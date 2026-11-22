@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.4 - 2026-11-22
+- Cố định thư mục nhận ảnh trên máy phát triển thành `E:\FlowLookbook\output` — kể cả bản cài đặt, đổi trong Cài đặt cũng không bị lệch.
+- Máy khác lần đầu mở app nếu chưa chọn thư mục lưu ảnh sẽ có thông báo kèm nút “Chọn thư mục…”.
+
+
 ## v1.1.3 - 2026-11-22
 - Sửa lỗi tải xong bản mới nhưng app không tự cài/tự mở lại: dùng helper PowerShell riêng, chờ app đóng hẳn rồi mới cài im lặng và mở lại.
 - Thêm file log `update.log` để kiểm tra từng bước tự cập nhật khi có sự cố.

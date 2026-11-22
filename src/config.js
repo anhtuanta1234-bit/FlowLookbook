@@ -18,6 +18,12 @@ if (!isPackaged) {
 const file = path.join(dataDir, 'config.json');
 const outputRoot = process.env.FLOW_OUTPUT_ROOT ? path.resolve(process.env.FLOW_OUTPUT_ROOT) : (isPackaged ? path.join(dataDir, 'output') : path.join(root, 'output'));
 
+// Máy của người phát triển: thư mục nhận ảnh LUÔN là E:\FlowLookbook\output, kể cả khi chạy bản cài đặt.
+// Nhận diện bằng sự tồn tại của thư mục mã nguồn; có thể ghi đè bằng FLOW_OUTPUT_ROOT nếu cần.
+const fixedOutputRoot = process.env.FLOW_DISABLE_FIXED_OUTPUT === '1' ? '' : (process.env.FLOW_OUTPUT_ROOT
+  ? path.resolve(process.env.FLOW_OUTPUT_ROOT)
+  : (process.platform === 'win32' && fs.existsSync('E:\\FlowLookbook') ? path.join('E:\\FlowLookbook', 'output') : ''));
+
 const defaults = {
   cdpPort: 9333,
   chromePath: '',
@@ -41,16 +47,32 @@ function get() {
   let saved = {};
   try { saved = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}
   cache = { ...defaults, ...saved };
+  // Máy này có đường dẫn cố định → bỏ qua mọi giá trị đã lưu, không cho đổi ở Cài đặt.
+  if (fixedOutputRoot) {
+    cache.outputRoot = fixedOutputRoot;
+    try { fs.mkdirSync(fixedOutputRoot, { recursive: true }); } catch (_) {}
+  }
   delete cache.geminiKey; delete cache.geminiModel; // không còn dùng Gemini
   return cache;
 }
 
 function set(patch) {
   const next = { ...get(), ...patch };
+  if (fixedOutputRoot) next.outputRoot = fixedOutputRoot; // khóa cứng, lưu cài đặt cũng không đổi được
   cache = next;
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(file, JSON.stringify(next, null, 2));
   return next;
 }
 
-module.exports = { get, set, dataDir, root };
+// Máy khác: "chưa chọn" = chưa từng lưu outputRoot vào config.json.
+// Máy có đường dẫn cố định thì coi như đã chọn sẵn, không cần nhắc.
+function hasSavedOutputRoot() {
+  if (fixedOutputRoot) return true;
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return typeof saved.outputRoot === 'string' && !!saved.outputRoot.trim();
+  } catch (_) { return false; }
+}
+
+module.exports = { get, set, dataDir, root, fixedOutputRoot, defaultOutputRoot: outputRoot, hasSavedOutputRoot };

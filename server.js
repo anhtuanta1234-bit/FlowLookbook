@@ -125,7 +125,13 @@ function pushProject(p) { store.save(p); broadcast('project', p); }
 app.get('/api/config', (req, res) => {
   const c = { ...cfg.get() };
   delete c.geminiKey; delete c.geminiModel;
-  res.json({ ...c, defaultOutputRoot: path.join(cfg.dataDir, 'output') }); // để nút "Mặc định" biết đường dẫn gốc
+  // fixedOutputRoot: máy này khóa cứng thư mục ảnh; outputRootChosen=false → giao diện nhắc chọn thư mục.
+  res.json({
+    ...c,
+    defaultOutputRoot: cfg.fixedOutputRoot || cfg.defaultOutputRoot,
+    fixedOutputRoot: cfg.fixedOutputRoot || '',
+    outputRootChosen: cfg.hasSavedOutputRoot(),
+  });
 });
 app.post('/api/config', (req, res) => {
   const patch = {};

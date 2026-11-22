@@ -131,6 +131,26 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx();
 window.addEventListener('blur', hideCtx);
 document.addEventListener('scroll', hideCtx, true);
 
+// Máy khác lần đầu mở app mà chưa từng chọn thư mục lưu ảnh → hiện thông báo, có nút chọn ngay.
+function promptOutputFolder() {
+  if (S.cfg.fixedOutputRoot || S.cfg.outputRootChosen) return;
+  const action = window.flowBridge?.pickFolder
+    ? {
+        label: 'Chọn thư mục…', title: 'Chọn nơi lưu ảnh 2K',
+        onClick: async () => {
+          try {
+            const dir = await window.flowBridge.pickFolder(S.cfg.outputRoot || '');
+            if (!dir) return;
+            await api('POST', '/api/config', { outputRoot: dir });
+            S.cfg.outputRoot = dir; S.cfg.outputRootChosen = true;
+            toast('Đã lưu thư mục lưu ảnh: ' + dir, 'ok', { duration: 10000 });
+          } catch (er) { fail(er); }
+        },
+      }
+    : { label: 'Mở Cài đặt', title: 'Gõ hoặc dán đường dẫn thư mục trong Cài đặt', onClick: () => $('#btnSettings').click() };
+  toast('Chưa chọn thư mục lưu ảnh 2K. Bấm “Chọn thư mục…” để tool lưu ảnh đúng chỗ (hoặc vào Cài đặt).', 'warn', { duration: 60000, action });
+}
+
 // ---------- khởi động ----------
 async function init() {
   S.cfg = await api('GET', '/api/config');
@@ -190,6 +210,7 @@ async function init() {
     }
     renderSidebar();
   };
+  promptOutputFolder();
 }
 function projectWorkItems(project) {
   return [
@@ -913,14 +934,19 @@ async function kocDialog(selectMode) {
 $('#btnSettings').onclick = async () => {
   S.cfg = await api('GET', '/api/config');
   try { const v = await api('GET', '/api/version'); if (v.version) { const el = $('#appVer'); if (el) el.textContent = 'v' + v.version; } } catch (_) {} const c = S.cfg;
+  const fixed = !!c.fixedOutputRoot;
   const m = modal(`<h3>Cài đặt</h3>
     <label class="lbl" for="cOut">Thư mục lưu ảnh 2K (mỗi sản phẩm tự tạo thư mục con)</label>
     <div style="display:flex;gap:8px">
-      <input id="cOut" style="flex:1;min-width:0" value="${esc(c.outputRoot)}" spellcheck="false">
-      <button class="btn ghost sm" id="cOutPick" type="button" data-tip="Mở hộp chọn thư mục của Windows">Chọn thư mục…</button>
-      <button class="btn ghost sm" id="cOutDef" type="button" data-tip="Trả về thư mục output mặc định nằm trong thư mục tool">Mặc định</button>
+      <input id="cOut" style="flex:1;min-width:0" value="${esc(c.outputRoot)}" spellcheck="false" ${fixed ? 'readonly' : ''}>
+      ${fixed ? '' : `<button class="btn ghost sm" id="cOutPick" type="button" data-tip="Mở hộp chọn thư mục của Windows">Chọn thư mục…</button>
+      <button class="btn ghost sm" id="cOutDef" type="button" data-tip="Trả về thư mục output mặc định nằm trong thư mục tool">Mặc định</button>`}
     </div>
-    <div class="hint warn">Nên để <b>mặc định</b> ở thư mục <b>output</b> trong thư mục tool. Chỉ đổi sang ổ khác khi bạn thật sự muốn (ví dụ ổ C sắp đầy). Tránh chọn ổ ngoài / USB vì rút ra giữa chừng có thể làm hỏng ảnh đang tải.</div>
+    <div class="hint ${fixed ? '' : 'warn'}">${fixed
+      ? 'Trên máy này thư mục ảnh được <b>cố định</b> ở <code>E:\\FlowLookbook\\output</code> — không đổi được từ Cài đặt.'
+      : (c.outputRootChosen
+        ? 'Nên để <b>mặc định</b> ở thư mục <b>output</b> trong thư mục tool. Chỉ đổi sang ổ khác khi bạn thật sự muốn (ví dụ ổ C sắp đầy). Tránh chọn ổ ngoài / USB vì rút ra giữa chừng có thể làm hỏng ảnh đang tải.'
+        : '<b>Chưa chọn thư mục lưu ảnh.</b> Bấm “Chọn thư mục…” rồi Lưu để ảnh 2K đi đúng chỗ.')}</div>
     <label class="lbl" for="cPar">Số lượt Flow chạy cùng lúc</label><input id="cPar" type="number" min="1" max="8" value="${c.maxParallelRuns}">
     <div class="hint">Khuyên dùng 3–4. Chạy nhiều quá dễ bị Flow cảnh báo hoạt động bất thường; nếu gặp lỗi hãy giảm xuống.</div>
     <label class="lbl" for="c2k">Số ảnh 2K tải cùng lúc (các cảnh chạy song song)</label><input id="c2k" type="number" min="1" max="16" value="${c.concurrent2k ?? 8}">
@@ -944,12 +970,19 @@ $('#btnSettings').onclick = async () => {
     <div class="foot"><button class="btn" id="sCancel">Đóng</button><button class="btn primary" id="sOk">Lưu</button></div>`, true);
   $('#sCancel').onclick = m.close;
   // Đổi thư mục: mở hộp chọn của Windows (chỉ có khi chạy trong app); bản web thì gõ/dán đường dẫn.
-  $('#cOutDef').onclick = () => { $('#cOut').value = c.defaultOutputRoot || c.outputRoot; };
-  $('#cOutPick').onclick = async () => {
-    if (!window.flowBridge?.pickFolder) { toast('Bản chạy trên trình duyệt không mở được hộp chọn thư mục. Bạn hãy gõ hoặc dán đường dẫn vào ô trên.', ''); return; }
-    try { const dir = await window.flowBridge.pickFolder($('#cOut').value.trim()); if (dir) $('#cOut').value = dir; } catch (er) { fail(er); }
+  // Máy có đường dẫn cố định thì ẩn hẳn 2 nút này.
+  if (!fixed) {
+    $('#cOutDef').onclick = () => { $('#cOut').value = c.defaultOutputRoot || c.outputRoot; };
+    $('#cOutPick').onclick = async () => {
+      if (!window.flowBridge?.pickFolder) { toast('Bản chạy trên trình duyệt không mở được hộp chọn thư mục. Bạn hãy gõ hoặc dán đường dẫn vào ô trên.', ''); return; }
+      try { const dir = await window.flowBridge.pickFolder($('#cOut').value.trim()); if (dir) $('#cOut').value = dir; } catch (er) { fail(er); }
+    };
+  }
+  $('#sOk').onclick = async () => {
+    const payload = { hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value };
+    if (!fixed) payload.outputRoot = $('#cOut').value;
+    try { await api('POST', '/api/config', payload); m.close(); S.cfg = await api('GET', '/api/config').catch(() => S.cfg); toast('Đã lưu cài đặt.', 'ok'); } catch (er) { fail(er); }
   };
-  $('#sOk').onclick = async () => { try { await api('POST', '/api/config', { outputRoot: $('#cOut').value, hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value }); m.close(); toast('Đã lưu cài đặt.', 'ok'); } catch (er) { fail(er); } };
   $('#cCheckUpdate').onclick = async () => {
     const btn = $('#cCheckUpdate'); const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
     try { await checkUpdate(true); } catch (er) { fail(er); } finally { btn.disabled = false; btn.textContent = orig; }
