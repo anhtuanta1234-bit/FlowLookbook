@@ -1,5 +1,5 @@
 {
-  "version": "1.1.8",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.8/Flow.Lookbook.Setup.1.1.8.exe",
-  "notes": "- Sửa triệt để lỗi helper không chạy: `spawn(detached: true)` trên Windows làm PowerShell thoát ngay mà không chạy script — chuyển sang `Start-Process` trung gian, helper sống sót sau khi app đóng.\n- App chỉ đóng sau khi helper ghi xác nhận đã chạy (có token riêng từng lần), không còn cảnh bấm cập nhật xong app tắt mà bản mới vẫn không được cài.\n- Thêm test tích hợp kiểm tra helper thực sự chạy và tiếp tục chạy sau khi tiến trình cha thoát."
+  "version": "1.1.9",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.9/Flow.Lookbook.Setup.1.1.9.exe",
+  "notes": "- Bản đích để kiểm tra trực tiếp luồng tự cập nhật đã sửa helper trên máy phát triển."
 }

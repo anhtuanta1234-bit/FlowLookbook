@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.9 - 2026-11-22
+- Bản đích để kiểm tra trực tiếp luồng tự cập nhật đã sửa helper trên máy phát triển.
+
+
 ## v1.1.8 - 2026-11-22
 - Sửa triệt để lỗi helper không chạy: `spawn(detached: true)` trên Windows làm PowerShell thoát ngay mà không chạy script — chuyển sang `Start-Process` trung gian, helper sống sót sau khi app đóng.
 - App chỉ đóng sau khi helper ghi xác nhận đã chạy (có token riêng từng lần), không còn cảnh bấm cập nhật xong app tắt mà bản mới vẫn không được cài.
