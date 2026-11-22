@@ -161,8 +161,7 @@ ipcMain.handle('flow:install-update', async (_e, file) => {
   // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.
   // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
   // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
-  const ps = `@'
-param([string]$Installer, [string]$AppExe, [string]$Log)
+  const ps = `param([string]$Installer, [string]$AppExe, [string]$Log)
 function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
 W "helper start"
 for ($i = 0; $i -lt 100; $i++) {
@@ -185,7 +184,7 @@ if (Test-Path -LiteralPath $AppExe) {
   W "app exe missing"
 }
 W "helper end"
-'@`;
+`;
   const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');
   fs.writeFileSync(helper, ps, 'utf8');
   updateLog('helper written: ' + helper);
@@ -193,6 +192,7 @@ W "helper end"
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
     '-Installer', file, '-AppExe', currentExe, '-Log', UPDATE_LOG,
   ], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('error', (er) => updateLog('helper spawn error=' + er.message));
   child.unref();
   updateLog('helper spawned pid=' + child.pid);
   setTimeout(() => app.quit(), 300);

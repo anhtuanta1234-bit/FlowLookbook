@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.5 - 2026-11-22
+- Sửa lỗi tải xong bản mới nhưng app không tự cài/tự mở lại: helper PowerShell bị ghi nhầm thành chuỗi `@'...'@` nên không chạy.
+- Thêm test ngăn helper tự cập nhật bị ghi sai dạng here-string.
+
+
 ## v1.1.4 - 2026-11-22
 - Cố định thư mục nhận ảnh trên máy phát triển thành `E:\FlowLookbook\output` — kể cả bản cài đặt, đổi trong Cài đặt cũng không bị lệch.
 - Máy khác lần đầu mở app nếu chưa chọn thư mục lưu ảnh sẽ có thông báo kèm nút “Chọn thư mục…”.
