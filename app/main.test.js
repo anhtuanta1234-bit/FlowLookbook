@@ -68,6 +68,18 @@ test('sau khi khởi cài: hiện đếm ngược 3 giây rồi mới đóng app
   assert.ok(!main.includes('shell.openPath(file)'), 'KHÔNG được để Windows hiện hộp thoại Chọn ứng dụng để mở');
 });
 
+test('cài đặt: phiên bản và nút kiểm tra phiên bản mới nằm ngay trên cùng', () => {
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const start = ui.indexOf('<h3>Cài đặt</h3>');
+  const outLabel = ui.indexOf('Thư mục lưu ảnh 2K', start);
+  const top = ui.slice(start, outLabel);
+  assert.ok(top.includes('Phiên bản hiện tại'), 'phải hiện phiên bản ở đầu hộp Cài đặt');
+  assert.ok(top.includes('Kiểm tra phiên bản mới'), 'nút đổi tên phải nằm ở đầu hộp Cài đặt');
+  assert.ok(!ui.includes('>Kiểm tra cập nhật<'), 'không được giữ tên nút cũ');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('Cài đặt → Kiểm tra phiên bản mới'), 'tooltip phải theo tên mới');
+});
+
 test('helper không xác nhận thì báo lỗi, không tắt app và xoá marker', () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   const block = main.slice(main.indexOf('await new Promise((resolve, reject)'), main.indexOf("ipcMain.handle('flow:quit-for-update'"));

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.15 - 2026-11-22
+- Đưa “Phiên bản hiện tại” và nút kiểm tra lên đầu hộp Cài đặt; đổi tên nút thành “Kiểm tra phiên bản mới”.
+
+
 ## v1.1.14 - 2026-11-22
 - Dọn luôn file `.exe.blockmap` của các bản cũ trong `dist` (Explorer giấu đuôi `.blockmap` nên nhìn tưởng là file `.exe` cũ chưa được xóa).
 - Thêm test kiểm tra xóa cả blockmap bản cũ nhưng vẫn giữ blockmap của bản hiện tại.

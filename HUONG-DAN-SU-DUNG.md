@@ -170,7 +170,7 @@ Sau khi release, mọi app (máy bạn và máy người khác) tự hiện thô
 ### Hành vi trên app người dùng
 - Khi mở app: tự kiểm tra bản mới. Nếu có → hiện hộp thoại với **số phiên bản + nội dung `notes`** + nút **"Tải về và cập nhật"**.
 - Bấm nút → app tự tải installer, báo `%` tiến độ, tự chạy installer im lặng và đóng app. Dữ liệu (`%APPDATA%\Flow Lookbook\data`) được giữ nguyên.
-- Vào **Cài đặt → Kiểm tra cập nhật** để kiểm tra thủ công bất kỳ lúc nào.
+- Vào **Cài đặt → Kiểm tra phiên bản mới** (ngay đầu hộp thoại) để kiểm tra thủ công bất kỳ lúc nào.
 - Góc trên bên trái luôn hiển thị phiên bản đang dùng (`v1.0.0`).
 
 ### Cập nhật thủ công (khi cần)

@@ -943,6 +943,10 @@ $('#btnSettings').onclick = async () => {
   try { const v = await api('GET', '/api/version'); if (v.version) { const el = $('#appVer'); if (el) el.textContent = 'v' + v.version; } } catch (_) {} const c = S.cfg;
   const fixed = !!c.fixedOutputRoot;
   const m = modal(`<h3>Cài đặt</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
+      <span class="hint" style="margin:0">Phiên bản hiện tại: <b id="cVer">v${esc(CURRENT_VERSION || '...')}</b></span>
+      <button class="btn ghost sm" id="cCheckUpdate" type="button" data-tip="Kiểm tra xem có phiên bản mới không">Kiểm tra phiên bản mới</button>
+    </div>
     <label class="lbl" for="cOut">Thư mục lưu ảnh 2K (mỗi sản phẩm tự tạo thư mục con)</label>
     <div style="display:flex;gap:8px">
       <input id="cOut" style="flex:1;min-width:0" value="${esc(c.outputRoot)}" spellcheck="false" ${fixed ? 'readonly' : ''}>
@@ -966,10 +970,6 @@ $('#btnSettings').onclick = async () => {
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn ghost sm" id="cBackup" type="button" data-tip="Sao lưu toàn bộ dữ liệu (dự án + ảnh) vào thư mục backups trong data/">Sao lưu dữ liệu</button>
       <span class="hint" style="margin:0;align-self:center">${c.lastBackupAt ? 'Lần sao lưu gần nhất: ' + new Date(c.lastBackupAt).toLocaleString('vi-VN') : 'Chưa sao lưu lần nào.'}</span>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
-      <span class="hint" style="margin:0">Phiên bản hiện tại: <b id="cVer">v${esc(CURRENT_VERSION || '...')}</b></span>
-      <button class="btn ghost sm" id="cCheckUpdate" type="button" data-tip="Kiểm tra xem có phiên bản mới không">Kiểm tra cập nhật</button>
     </div>
     <details class="adv"><summary>Nâng cao</summary>
       <label class="lbl" for="cChrome">Đường dẫn Chrome</label><input id="cChrome" style="width:100%" value="${esc(c.chromePath)}" placeholder="Để trống — tool tự tìm Chrome">
