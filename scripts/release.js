@@ -159,14 +159,21 @@ function ask(question) {
   // 4. Ghi lại vào file
   pkg.version = next;
   writeJson('package.json', pkg);
-  const assetName = `Flow Lookbook Setup ${next}.exe`;
+  // GitHub đổi dấu cách thành dấu chấm trong tên asset Release → dùng luôn tên này cho link tải.
+  const installerName = `Flow Lookbook Setup ${next}.exe`;
+  const assetName = `Flow.Lookbook.Setup.${next}.exe`;
   writeJson('version.json', {
     version: next,
     url: `https://github.com/${OWNER}/${REPO}/releases/download/v${next}/${encodeURIComponent(assetName)}`,
     notes,
   });
   const date = new Date().toISOString().slice(0, 10);
-  const newCl = cl.text.replace(
+  // Nếu phát hành lại cùng 1 version, thay section cũ thay vì nhân bản heading.
+  const escVer = next.replace(/\./g, '\\.');
+  let newCl = cl.text.replace(
+    new RegExp(`##\\s*v${escVer}\\s*-[^\\n]*\\n[\\s\\S]*?(?=\\n##\\s|$)`, 'i'), ''
+  );
+  newCl = newCl.replace(
     /##\s*Unreleased\s*\n[\s\S]*?(?=\n##\s|$)/i,
     `## Unreleased\n\n## v${next} - ${date}\n${notes}\n\n`
   );
@@ -179,7 +186,7 @@ function ask(question) {
     cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',
   });
   if (build.status !== 0) throw new Error('Build thất bại.');
-  const installer = path.join(ROOT, 'dist', assetName);
+  const installer = path.join(ROOT, 'dist', installerName);
   if (!fs.existsSync(installer)) throw new Error('Không tìm thấy file cài đặt: ' + installer);
 
   // 6. Commit + tag + push
