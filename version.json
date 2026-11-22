@@ -1,5 +1,5 @@
 {
-  "version": "1.1.5",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.5/Flow.Lookbook.Setup.1.1.5.exe",
-  "notes": "- Sửa lỗi tải xong bản mới nhưng app không tự cài/tự mở lại: helper PowerShell bị ghi nhầm thành chuỗi `@'...'@` nên không chạy.\n- Thêm test ngăn helper tự cập nhật bị ghi sai dạng here-string."
+  "version": "1.1.6",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.6/Flow.Lookbook.Setup.1.1.6.exe",
+  "notes": "- Sau khi app mới tự mở lại thành công, tự xóa installer vừa tải và các installer cũ trong `dist` (giữ lại bản mới nhất), ghi rõ vào `update.log`.\n- Thêm công tắc “Tự dọn file cài đặt cũ” trong Cài đặt, bật mặc định; không đụng vào dự án hay thư mục app đang chạy."
 }

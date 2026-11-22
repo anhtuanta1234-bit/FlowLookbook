@@ -955,6 +955,7 @@ $('#btnSettings').onclick = async () => {
     <label class="lbl" for="cTabs">Giới hạn tab Chrome đang mở cùng lúc</label><input id="cTabs" type="number" min="4" max="32" value="${c.maxChromeTabs ?? 12}">
     <div class="hint">Tránh hết RAM khi chạy nhiều cảnh + tải 2K song song. Khuyên dùng 12.</div>
     <label class="lbl" style="display:flex;gap:8px;align-items:flex-start;font-weight:500"><input id="cHq" type="checkbox" ${c.hqIntermediate !== false ? 'checked' : ''} style="margin-top:3px"><span>Lấy <b>bản 2K nét</b> cho ảnh đã chọn ở bước 1 và 2 trước khi dùng cho bước sau (ảnh đầu vào nét hơn, kết quả cuối nét hơn). Mỗi ảnh đã chọn tốn thêm vài giây.</span></label>
+    <label class="lbl" style="display:flex;gap:8px;align-items:flex-start;font-weight:500"><input id="cAutoClean" type="checkbox" ${c.autoCleanOldInstallers !== false ? 'checked' : ''} style="margin-top:3px"><span><b>Tự dọn file cài đặt cũ</b>: sau khi bản mới mở lại, xóa file installer vừa tải và các installer cũ trong thư mục <code>dist</code> (chỉ giữ bản mới nhất). Không đụng vào dự án/ảnh của bạn.</span></label>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn ghost sm" id="cBackup" type="button" data-tip="Sao lưu toàn bộ dữ liệu (dự án + ảnh) vào thư mục backups trong data/">Sao lưu dữ liệu</button>
       <span class="hint" style="margin:0;align-self:center">${c.lastBackupAt ? 'Lần sao lưu gần nhất: ' + new Date(c.lastBackupAt).toLocaleString('vi-VN') : 'Chưa sao lưu lần nào.'}</span>
@@ -979,7 +980,7 @@ $('#btnSettings').onclick = async () => {
     };
   }
   $('#sOk').onclick = async () => {
-    const payload = { hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value };
+    const payload = { hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, autoCleanOldInstallers: $('#cAutoClean').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value };
     if (!fixed) payload.outputRoot = $('#cOut').value;
     try { await api('POST', '/api/config', payload); m.close(); S.cfg = await api('GET', '/api/config').catch(() => S.cfg); toast('Đã lưu cài đặt.', 'ok'); } catch (er) { fail(er); }
   };

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.6 - 2026-11-22
+- Sau khi app mới tự mở lại thành công, tự xóa installer vừa tải và các installer cũ trong `dist` (giữ lại bản mới nhất), ghi rõ vào `update.log`.
+- Thêm công tắc “Tự dọn file cài đặt cũ” trong Cài đặt, bật mặc định; không đụng vào dự án hay thư mục app đang chạy.
+
+
 ## v1.1.5 - 2026-11-22
 - Sửa lỗi tải xong bản mới nhưng app không tự cài/tự mở lại: helper PowerShell bị ghi nhầm thành chuỗi `@'...'@` nên không chạy.
 - Thêm test ngăn helper tự cập nhật bị ghi sai dạng here-string.

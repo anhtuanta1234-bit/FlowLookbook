@@ -5,11 +5,15 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
+const { runCleanup } = require('./update-cleanup');
 
 const PORT = process.env.PORT || 4177;
 const APP_URL = `http://127.0.0.1:${PORT}`;
 const ROOT = path.join(__dirname, '..');
 const ICON = path.join(__dirname, 'icon.png');
+const PENDING_CLEANUP = path.join(app.getPath('userData'), 'pending-cleanup.json');
+// Chỉ máy có mã nguồn ở E:\FlowLookbook mới có thư mục dist để dọn installer cũ.
+const SOURCE_ROOT = process.platform === 'win32' && fs.existsSync('E:\\FlowLookbook') ? 'E:\\FlowLookbook' : '';
 
 app.setName('Flow Lookbook');
 
@@ -151,11 +155,43 @@ function updateLog(msg) {
   try { fs.appendFileSync(UPDATE_LOG, `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
 }
 
+// Cài đặt tự dọn file cũ: mặc định bật, có thể tắt trong Cài đặt.
+function autoCleanEnabled() {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'data', 'config.json'), 'utf8'));
+    return c.autoCleanOldInstallers !== false;
+  } catch (_) { return true; }
+}
+
+// App cũ ghi lại việc cần dọn trước khi thoát; app mới sẽ đọc sau khi đã mở lại.
+function writePendingCleanup(installer) {
+  try {
+    fs.writeFileSync(PENDING_CLEANUP, JSON.stringify({
+      fromVersion: app.getVersion(),
+      installer,
+      sourceRoot: SOURCE_ROOT,
+      createdAt: Date.now(),
+    }, null, 2));
+    updateLog('pending cleanup saved');
+  } catch (er) { updateLog('pending cleanup error=' + er.message); }
+}
+
+// Chạy lúc app mới đã khởi động: chỉ dọn khi phiên bản thật sự tăng.
+function cleanupOldInstallers() {
+  let job = null;
+  try { job = JSON.parse(fs.readFileSync(PENDING_CLEANUP, 'utf8')); }
+  catch (_) { return; }
+  try { fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}
+  try { runCleanup(job, app.getVersion(), updateLog, { enabled: autoCleanEnabled() }); }
+  catch (er) { updateLog('cleanup error=' + er.message); }
+}
+
 ipcMain.handle('flow:install-update', async (_e, file) => {
   updateLog('install requested: ' + file);
   if (typeof file !== 'string' || !fs.existsSync(file)) throw new Error('Không tìm thấy file cài đặt đã tải.');
   if (!app.isPackaged) { await shell.openPath(file); return 'opened'; }
 
+  writePendingCleanup(file);
   const { spawn } = require('child_process');
   const currentExe = app.getPath('exe');
   // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.
@@ -218,6 +254,7 @@ if (app.requestSingleInstanceLock()) {
       return;
     }
     createWindow();
+    cleanupOldInstallers(); // bản mới đã chạy ổn → dọn installer cũ (nếu có)
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
 } else {

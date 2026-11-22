@@ -144,6 +144,7 @@ app.post('/api/config', (req, res) => {
   }
   if (typeof req.body.hqIntermediate === 'boolean') patch.hqIntermediate = req.body.hqIntermediate;
   if (typeof req.body.fastMode === 'boolean') patch.fastMode = req.body.fastMode;
+  if (typeof req.body.autoCleanOldInstallers === 'boolean') patch.autoCleanOldInstallers = req.body.autoCleanOldInstallers;
   if (Number.isInteger(req.body.maxChromeTabs)) patch.maxChromeTabs = Math.min(32, Math.max(4, req.body.maxChromeTabs));
   if (Number.isInteger(req.body.maxParallelRuns)) patch.maxParallelRuns = Math.min(8, Math.max(1, req.body.maxParallelRuns));
   if (Number.isInteger(req.body.concurrent2k)) patch.concurrent2k = Math.min(16, Math.max(1, req.body.concurrent2k));

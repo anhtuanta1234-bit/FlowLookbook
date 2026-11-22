@@ -36,6 +36,7 @@ const defaults = {
   aspect: '9:16',
   fastMode: false, // chế độ nhanh: giảm delay giữa thao tác (tăng nguy cơ Flow cảnh báo spam)
   maxChromeTabs: 12, // giới hạn tổng số tab Chrome đang mở để tránh hết RAM
+  autoCleanOldInstallers: true, // sau khi update thành công: xóa installer cũ, giữ bản mới nhất
   lastBackupAt: 0,
 };
 
