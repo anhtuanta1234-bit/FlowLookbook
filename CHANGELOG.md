@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.3 - 2026-11-22
+- Sửa lỗi tải xong bản mới nhưng app không tự cài/tự mở lại: dùng helper PowerShell riêng, chờ app đóng hẳn rồi mới cài im lặng và mở lại.
+- Thêm file log `update.log` để kiểm tra từng bước tự cập nhật khi có sự cố.
+
+
 ## v1.1.2 - 2026-11-22
 - Thêm cache-buster khi kiểm tra phiên bản: app luôn đọc `version.json` mới nhất, không bị CDN trả bản cũ.
 

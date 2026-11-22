@@ -4,6 +4,7 @@ const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
 
 const PORT = process.env.PORT || 4177;
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -145,22 +146,55 @@ ipcMain.handle('flow:download-update', async (e, url) => {
 });
 
 // Chạy installer im lặng sau khi app đã đóng. Bản dev thì chỉ mở file để kiểm tra.
+const UPDATE_LOG = path.join(app.getPath('userData'), 'update.log');
+function updateLog(msg) {
+  try { fs.appendFileSync(UPDATE_LOG, `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
+}
+
 ipcMain.handle('flow:install-update', async (_e, file) => {
+  updateLog('install requested: ' + file);
   if (typeof file !== 'string' || !fs.existsSync(file)) throw new Error('Không tìm thấy file cài đặt đã tải.');
   if (!app.isPackaged) { await shell.openPath(file); return 'opened'; }
+
   const { spawn } = require('child_process');
-  const safe = file.replace(/"/g, '""');
-  // Đường dẫn đang chạy chính là nơi NSIS đã cài (kể cả khi chọn thư mục khác lúc đầu).
-  // Cài đè xong thì mở lại đúng đường dẫn đó → shortcut trên Desktop không cần làm lại.
   const currentExe = app.getPath('exe');
-  const safeExe = currentExe.replace(/"/g, '""');
-  // Chờ app + Chrome đóng hẳn (~11s) → cài im lặng → đợi installer thoát → tự mở lại app.
-  const cmd = [
-    'ping 127.0.0.1 -n 12 >nul',
-    `start "" /WAIT "${safe}" /S`,
-    `if exist "${safeExe}" start "" "${safeExe}"`,
-  ].join(' & ');
-  spawn('cmd.exe', ['/c', cmd], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.
+  // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
+  // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
+  const ps = `@'
+param([string]$Installer, [string]$AppExe, [string]$Log)
+function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
+W "helper start"
+for ($i = 0; $i -lt 100; $i++) {
+  $running = Get-Process -Name 'Flow Lookbook' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $AppExe }
+  if (-not $running) { break }
+  Start-Sleep -Milliseconds 400
+}
+W "waited ticks=$i stillRunning=$([bool]$running)"
+try {
+  $proc = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru -ErrorAction Stop
+  W "installer exit=$($proc.ExitCode)"
+} catch {
+  W "installer error=$($_.Exception.Message)"
+}
+Start-Sleep -Seconds 2
+if (Test-Path -LiteralPath $AppExe) {
+  W "relaunch"
+  Start-Process -FilePath $AppExe
+} else {
+  W "app exe missing"
+}
+W "helper end"
+'@`;
+  const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');
+  fs.writeFileSync(helper, ps, 'utf8');
+  updateLog('helper written: ' + helper);
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
+    '-Installer', file, '-AppExe', currentExe, '-Log', UPDATE_LOG,
+  ], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+  updateLog('helper spawned pid=' + child.pid);
   setTimeout(() => app.quit(), 300);
   return 'installing';
 });
