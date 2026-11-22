@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.1.8 - 2026-11-22
+- Sửa triệt để lỗi helper không chạy: `spawn(detached: true)` trên Windows làm PowerShell thoát ngay mà không chạy script — chuyển sang `Start-Process` trung gian, helper sống sót sau khi app đóng.
+- App chỉ đóng sau khi helper ghi xác nhận đã chạy (có token riêng từng lần), không còn cảnh bấm cập nhật xong app tắt mà bản mới vẫn không được cài.
+- Thêm test tích hợp kiểm tra helper thực sự chạy và tiếp tục chạy sau khi tiến trình cha thoát.
+
+
 ## v1.1.7 - 2026-11-22
 - Đổi luồng cập nhật: bấm “Tải về và cập nhật” chỉ tải, app không tắt; hiện hộp thoại bắt buộc với nút “Tải lại để cập nhật”.
 - Chỉ khi bấm nút “Tải lại để cập nhật” mới cài im lặng, đóng app ngắn rồi tự mở lại bản mới.

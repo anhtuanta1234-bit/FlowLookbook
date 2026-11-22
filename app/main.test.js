@@ -14,6 +14,15 @@ test('helper tự cập nhật là script PowerShell chạy được', () => {
   assert.ok(ps.includes('Add-Content -LiteralPath $Log'), 'phải ghi log từng bước');
   assert.ok(ps.includes('Start-Process -FilePath $Installer'), 'phải chạy installer');
   assert.ok(ps.includes('Start-Process -FilePath $AppExe'), 'phải mở lại app');
+  assert.ok(ps.includes('helper start token=$Token'), 'phải ghi token để xác nhận helper chạy');
+});
+
+test('helper được khởi qua Start-Process trung gian, không spawn detached', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(src.includes("Start-Process -FilePath 'powershell.exe'"), 'phải dùng Start-Process tách tiến trình');
+  assert.ok(!src.includes('detached: true'), 'KHÔNG được spawn detached: PowerShell không chạy -File');
+  assert.ok(src.includes('helper confirmed running'), 'phải đợi helper xác nhận trước khi tắt app');
+  assert.ok(src.includes("'helper start token=' + token"), 'phải đối chiếu đúng token của lần này');
 });
 
 test('luồng cập nhật mới: tải xong không cài ngay, có nút tải lại bắt buộc', () => {

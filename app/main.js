@@ -213,9 +213,9 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
   // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.
   // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
   // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
-  const ps = `param([string]$Installer, [string]$AppExe, [string]$Log)
+  const ps = `param([string]$Installer, [string]$AppExe, [string]$Log, [string]$Token)
 function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
-W "helper start"
+W "helper start token=$Token"
 for ($i = 0; $i -lt 100; $i++) {
   $running = Get-Process -Name 'Flow Lookbook' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $AppExe }
   if (-not $running) { break }
@@ -240,13 +240,38 @@ W "helper end"
   const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');
   fs.writeFileSync(helper, ps, 'utf8');
   updateLog('helper written: ' + helper);
-  const child = spawn('powershell.exe', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper,
-    '-Installer', file, '-AppExe', currentExe, '-Log', UPDATE_LOG,
-  ], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.on('error', (er) => updateLog('helper spawn error=' + er.message));
-  child.unref();
-  updateLog('helper spawned pid=' + child.pid);
+
+  // spawn(detached:true) trên Windows làm PowerShell thoát ngay mà KHÔNG chạy -File.
+  // Phải dùng một PowerShell trung gian gọi Start-Process để helper là "cháu" tách biệt,
+  // sống sót sau khi app đóng. Token giúp phân biệt lần chạy này với log cũ.
+  const token = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+  const inner = "Start-Process -FilePath 'powershell.exe' -ArgumentList @(" +
+    "'-NoProfile','-ExecutionPolicy','Bypass','-File'," + q(helper) + "," +
+    "'-Installer'," + q(file) + ",'-AppExe'," + q(currentExe) +
+    ",'-Log'," + q(UPDATE_LOG) + ",'-Token'," + q(token) + ") -WindowStyle Hidden";
+  updateLog('helper spawn token=' + token);
+  const wrapper = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', inner,
+  ], { stdio: 'ignore', windowsHide: true });
+  wrapper.on('error', (er) => updateLog('helper spawn error=' + er.message));
+  wrapper.on('exit', (code) => updateLog('helper wrapper exit=' + code));
+
+  // Đợi helper ghi xác nhận rồi mới tắt app — không bao giờ tắt khi helper chưa chạy.
+  await new Promise((resolve) => {
+    const startedAt = Date.now();
+    const iv = setInterval(() => {
+      let started = false;
+      try { started = fs.readFileSync(UPDATE_LOG, 'utf8').includes('helper start token=' + token); }
+      catch (_) {}
+      if (started || Date.now() - startedAt > 8000) {
+        clearInterval(iv);
+        updateLog(started ? 'helper confirmed running' : 'helper start timeout — vẫn tiếp tục');
+        resolve();
+      }
+    }, 100);
+  });
+
   setTimeout(() => app.quit(), 300);
   return 'installing';
 });
