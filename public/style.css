@@ -109,6 +109,8 @@ textarea{width:100%;resize:vertical;line-height:1.55}
 .btn.sm{padding:3px 9px;font-size:12px;border-radius:8px}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 .btn.ghost:hover{background:var(--surface);border-color:var(--bar-line);color:var(--text)}
+.btn.outline{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent)}
+.btn.outline:hover{border-color:var(--accent2);background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent2)}
 .btn.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 3px 10px rgba(59,124,240,.28)}
 .btn.primary:hover{filter:brightness(1.07);background:var(--grad)}
 .btn.danger:hover{border-color:var(--err);color:var(--err);background:transparent}

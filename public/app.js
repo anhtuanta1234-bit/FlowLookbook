@@ -945,7 +945,7 @@ $('#btnSettings').onclick = async () => {
   const m = modal(`<h3>Cài đặt</h3>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
       <span class="hint" style="margin:0">Phiên bản hiện tại: <b id="cVer">v${esc(CURRENT_VERSION || '...')}</b></span>
-      <button class="btn ghost sm" id="cCheckUpdate" type="button" data-tip="Kiểm tra xem có phiên bản mới không">Kiểm tra phiên bản mới</button>
+      <button class="btn outline sm" id="cCheckUpdate" type="button" data-tip="Kiểm tra xem có phiên bản mới không">Kiểm tra phiên bản mới</button>
     </div>
     <label class="lbl" for="cOut">Thư mục lưu ảnh 2K (mỗi sản phẩm tự tạo thư mục con)</label>
     <div style="display:flex;gap:8px">
@@ -1053,9 +1053,10 @@ function showUpdateDialog(info) {
       let n = 3;
       const tick = () => {
         btn.textContent = n > 0 ? `Đóng sau ${n}s…` : 'Đang đóng…';
+        const reopenNote = '<div style="margin-top:4px;font-size:11px;color:var(--muted)">Mở lại app sau khoảng 10 giây.</div>';
         state.innerHTML = n > 0
-          ? `App sẽ đóng sau <b>${n} giây</b> để hoàn tất cài đặt.<br>Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.`
-          : `Đang đóng. Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.`;
+          ? `App sẽ đóng sau <b>${n} giây</b> để hoàn tất cài đặt.<br>Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.${reopenNote}`
+          : `Đang đóng. Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.${reopenNote}`;
         if (n > 0) { n--; setTimeout(tick, 1000); }
         else window.flowBridge?.quitForUpdate?.();
       };

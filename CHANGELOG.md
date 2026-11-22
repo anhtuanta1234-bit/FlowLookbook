@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.16 - 2026-11-22
+- Thêm viền xanh kiểu outline cho nút “Kiểm tra phiên bản mới” trong Cài đặt.
+- Khi đếm ngược đóng app sau 3s, thêm dòng nhỏ “Mở lại app sau khoảng 10 giây.”
+
+
 ## v1.1.15 - 2026-11-22
 - Đưa “Phiên bản hiện tại” và nút kiểm tra lên đầu hộp Cài đặt; đổi tên nút thành “Kiểm tra phiên bản mới”.
 

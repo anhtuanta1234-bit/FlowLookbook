@@ -63,6 +63,8 @@ test('sau khi khởi cài: hiện đếm ngược 3 giây rồi mới đóng app
   assert.ok(block.includes('Đóng sau ${n}s'), 'phải hiện “Đóng sau 3s/2s/1s”');
   assert.ok(block.includes('quitForUpdate'), 'hết 3 giây mới gọi lệnh đóng app');
   assert.ok(block.includes('Mở lại app bằng shortcut'), 'phải hướng dẫn mở lại bằng shortcut');
+  assert.ok(block.includes('Mở lại app sau khoảng 10 giây.'), 'phải có dòng nhỏ báo mở lại sau ~10s');
+  assert.ok(block.includes('font-size:11px'), 'dòng báo mở lại phải nhỏ');
   assert.ok(block.includes('v${esc(info.version)}'), 'phải hiện đúng tên phiên bản đích');
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   assert.ok(!main.includes('shell.openPath(file)'), 'KHÔNG được để Windows hiện hộp thoại Chọn ứng dụng để mở');
@@ -75,7 +77,10 @@ test('cài đặt: phiên bản và nút kiểm tra phiên bản mới nằm nga
   const top = ui.slice(start, outLabel);
   assert.ok(top.includes('Phiên bản hiện tại'), 'phải hiện phiên bản ở đầu hộp Cài đặt');
   assert.ok(top.includes('Kiểm tra phiên bản mới'), 'nút đổi tên phải nằm ở đầu hộp Cài đặt');
+  assert.ok(top.includes('btn outline sm'), 'nút phải có viền ngoài kiểu outline');
   assert.ok(!ui.includes('>Kiểm tra cập nhật<'), 'không được giữ tên nút cũ');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+  assert.ok(css.includes('.btn.outline{border:1px solid var(--accent)'), 'CSS phải định nghĩa viền xanh cho nút');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('Cài đặt → Kiểm tra phiên bản mới'), 'tooltip phải theo tên mới');
 });
