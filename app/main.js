@@ -197,6 +197,9 @@ ipcMain.handle('flow:consume-update-success', () => {
     if (!fs.existsSync(UPDATE_SUCCESS)) return '';
     let version = '';
     try { version = JSON.parse(fs.readFileSync(UPDATE_SUCCESS, 'utf8')).version || ''; } catch (_) {}
+    // Mở lại quá sớm (installer chưa xong) thì GIỮ marker, không báo thành công sai.
+    // Lần mở sau, khi app.getVersion() đúng bằng bản đích → mới xoá marker và báo.
+    if (version && version !== app.getVersion()) return '';
     fs.rmSync(UPDATE_SUCCESS, { force: true });
     return version;
   } catch (_) { return ''; }
@@ -205,12 +208,14 @@ ipcMain.handle('flow:consume-update-success', () => {
 ipcMain.handle('flow:install-update', async (_e, file, version) => {
   updateLog('install requested: ' + file + ' (target=' + (version || '?') + ')');
   if (typeof file !== 'string' || !fs.existsSync(file)) throw new Error('Không tìm thấy file cài đặt đã tải.');
-  if (!app.isPackaged) { await shell.openPath(file); return 'opened'; }
+  // Không dùng shell.openPath(): Windows có thể hiện hộp thoại "Chọn một ứng dụng để mở".
+  if (!app.isPackaged) { updateLog('dev mode: bỏ qua cài tự động'); return 'dev-skipped'; }
 
   writePendingCleanup(file, version);
   const { spawn } = require('child_process');
   const currentExe = app.getPath('exe');
-  // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.
+  // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → KHÔNG tự mở lại.
+  // Người dùng mở lại bằng shortcut; app mới sẽ hiện thông báo thành công nếu phiên bản khớp.
   // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
   // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
   const ps = `param([string]$Installer, [string]$AppExe, [string]$Log, [string]$Token)
@@ -228,13 +233,7 @@ try {
 } catch {
   W "installer error=$($_.Exception.Message)"
 }
-Start-Sleep -Seconds 2
-if (Test-Path -LiteralPath $AppExe) {
-  W "relaunch"
-  Start-Process -FilePath $AppExe
-} else {
-  W "app exe missing"
-}
+W "install finished - user will relaunch manually"
 W "helper end"
 `;
   const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');

@@ -13,7 +13,8 @@ test('helper tự cập nhật là script PowerShell chạy được', () => {
   assert.ok(!ps.includes("@'") && !ps.includes("'@"), 'helper không được bọc trong here-string');
   assert.ok(ps.includes('Add-Content -LiteralPath $Log'), 'phải ghi log từng bước');
   assert.ok(ps.includes('Start-Process -FilePath $Installer'), 'phải chạy installer');
-  assert.ok(ps.includes('Start-Process -FilePath $AppExe'), 'phải mở lại app');
+  assert.ok(!ps.includes('Start-Process -FilePath $AppExe'), 'không tự mở lại app — user mở bằng shortcut');
+  assert.ok(ps.includes('user will relaunch manually'), 'phải ghi rõ chế độ mở lại thủ công');
   assert.ok(ps.includes('helper start token=$Token'), 'phải ghi token để xác nhận helper chạy');
 });
 
@@ -47,4 +48,14 @@ test('thông báo thành công chỉ hiện khi đúng phiên bản đang chạy
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
   assert.ok(src.includes("compareVer(done, CURRENT_VERSION) === 0"), 'phải so phiên bản marker với phiên bản thật');
   assert.ok(src.includes('Cập nhật phiên bản v'), 'phải hiện tên phiên bản trong thông báo');
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(main.includes("if (version && version !== app.getVersion()) return ''"), 'marker phải giữ lại nếu mở app quá sớm');
+});
+
+test('đếm ngược 3 giây trước khi cài, không dùng shell.openPath', () => {
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  assert.ok(ui.includes('tick(3)') && ui.includes('Tắt app sau'), 'phải có đếm ngược 3 giây');
+  assert.ok(ui.includes('mở lại app bằng shortcut'), 'phải hướng dẫn mở lại bằng shortcut');
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(!main.includes('shell.openPath(file)'), 'KHÔNG được để Windows hiện hộp thoại Chọn ứng dụng để mở');
 });

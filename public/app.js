@@ -1037,18 +1037,22 @@ function showUpdateDialog(info) {
     btn.disabled = false;
     btn.textContent = 'Tải lại để cập nhật';
     btn.className = 'btn primary';
-    state.innerHTML = `<span class="badge ok" style="display:inline-flex;margin-bottom:8px">Đã tải xong v${esc(info.version)} — app vẫn đang mở</span><div>Bấm nút bên dưới để <b>cài đặt và tải lại</b> sang bản mới. App sẽ đóng vài chục giây rồi tự mở lại.</div>`;
-    btn.onclick = async () => {
+    state.innerHTML = `<span class="badge ok" style="display:inline-flex;margin-bottom:8px">Đã tải xong v${esc(info.version)} — app vẫn đang mở</span><div>Bấm nút bên dưới để <b>cài đặt</b> bản mới. App sẽ đếm ngược 3 giây rồi tắt để cài đặt.</div>`;
+    btn.onclick = () => {
       btn.disabled = true;
-      btn.textContent = 'Đang tải lại…';
-      state.textContent = 'Đang chuyển sang phiên bản mới. App sẽ đóng vài chục giây rồi tự mở lại…';
-      try {
-        await window.flowBridge.installUpdate(file, info.version);
-      } catch (er) {
-        btn.disabled = false;
-        btn.textContent = 'Tải lại để cập nhật';
-        fail(er);
-      }
+      const tick = (n) => {
+        btn.textContent = n > 0 ? `Tắt app sau ${n}s…` : 'Đang cài đặt…';
+        state.innerHTML = n > 0
+          ? `App sẽ tắt sau <b>${n} giây</b> để cài bản <b>v${esc(info.version)}</b>.<br>Sau khi cài xong (khoảng 30–60 giây), <b>mở lại app bằng shortcut trên Desktop</b> để dùng phiên bản mới.`
+          : 'Đang cài đặt im lặng. Mở lại app bằng shortcut sau khoảng 30–60 giây.';
+        if (n > 0) setTimeout(() => tick(n - 1), 1000);
+        else window.flowBridge.installUpdate(file, info.version).catch((er) => {
+          btn.disabled = false;
+          btn.textContent = 'Tải lại để cập nhật';
+          fail(er);
+        });
+      };
+      tick(3);
     };
   };
 
