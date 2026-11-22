@@ -50,7 +50,9 @@ function loadToken() {
 const TOKEN = loadToken();
 
 function git(list, auth) {
-  const prefix = auth ? ['-c', `http.extraHeader=AUTHORIZATION: bearer ${TOKEN}`] : [];
+  // GitHub chấp nhận Basic với username đặc biệt "x-access-token" (Bearer không dùng được cho git HTTPS).
+  const basic = Buffer.from(`x-access-token:${TOKEN}`).toString('base64');
+  const prefix = auth ? ['-c', `http.extraHeader=AUTHORIZATION: basic ${basic}`] : [];
   return execFileSync('git', [...prefix, ...list], {
     cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
