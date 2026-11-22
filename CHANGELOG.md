@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## v1.1.17 - 2026-11-22
+- Sửa lỗi sao lưu không chứa dự án: loại Chrome profile (bị khoá gây lỗi EBUSY) ra khỏi backup, copy vào thư mục tạm rồi đổi tên, có manifest và kiểm tra trước khi báo thành công.
+- Sửa lỗi bấm shortcut lần 2 làm đóng nhầm Chrome/hàng đợi của app đang chạy.
+- Sửa lỗi cửa sổ nhỏ nhất 1000px không bấm được nút Cài đặt (header tự xuống dòng từ 1120px).
+- Sửa lỗi mất job dọn installer cũ khi mở lại app quá sớm; giữ job lại đến khi phiên bản tăng thật.
+- Cập nhật báo lỗi cài đặt thất bại (UAC/NSIS) cho người dùng ở lần mở app tiếp theo.
+- Thêm timeout và reset nút cho kiểm tra/tải cập nhật; phím Esc đóng đúng hộp thoại; không mất các ô Cài đặt chưa Lưu.
+- Sửa lỗi gõ prompt xong bấm sang bước khác trong 600ms làm lưu nhầm nội dung sang bước mới.
+- Chặn đường dẫn dự án lạ (path traversal) và bỏ định nghĩa trùng route sao lưu.
+- Chốt cứng thư mục dữ liệu, không để app đọc nhầm dataset cũ giữa hai thư mục AppData.
+- Thay test soi nội dung bằng test chạy thật các hàm cập nhật; cập nhật thông báo "Mở lại sau 10–20 giây...".
+
+
 ## v1.1.16 - 2026-11-22
 - Thêm viền xanh kiểu outline cho nút “Kiểm tra phiên bản mới” trong Cài đặt.
 - Khi đếm ngược đóng app sau 3s, thêm dòng nhỏ “Mở lại app sau khoảng 10 giây.”

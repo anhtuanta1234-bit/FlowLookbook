@@ -6,17 +6,27 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const { runCleanup } = require('./update-cleanup');
+const { sameVersion, shouldKeepPending, validateInstallerUrl, buildHelperScript } = require('./update-helpers');
 
 const PORT = process.env.PORT || 4177;
 const APP_URL = `http://127.0.0.1:${PORT}`;
 const ROOT = path.join(__dirname, '..');
 const ICON = path.join(__dirname, 'icon.png');
+// Chốt cứng userData TRƯỚC mọi getPath('userData') (kể cả lần config.js gọi khi require server).
+// Nếu chỉ setName('Flow Lookbook') rồi để Electron tự suy, userData nhảy sang
+// %APPDATA%\Flow Lookbook — thư mục cũ — và app đọc nhầm dataset cũ. Giữ nguyên
+// %APPDATA%\flowlookbook = thư mục đang dùng. Không migrate/xoá thư mục cũ.
+const APP_DATA_NAME = 'flowlookbook';
+app.setName('Flow Lookbook');
+app.setPath('userData', path.join(app.getPath('appData'), APP_DATA_NAME));
 const PENDING_CLEANUP = path.join(app.getPath('userData'), 'pending-cleanup.json');
 const UPDATE_SUCCESS = path.join(app.getPath('userData'), 'update-success.json');
+const UPDATE_LOCK = path.join(os.tmpdir(), 'flow-update.lock');
+const UPDATE_CANCEL = path.join(os.tmpdir(), 'flow-update-cancel.json');
+const UPDATE_STATUS = path.join(os.tmpdir(), 'flow-update-status.json');
+let LAST_UPDATE_ERROR = '';
 // Chỉ máy có mã nguồn ở E:\FlowLookbook mới có thư mục dist để dọn installer cũ.
 const SOURCE_ROOT = process.platform === 'win32' && fs.existsSync('E:\\FlowLookbook') ? 'E:\\FlowLookbook' : '';
-
-app.setName('Flow Lookbook');
 
 // Server đã chạy sẵn ở nơi khác (ví dụ bản chạy nền cũ) thì dùng luôn, không mở thêm.
 // Chỉ coi là "đúng app" khi /api/ping trả về đúng định danh, tránh mở nhầm một app khác chiếm cổng 4177.
@@ -97,6 +107,9 @@ function createWindow() {
 
 // Khi đóng app: đóng luôn Chrome của tool để không để lại tiến trình ngầm tốn tài nguyên.
 app.on('before-quit', (e) => {
+  // Instance thứ 2 (bấm shortcut khi app đang mở) sẽ đi thẳng vào app.quit().
+  // Không được phép gửi /api/flow/close tới server của instance đang chạy.
+  if (!app.hasSingleInstanceLock()) return;
   if (app.isQuitting) return;
   app.isQuitting = true;
   e.preventDefault();
@@ -120,13 +133,17 @@ ipcMain.handle('flow:pick-folder', async (e, current) => {
 // ---------- tự tải / cập nhật ----------
 // Tải installer về thư mục Downloads của người dùng, báo tiến độ cho giao diện.
 ipcMain.handle('flow:download-update', async (e, url) => {
-  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('Link tải không hợp lệ.');
-  const res = await fetch(url, { redirect: 'follow' });
+  const checked = validateInstallerUrl(url);
+  if (!checked.ok) throw new Error(checked.reason);
+  const res = await fetch(checked.url, { redirect: 'follow' });
   if (!res.ok) throw new Error('Không tải được bản cập nhật (HTTP ' + res.status + ').');
-  let name = '';
-  try { name = decodeURIComponent(new URL(res.url || url).pathname.split('/').pop() || ''); } catch (_) {}
-  if (!/\.exe$/i.test(name)) name = 'Flow Lookbook Setup.exe';
-  const dest = path.join(app.getPath('downloads'), name);
+  // Redirect tới CDN của GitHub vẫn hợp lệ, nhưng tên file phải giữ nguyên.
+  let finalName = checked.fileName;
+  try {
+    const finalUrl = validateInstallerUrl(res.url || checked.url);
+    if (finalUrl.ok) finalName = finalUrl.fileName;
+  } catch (_) {}
+  const dest = path.join(app.getPath('downloads'), finalName);
   const total = Number(res.headers.get('content-length') || 0);
   const reader = res.body?.getReader();
   if (!reader) throw new Error('Không đọc được dữ liệu tải về.');
@@ -141,6 +158,7 @@ ipcMain.handle('flow:download-update', async (e, url) => {
       e.sender.send('flow:update-progress', total ? Math.min(100, Math.round(received * 100 / total)) : -1);
     }
     await new Promise((resolve, reject) => { out.end(resolve); out.on('error', reject); });
+    if (received < 20 * 1024 * 1024) throw new Error('File tải về quá nhỏ, có thể bị lỗi. Vui lòng thử lại.');
   } catch (er) {
     out.destroy();
     try { fs.rmSync(dest, { force: true }); } catch (_) {}
@@ -166,19 +184,31 @@ function autoCleanEnabled() {
 
 // App cũ ghi lại việc cần dọn trước khi thoát; app mới sẽ đọc sau khi đã mở lại.
 function writePendingCleanup(installer, targetVersion) {
+  fs.writeFileSync(PENDING_CLEANUP, JSON.stringify({
+    fromVersion: app.getVersion(),
+    installer,
+    sourceRoot: SOURCE_ROOT,
+    createdAt: Date.now(),
+  }, null, 2));
+  updateLog('pending cleanup saved');
+  fs.writeFileSync(UPDATE_SUCCESS, JSON.stringify({ version: targetVersion || '', at: Date.now() }));
+  updateLog('update-success marker saved');
+}
+
+function clearUpdateMarkers() {
+  for (const f of [PENDING_CLEANUP, UPDATE_SUCCESS, UPDATE_LOCK, UPDATE_CANCEL, UPDATE_STATUS]) {
+    try { fs.rmSync(f, { force: true }); } catch (_) {}
+  }
+}
+
+// Helper ghi trạng thái thật của installer (exit code / lỗi) sau khi app đã đóng.
+function readHelperStatus() {
   try {
-    fs.writeFileSync(PENDING_CLEANUP, JSON.stringify({
-      fromVersion: app.getVersion(),
-      installer,
-      sourceRoot: SOURCE_ROOT,
-      createdAt: Date.now(),
-    }, null, 2));
-    updateLog('pending cleanup saved');
-  } catch (er) { updateLog('pending cleanup error=' + er.message); }
-  try {
-    fs.writeFileSync(UPDATE_SUCCESS, JSON.stringify({ version: targetVersion || '', at: Date.now() }));
-    updateLog('update-success marker saved');
-  } catch (er) { updateLog('update-success marker error=' + er.message); }
+    if (!fs.existsSync(UPDATE_STATUS)) return null;
+    const s = JSON.parse(fs.readFileSync(UPDATE_STATUS, 'utf8'));
+    try { fs.rmSync(UPDATE_STATUS, { force: true }); } catch (_) {}
+    return s;
+  } catch (_) { return null; }
 }
 
 // Chạy lúc app mới đã khởi động: chỉ dọn khi phiên bản thật sự tăng.
@@ -186,9 +216,15 @@ function cleanupOldInstallers() {
   let job = null;
   try { job = JSON.parse(fs.readFileSync(PENDING_CLEANUP, 'utf8')); }
   catch (_) { return; }
-  try { fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}
-  try { runCleanup(job, app.getVersion(), updateLog, { enabled: autoCleanEnabled() }); }
+  let result = null;
+  try { result = runCleanup(job, app.getVersion(), updateLog, { enabled: autoCleanEnabled() }); }
   catch (er) { updateLog('cleanup error=' + er.message); }
+  // Mở app quá sớm (bản chưa tăng) thì GIỮ job — đừng xoá như trước.
+  const keep = shouldKeepPending(app.getVersion(), job)
+    || (result && result.skipped && result.reason === 'version not advanced');
+  if (!keep) {
+    try { fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}
+  }
 }
 
 // Bản mới đọc marker này ngay lúc khởi động để hiện thông báo thành công.
@@ -198,11 +234,18 @@ ipcMain.handle('flow:consume-update-success', () => {
     let version = '';
     try { version = JSON.parse(fs.readFileSync(UPDATE_SUCCESS, 'utf8')).version || ''; } catch (_) {}
     // Mở lại quá sớm (installer chưa xong) thì GIỮ marker, không báo thành công sai.
-    // Lần mở sau, khi app.getVersion() đúng bằng bản đích → mới xoá marker và báo.
-    if (version && version !== app.getVersion()) return '';
+    // So sánh bằng số phiên bản để "v1.1.17" / "1.1.17.0" vẫn khớp với app.getVersion().
+    if (version && !sameVersion(version, app.getVersion())) return '';
     fs.rmSync(UPDATE_SUCCESS, { force: true });
     return version;
   } catch (_) { return ''; }
+});
+
+// Lỗi cài đặt thật (NSIS exit≠0, UAC từ chối, file hỏng) được báo lại cho user.
+ipcMain.handle('flow:consume-update-error', () => {
+  const msg = LAST_UPDATE_ERROR;
+  LAST_UPDATE_ERROR = '';
+  return msg;
 });
 
 ipcMain.handle('flow:install-update', async (_e, file, version) => {
@@ -211,85 +254,96 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
   // Không dùng shell.openPath(): Windows có thể hiện hộp thoại "Chọn một ứng dụng để mở".
   if (!app.isPackaged) { updateLog('dev mode: bỏ qua cài tự động'); return 'dev-skipped'; }
 
-  writePendingCleanup(file, version);
   const { spawn } = require('child_process');
-  const currentExe = app.getPath('exe');
-  // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → KHÔNG tự mở lại.
-  // Người dùng mở lại bằng shortcut; app mới sẽ hiện thông báo thành công nếu phiên bản khớp.
-  // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
-  // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
-  const ps = `param([string]$Config)
-$c = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
-$Installer = $c.installer
-$AppExe = $c.appExe
-$Log = $c.log
-$Token = $c.token
-function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
-W "helper start token=$Token"
-for ($i = 0; $i -lt 100; $i++) {
-  $running = Get-Process -Name 'Flow Lookbook' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $AppExe }
-  if (-not $running) { break }
-  Start-Sleep -Milliseconds 400
-}
-W "waited ticks=$i stillRunning=$([bool]$running)"
-try {
-  $proc = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru -ErrorAction Stop
-  W "installer exit=$($proc.ExitCode)"
-} catch {
-  W "installer error=$($_.Exception.Message)"
-}
-W "install finished - user will relaunch manually"
-W "helper end"
-Remove-Item -LiteralPath $Config -Force -ErrorAction SilentlyContinue
-`;
   const token = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');
   const config = path.join(os.tmpdir(), 'flow-update-params.json');
-  fs.writeFileSync(helper, ps, 'utf8');
-  // KHÔNG truyền đường dẫn có dấu cách qua -ArgumentList: PowerShell 5.1 sẽ tách
-  // "C:\Users\TA ANH TUAN\..." thành nhiều arg, Windows hiện hộp "Chọn ứng dụng để mở 'TA'".
-  // Ghi hết vào JSON, chỉ truyền đường dẫn ngắn (không dấu cách) của file helper + config.
-  fs.writeFileSync(config, JSON.stringify({
-    installer: file, appExe: currentExe, log: UPDATE_LOG, token,
-  }), 'utf8');
-  updateLog('helper written: ' + helper);
+  let wrapper = null;
 
-  // spawn(detached:true) trên Windows làm PowerShell thoát ngay mà KHÔNG chạy -File.
-  // Phải dùng một PowerShell trung gian gọi Start-Process để helper là "cháu" tách biệt,
-  // sống sót sau khi app đóng. Token giúp phân biệt lần chạy này với log cũ.
-  const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
-  const inner = "Start-Process -FilePath 'powershell.exe' -ArgumentList @(" +
-    "'-NoProfile','-ExecutionPolicy','Bypass','-File'," + q(helper) +
-    ",'-Config'," + q(config) + ") -WindowStyle Hidden";
-  updateLog('helper spawn token=' + token);
-  const wrapper = spawn('powershell.exe', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', inner,
-  ], { stdio: 'ignore', windowsHide: true });
-  wrapper.on('error', (er) => updateLog('helper spawn error=' + er.message));
-  wrapper.on('exit', (code) => updateLog('helper wrapper exit=' + code));
+  // Chặn double-install: nếu có lượt khác còn hiệu lực thì từ chối ngay.
+  try {
+    if (fs.existsSync(UPDATE_LOCK)) {
+      let lock = {};
+      try { lock = JSON.parse(fs.readFileSync(UPDATE_LOCK, 'utf8')); } catch (_) {}
+      if (lock.token && lock.token !== token && Date.now() - (lock.at || 0) < 10 * 60 * 1000) {
+        throw new Error('Đang có một lượt cập nhật khác. Vui lòng đợi vài phút rồi thử lại.');
+      }
+      try { fs.rmSync(UPDATE_LOCK, { force: true }); } catch (_) {}
+    }
+    fs.writeFileSync(UPDATE_LOCK, JSON.stringify({ token, at: Date.now() }), { flag: 'wx' });
+  } catch (er) {
+    clearUpdateMarkers();
+    throw er;
+  }
 
-  // Đợi helper ghi xác nhận rồi mới tắt app — không bao giờ tắt khi helper chưa chạy.
-  await new Promise((resolve, reject) => {
-    const startedAt = Date.now();
-    const iv = setInterval(() => {
-      let started = false;
-      try { started = fs.readFileSync(UPDATE_LOG, 'utf8').includes('helper start token=' + token); }
-      catch (_) {}
-      if (started || Date.now() - startedAt > 8000) {
-        clearInterval(iv);
+  let rolledBack = false;
+  const cancelAndRollback = (reason) => {
+    if (rolledBack) return;
+    rolledBack = true;
+    try { fs.writeFileSync(UPDATE_CANCEL, token, 'utf8'); } catch (_) {}
+    if (wrapper && !wrapper.killed) { try { wrapper.kill(); } catch (_) {} }
+    updateLog(reason + ' — hủy cập nhật, app vẫn mở');
+    clearUpdateMarkers();
+    for (const f of [config, helper]) { try { fs.rmSync(f, { force: true }); } catch (_) {} }
+  };
+
+  try {
+    writePendingCleanup(file, version);
+    fs.writeFileSync(helper, buildHelperScript(), 'utf8');
+    // KHÔNG truyền đường dẫn có dấu cách qua -ArgumentList: PowerShell 5.1 sẽ tách
+    // "C:\Users\TA ANH TUAN\..." thành nhiều arg, Windows hiện hộp "Chọn ứng dụng để mở 'TA'".
+    fs.writeFileSync(config, JSON.stringify({
+      installer: file,
+      appExe: app.getPath('exe'),
+      log: UPDATE_LOG,
+      token,
+      lock: UPDATE_LOCK,
+      cancel: UPDATE_CANCEL,
+      status: UPDATE_STATUS,
+      processName: path.basename(app.getPath('exe'), '.exe'),
+    }), 'utf8');
+    updateLog('helper written: ' + helper);
+
+    // spawn(detached:true) trên Windows làm PowerShell thoát ngay mà KHÔNG chạy -File.
+    // Phải dùng PowerShell trung gian để helper sống sót sau khi app đóng. Token giúp
+    // phân biệt lần chạy này với log cũ và là cách duy nhất để hủy helper nếu timeout.
+    const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+    const inner = "Start-Process -FilePath 'powershell.exe' -ArgumentList @(" +
+      "'-NoProfile','-ExecutionPolicy','Bypass','-File'," + q(helper) +
+      ",'-Config'," + q(config) + ") -WindowStyle Hidden";
+    updateLog('helper spawn token=' + token);
+    wrapper = spawn('powershell.exe', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', inner,
+    ], { stdio: 'ignore', windowsHide: true });
+    wrapper.on('error', (er) => updateLog('helper spawn error=' + er.message));
+    wrapper.on('exit', (code) => updateLog('helper wrapper exit=' + code));
+
+    // Đợi helper ghi xác nhận rồi mới cho UI đếm ngược. Timeout 15s (AV/PS cold start
+    // có thể chậm hơn 8s) → ghi file huỷ để helper tự thoát, rollback toàn bộ marker.
+    await new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const iv = setInterval(() => {
+        let started = false;
+        try { started = fs.readFileSync(UPDATE_LOG, 'utf8').includes('helper start token=' + token); }
+        catch (_) {}
         if (started) {
+          clearInterval(iv);
           updateLog('helper confirmed running');
           resolve();
           return;
         }
-        // Không xác nhận được thì TUYỆT ĐỐI không tắt app: báo lỗi để giao diện hiện nút Thử lại.
-        updateLog('helper start timeout — hủy cập nhật, app vẫn mở');
-        try { fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}
-        try { fs.rmSync(UPDATE_SUCCESS, { force: true }); } catch (_) {}
-        reject(new Error('Không khởi được tiến trình cập nhật. Vui lòng bấm “Thử lại”.'));
-      }
-    }, 100);
-  });
+        if (Date.now() - startedAt > 15000) {
+          clearInterval(iv);
+          cancelAndRollback('helper start timeout');
+          reject(new Error('Không khởi được tiến trình cập nhật. Vui lòng bấm “Thử lại”.'));
+        }
+      }, 100);
+    });
+  } catch (er) {
+    cancelAndRollback('helper setup error: ' + (er && er.message ? er.message : er));
+    if (String(er && er.message || '').includes('Không khởi được')) throw er;
+    throw new Error('Không chuẩn bị được bản cập nhật: ' + (er && er.message ? er.message : er));
+  }
 
   // Không tự đóng ở đây: giao diện sẽ đếm ngược 3 giây rồi gọi flow:quit-for-update.
   return 'ready';
@@ -320,8 +374,19 @@ if (app.requestSingleInstanceLock()) {
       app.quit();
       return;
     }
+    const status = readHelperStatus();
+    if (status && status.ok === false) {
+      // NSIS thất bại: đừng giữ marker thành công, báo lỗi thật cho user ở lần mở này.
+      updateLog('helper reported install failure: ' + (status.error || 'exit=' + status.exitCode));
+      LAST_UPDATE_ERROR = 'Cài đặt phiên bản mới thất bại'
+        + (status.error ? ': ' + status.error : '')
+        + '. App vẫn dùng bản cũ, bạn có thể thử lại trong Cài đặt.';
+      clearUpdateMarkers();
+    } else {
+      if (status) updateLog('helper reported install success, exit=' + status.exitCode);
+      cleanupOldInstallers(); // bản mới đã chạy ổn → dọn installer cũ (nếu có)
+    }
     createWindow();
-    cleanupOldInstallers(); // bản mới đã chạy ổn → dọn installer cũ (nếu có)
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
 } else {

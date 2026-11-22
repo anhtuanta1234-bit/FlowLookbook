@@ -2,20 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { buildHelperScript } = require('./update-helpers');
 
-// Helper cập nhật từng bị ghi nhầm thành một here-string (@' ... '@) nên không chạy.
-// Test này đảm bảo file .ps1 tạo ra là script thật, có đủ 3 bước: log, cài, mở lại.
+// Helper cập nhật từng bị ghi nhầm thành here-string (@' ... '@) nên không chạy.
+// Giờ script được sinh bởi buildHelperScript() — test chạy thật hàm đó, không bóc chuỗi trong main.js.
 test('helper tự cập nhật là script PowerShell chạy được', () => {
-  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  const found = src.match(/const ps = `([\s\S]*?)`;/);
-  assert.ok(found, 'không tìm thấy nội dung helper trong main.js');
-  const ps = found[1];
+  const ps = buildHelperScript();
   assert.ok(!ps.includes("@'") && !ps.includes("'@"), 'helper không được bọc trong here-string');
   assert.ok(ps.includes('Add-Content -LiteralPath $Log'), 'phải ghi log từng bước');
   assert.ok(ps.includes('Start-Process -FilePath $Installer'), 'phải chạy installer');
   assert.ok(!ps.includes('Start-Process -FilePath $AppExe'), 'không tự mở lại app — user mở bằng shortcut');
   assert.ok(ps.includes('user will relaunch manually'), 'phải ghi rõ chế độ mở lại thủ công');
   assert.ok(ps.includes('helper start token=$Token'), 'phải ghi token để xác nhận helper chạy');
+  assert.ok(ps.includes('WriteStatus $false'), 'phải ghi trạng thái thất bại kèm exit code');
+  assert.ok(ps.includes('Get-Process -Name $ProcessName'), 'không được hardcode tên process');
 });
 
 test('helper được khởi qua Start-Process trung gian, không spawn detached', () => {
@@ -30,7 +30,9 @@ test('helper được khởi qua Start-Process trung gian, không spawn detached
 
 test('một nút duy nhất: tải xong tự cập nhật, không còn nút tải lại', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
-  const block = src.slice(src.indexOf('const file = await window.flowBridge.downloadUpdate'), src.indexOf('const file = await window.flowBridge.downloadUpdate') + 500);
+  const start = src.indexOf('window.flowBridge.downloadUpdate');
+  assert.ok(start >= 0, 'phải có lượt tải installer');
+  const block = src.slice(start, start + 1200);
   assert.ok(block.includes('Đang cập nhật'), 'tải xong phải hiện “Đang cập nhật…”');
   assert.ok(block.includes('installUpdate(file, info.version)'), 'tải xong phải tự gọi cài, không cần bấm tiếp');
   assert.ok(!src.includes('showReloadRequired'), 'không được giữ nút “Tải lại để cập nhật”');
@@ -54,7 +56,7 @@ test('thông báo thành công chỉ hiện khi đúng phiên bản đang chạy
   assert.ok(src.includes("compareVer(done, CURRENT_VERSION) === 0"), 'phải so phiên bản marker với phiên bản thật');
   assert.ok(src.includes('Cập nhật phiên bản v'), 'phải hiện tên phiên bản trong thông báo');
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  assert.ok(main.includes("if (version && version !== app.getVersion()) return ''"), 'marker phải giữ lại nếu mở app quá sớm');
+  assert.ok(main.includes("if (version && !sameVersion(version, app.getVersion())) return ''"), 'marker phải so bằng số phiên bản, giữ lại nếu mở app quá sớm');
 });
 
 test('sau khi khởi cài: hiện đếm ngược 3 giây rồi mới đóng app', () => {
@@ -63,7 +65,7 @@ test('sau khi khởi cài: hiện đếm ngược 3 giây rồi mới đóng app
   assert.ok(block.includes('Đóng sau ${n}s'), 'phải hiện “Đóng sau 3s/2s/1s”');
   assert.ok(block.includes('quitForUpdate'), 'hết 3 giây mới gọi lệnh đóng app');
   assert.ok(block.includes('Mở lại app bằng shortcut'), 'phải hướng dẫn mở lại bằng shortcut');
-  assert.ok(block.includes('Mở lại app sau khoảng 10 giây.'), 'phải có dòng nhỏ báo mở lại sau ~10s');
+  assert.ok(block.includes('Mở lại sau 10–20 giây; nếu chưa thấy bản mới, mở lại lần nữa.'), 'phải có dòng nhỏ báo mở lại sau 10–20s');
   assert.ok(block.includes('font-size:11px'), 'dòng báo mở lại phải nhỏ');
   assert.ok(block.includes('v${esc(info.version)}'), 'phải hiện đúng tên phiên bản đích');
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
@@ -85,10 +87,28 @@ test('cài đặt: phiên bản và nút kiểm tra phiên bản mới nằm nga
   assert.ok(html.includes('Cài đặt → Kiểm tra phiên bản mới'), 'tooltip phải theo tên mới');
 });
 
-test('helper không xác nhận thì báo lỗi, không tắt app và xoá marker', () => {
+test('helper không xác nhận thì báo lỗi, ghi file huỷ và rollback marker', () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  const block = main.slice(main.indexOf('await new Promise((resolve, reject)'), main.indexOf("ipcMain.handle('flow:quit-for-update'"));
+  const block = main.slice(main.indexOf('const cancelAndRollback'), main.indexOf("ipcMain.handle('flow:quit-for-update'"));
+  assert.ok(block.includes('UPDATE_CANCEL'), 'phải ghi token huỷ để helper đang chạy cũng dừng');
+  assert.ok(block.includes('clearUpdateMarkers()'), 'phải rollback cả marker dọn lẫn marker thành công');
+  assert.ok(block.includes('wrapper.kill()'), 'phải dừng PowerShell trung gian');
   assert.ok(block.includes('reject(new Error('), 'phải báo lỗi khi helper không chạy');
-  assert.ok(block.includes('rmSync(PENDING_CLEANUP'), 'phải xoá marker dọn khi hủy');
-  assert.ok(block.includes('rmSync(UPDATE_SUCCESS'), 'phải xoá marker thành công khi hủy');
+  assert.ok(main.includes('Date.now() - startedAt > 15000'), 'timeout phải đủ 15s cho AV/PS cold start');
+});
+
+test('mở app quá sớm thì giữ job dọn, không xoá pending-cleanup', () => {
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(main.includes('shouldKeepPending(app.getVersion(), job)'), 'phải dùng helper quyết định giữ job');
+  assert.ok(!main.includes('fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}\n  try { runCleanup'),
+    'không được xoá marker trước khi runCleanup kiểm tra version');
+});
+
+test('helper báo lỗi installer thì báo lại cho user ở lần mở sau', () => {
+  const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(preload.includes('consumeUpdateError'), 'preload phải mở hàm đọc lỗi cài đặt');
+  assert.ok(main.includes("ipcMain.handle('flow:consume-update-error'"), 'main phải có IPC báo lỗi');
+  assert.ok(main.includes('status.ok === false'), 'chỉ báo lỗi khi helper xác nhận thất bại');
+  assert.ok(main.includes('LAST_UPDATE_ERROR'), 'phải giữ lỗi lại cho giao diện đọc');
 });

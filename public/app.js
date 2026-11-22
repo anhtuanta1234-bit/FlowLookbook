@@ -108,7 +108,7 @@ async function reloadUI() {
       if (tr[k]) clearTimeout(tr[k].timer);
       await api('PATCH', `/api/projects/${S.p.id}`, { [k]: { promptVi: vi.value, promptEn: en.value, enFrom: (tr[k] && tr[k].enFrom) || vi.value } }).catch(() => {});
     }
-    clearTimeout(saveTimer);
+    clearSaveTimer(false); // reloadUI vừa lưu xong ô prompt hiện tại → bỏ timer cũ, không để nó ghi nhầm ô/bước
   } catch (_) {}
   location.reload();
 }
@@ -161,12 +161,22 @@ async function init() {
     const el = $('#appVer'); if (el && CURRENT_VERSION) el.textContent = 'v' + CURRENT_VERSION;
   } catch (_) {}
   // Bản mới vừa cài xong và mở lại: chỉ báo thành công nếu đúng phiên bản đang chạy.
+  let updateSuccessShown = false;
   try {
     const done = await window.flowBridge?.consumeUpdateSuccess?.();
     if (done && (!CURRENT_VERSION || compareVer(done, CURRENT_VERSION) === 0)) {
       toast('Cập nhật phiên bản v' + done + ' thành công!', 'ok', { duration: 15000 });
+      updateSuccessShown = true;
     }
   } catch (_) {}
+  // Cài đặt thất bại ở lần trước: chỉ báo lỗi khi KHÔNG có thông báo thành công ở trên
+  // (vỏ Electron cũ chưa có hàm này thì optional chaining giúp bỏ qua quietly).
+  if (!updateSuccessShown) {
+    try {
+      const errMsg = await window.flowBridge?.consumeUpdateError?.();
+      if (errMsg) toast(String(errMsg), 'err', { duration: 15000 });
+    } catch (_) {}
+  }
   S.koc = await api('GET', '/api/koc');
   S.projects = await api('GET', '/api/projects');
   try { S.projectDeleteApi = (await api('GET', '/api/projects/delete-capabilities')).safeDelete === true; } catch (_) { S.projectDeleteApi = false; }
@@ -425,6 +435,7 @@ const STEPS = [
 function stageDone(n) { const p = S.p; return n === 1 ? !!p.s1.approved : n === 2 ? !!p.s2.approved : p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen); }
 
 function renderMain() {
+  clearSaveTimer(true); // đổi sản phẩm / đổi bước: chốt nội dung đang gõ cho đúng project + đúng key rồi mới vẽ lại
   const p = S.p;
   document.title = `${p.name} — Flow Lookbook`;
   $('#main').innerHTML = `
@@ -514,19 +525,31 @@ function buildCtl() {
     <div class="runbar"><span class="mchip" data-tip="Cố định: mỗi lượt luôn tạo ${S.cfg.imagesPerRun || 4} ảnh, tỉ lệ ${S.cfg.aspect || '9:16'}, model Nano Banana 2.1">🍌 Nano Banana 2.1<span class="sep"></span><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/></svg>${S.cfg.aspect || '9:16'}<span class="sep"></span>x${S.cfg.imagesPerRun || 4}</span><span class="grow"></span><button class="btn primary big" data-act="run" data-stage="${S.stage}" data-tip="${esc(T.tip)}">${T.run} ${I.right}</button></div>`;
   const vi = $('#vi'), en = $('#en'); const t = (tr[k] = { seq: 0, manual: false, timer: null, pending: null, enFrom: st.enFrom || '' });
   vi.oninput = () => { t.manual = false; setStat('Sẽ tự dịch…'); clearTimeout(t.timer); t.timer = setTimeout(() => doTranslate(k), 1200); saveLater(k); };
-  en.oninput = () => { t.manual = true; clearTimeout(t.timer); t.seq++; setStat('Đã sửa tay', 'acc'); saveLater(k, true); };
+  en.oninput = () => { t.manual = true; clearTimeout(t.timer); t.seq++; setStat('Đã sửa tay', 'acc'); saveLater(k); };
   if (vi.value.trim() && (!en.value.trim())) doTranslate(k);
   else setStat(en.value.trim() ? 'Đã có bản dịch' : '');
 }
 function setStat(text, kind = '') { const el = $('#stat'); if (el) el.innerHTML = text ? `<span class="badge ${kind}">${text}</span>` : ''; }
 
-let saveTimer;
-function saveLater(k, enEdited) {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const vi = $('#vi'), en = $('#en'); if (!vi || !S.p) return;
-    api('PATCH', `/api/projects/${S.p.id}`, { [k]: { promptVi: vi.value, promptEn: en.value, enFrom: vi.value } }).catch(() => {});
-  }, 600);
+// Lưu prompt có trễ 600ms. QUAN TRỌNG: chụp giá trị + key (s1/s2/s3) + projectId NGAY LÚC GÕ,
+// không đọc DOM lúc timer chạy — nếu người dùng sang bước khác trong 600ms thì timer cũ
+// sẽ ghi nhầm prompt của bước mới vào bước cũ.
+let saveTimer = null;
+let pendingSave = null; // { projectId, body }
+function clearSaveTimer(flush = false) {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  const job = pendingSave; pendingSave = null;
+  if (!flush || !job) return;
+  const k = Object.keys(job.body)[0];
+  // Giữ bản sao local khớp nội dung vừa gửi để render lại không hiện chữ cũ.
+  if (S.p && S.p.id === job.projectId && S.p[k]) Object.assign(S.p[k], job.body[k]);
+  api('PATCH', `/api/projects/${job.projectId}`, job.body).catch(() => {});
+}
+function saveLater(k) {
+  clearSaveTimer(false);
+  const vi = $('#vi'), en = $('#en'); if (!vi || !en || !S.p) return;
+  pendingSave = { projectId: S.p.id, body: { [k]: { promptVi: vi.value, promptEn: en.value, enFrom: vi.value } } };
+  saveTimer = setTimeout(() => clearSaveTimer(true), 600);
 }
 async function doTranslate(k) {
   const vi = $('#vi'), en = $('#en'); if (!vi || !vi.value.trim()) return;
@@ -555,7 +578,7 @@ async function ensureTranslated(k) {
     if (t.enFrom !== vi.value) throw new Error('Chưa có bản dịch tiếng Anh khớp với prompt tiếng Việt hiện tại nên tool dừng để không gửi sai prompt. Kiểm tra mạng rồi thử lại, hoặc gõ trực tiếp vào ô Tiếng Anh.');
   }
   if (!en.value.trim()) throw new Error('Prompt tiếng Anh đang trống. Hãy nhập prompt (tool tự dịch) hoặc bấm “Dịch lại”.');
-  clearTimeout(saveTimer);
+  clearSaveTimer(false); // sắp lưu ngay nội dung hiện tại → hủy timer cũ, tránh ghi nhầm bước
   await api('PATCH', `/api/projects/${S.p.id}`, { [k]: { promptVi: vi.value, promptEn: en.value, enFrom: vi.value } });
 }
 
@@ -741,7 +764,7 @@ async function act(b) {
   }
   const p0 = S.p; if (!p0 && a !== 'goto') return;
   if (a === 'retryhq') return api('POST', `/api/projects/${p.id}/retry-hq`, { stage: S.stage });
-  if (a === 'goto') { const to = +b.dataset.stage; S.p = await api('PATCH', `/api/projects/${p.id}`, { stage: to }); S.stage = to; return renderMain(); }
+  if (a === 'goto') { clearSaveTimer(true); const to = +b.dataset.stage; S.p = await api('PATCH', `/api/projects/${p.id}`, { stage: to }); S.stage = to; return renderMain(); }
   if (a === 'openout') return api('POST', `/api/projects/${p.id}/open-output`);
   if (a === 'retranslate') { tr[PK[S.stage]].manual = false; return doTranslate(PK[S.stage]); }
   if (a === 'run') { const k = PK[S.stage]; await ensureTranslated(k); const r = await api('POST', `/api/projects/${p.id}/run`, { stage: S.stage }); if (S.stage !== 3) $('#resPane')?.scrollTo({ top: 0, behavior: 'smooth' }); return toast(`Đã đưa ${r.queued} lượt vào hàng đợi.`, 'ok'); }
@@ -844,9 +867,15 @@ async function recrop(group, file, sid) {
 }
 
 // ---------- hộp thoại ----------
+// Hộp thoại nào đang mở thì đăng ký close() của nó ở đây để phím Esc gọi đúng (không chỉ ẩn div).
+let activeModalClose = null;
 function modal(html, narrow) {
   const m = $('#modal'); m.innerHTML = `<div class="box ${narrow ? 'narrow' : ''}">${html}</div>`; m.classList.remove('hidden');
-  const close = () => { m.classList.add('hidden'); m.innerHTML = ''; };
+  const close = () => {
+    m.classList.add('hidden'); m.innerHTML = '';
+    if (activeModalClose === close) activeModalClose = null;
+  };
+  activeModalClose = close;
   m.onmousedown = (e) => { if (e.target === m) close(); };
   return { el: m, close };
 }
@@ -910,7 +939,15 @@ document.addEventListener('click', (e) => {
   if (k === 'close') lbClose(); else if (k === 'in') lbZoom(1.3); else if (k === 'out') lbZoom(1 / 1.3); else if (k === 'fit') lbFit(); else if (k === 'one') lbOne(); else if (k === 'prev') lbStep(-1); else if (k === 'next') lbStep(1);
 });
 document.addEventListener('keydown', (e) => {
-  if ($('#lightbox').classList.contains('hidden')) { if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) $('#modal').classList.add('hidden'); return; }
+  if ($('#lightbox').classList.contains('hidden')) {
+    if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) {
+      // Gọi đúng close() của hộp thoại đang mở: hộp cập nhật tự chặn Esc khi đang tải/đếm ngược
+      // và xóa cờ S.updateDialogOpen, nên bấm lại vẫn hiện được dialog.
+      if (activeModalClose) activeModalClose();
+      else { const m = $('#modal'); m.classList.add('hidden'); m.innerHTML = ''; }
+    }
+    return;
+  }
   if (e.key === 'Escape') lbClose(); else if (e.key === 'ArrowLeft') lbStep(-1); else if (e.key === 'ArrowRight') lbStep(1);
   else if (e.key === '+' || e.key === '=') lbZoom(1.25); else if (e.key === '-') lbZoom(1 / 1.25); else if (e.key === '0') lbFit(); else if (e.key === '1') lbOne();
 });
@@ -938,6 +975,27 @@ async function kocDialog(selectMode) {
 }
 
 // ---------- cài đặt ----------
+// Cài đặt đang mở có ô nào sửa tay mà chưa bấm Lưu không? Dùng để xác nhận trước khi
+// hộp thoại cập nhật thay thế nội dung #modal (hai hộp thoại dùng chung một phần tử).
+function settingsHasUnsavedChanges() {
+  if (!$('#cCheckUpdate')) return false; // không đang mở Cài đặt
+  const c = S.cfg || {};
+  const val = (id, fallback) => {
+    const el = $('#' + id);
+    return el ? (el.type === 'checkbox' ? el.checked : el.value) : fallback;
+  };
+  const fixed = !!c.fixedOutputRoot;
+  if (!fixed && String(val('cOut', c.outputRoot ?? '')) !== String(c.outputRoot ?? '')) return true;
+  if (+val('cPar', c.maxParallelRuns) !== +(c.maxParallelRuns ?? 0)) return true;
+  if (+val('c2k', c.concurrent2k ?? 8) !== +(c.concurrent2k ?? 8)) return true;
+  if (+val('cTabs', c.maxChromeTabs ?? 12) !== +(c.maxChromeTabs ?? 12)) return true;
+  if (String(val('cChrome', c.chromePath ?? '')) !== String(c.chromePath ?? '')) return true;
+  if (val('cHq', c.hqIntermediate !== false) !== (c.hqIntermediate !== false)) return true;
+  if (val('cFast', !!c.fastMode) !== !!c.fastMode) return true;
+  if (val('cAutoClean', c.autoCleanOldInstallers !== false) !== (c.autoCleanOldInstallers !== false)) return true;
+  return false;
+}
+
 $('#btnSettings').onclick = async () => {
   S.cfg = await api('GET', '/api/config');
   try { const v = await api('GET', '/api/version'); if (v.version) { const el = $('#appVer'); if (el) el.textContent = 'v' + v.version; } } catch (_) {} const c = S.cfg;
@@ -993,30 +1051,71 @@ $('#btnSettings').onclick = async () => {
   };
   $('#cCheckUpdate').onclick = async () => {
     const btn = $('#cCheckUpdate'); const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
-    try { await checkUpdate(true); } catch (er) { fail(er); } finally { btn.disabled = false; btn.textContent = orig; }
+    // showUpdateDialog() sẽ tự hỏi xác nhận nếu các ô Cài đặt đang có thay đổi chưa Lưu.
+    try { await checkUpdate(true); } catch (er) { toast(friendlyUpdateError(er), 'err'); } finally { btn.disabled = false; btn.textContent = orig; }
   };
   $('#cBackup').onclick = async () => { const btn = $('#cBackup'); const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Đang sao lưu…'; try { const r = await api('POST', '/api/backup'); toast('Đã sao lưu vào: ' + r.path, 'ok', { duration: 10000, action: { label: 'Mở thư mục sao lưu', title: 'Mở thư mục chứa các bản sao lưu', onClick: () => api('POST', '/api/backup/open') } }); } catch (er) { fail(er); } finally { btn.disabled = false; btn.textContent = orig; } };
 };
 
 // ---------- cập nhật ----------
 // Đọc version.json từ link đặt sẵn trong server.js. Không cần người dùng cấu hình gì.
+const UPDATE_TIMEOUT_MS = 15000;
+const INSTALL_TIMEOUT_MS = 30000;
+
+// fetch có AbortController: mạng treo thì tự hủy sau 15s, không để nút kẹt "Đang…".
+async function fetchWithTimeout(url, opt = {}, ms = UPDATE_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...(opt || {}), signal: ctrl.signal });
+  } catch (er) {
+    if (er?.name === 'AbortError') throw new Error('Kết nối quá lâu (quá 15 giây). Vui lòng kiểm tra mạng rồi thử lại.');
+    throw er;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// IPC tải/cài installer không nhận signal → dùng Promise.race để không chờ vô hạn.
+function withTimeout(promise, ms, message) {
+  let timer;
+  const guard = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(message)), ms); });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+// Mọi lỗi cập nhật đều đổi sang tiếng Việt thân thiện trước khi hiện toast (không lọt AbortError/SyntaxError).
+function friendlyUpdateError(er) {
+  const name = er?.name || '';
+  const msg = String(er?.message || er || '');
+  if (name === 'AbortError' || /quá 15 giây|quá 30 giây/i.test(msg)) return msg;
+  if (name === 'SyntaxError' || /unexpected token|invalid json|is not valid json/i.test(msg)) return 'Thông tin cập nhật từ máy chủ không đúng định dạng. Vui lòng thử lại sau.';
+  if (/failed to fetch|networkerror|network request failed|load failed|timeout/i.test(msg)) return 'Không kết nối được máy chủ cập nhật. Vui lòng kiểm tra mạng rồi thử lại.';
+  if (/^HTTP \d+/.test(msg)) return 'Không tải được thông tin cập nhật (' + msg + '). Vui lòng thử lại sau.';
+  if (/^không tải được|^file thông tin|^tải bản cài đặt|^cài đặt quá lâu/i.test(msg)) return msg;
+  return 'Kiểm tra cập nhật thất bại. Vui lòng thử lại sau.';
+}
+
 async function checkUpdate(manual) {
   if (!UPDATE_MANIFEST_URL) { if (manual) toast('Tính năng cập nhật tự động chưa được thiết lập. Vui lòng liên hệ người phát triển.', ''); return; }
-  // Thêm tham số ngẫu nhiên để GitHub raw/CDN không trả nội dung cũ sau khi publish bản mới.
-  const sep = UPDATE_MANIFEST_URL.includes('?') ? '&' : '?';
-  const r = await fetch(UPDATE_MANIFEST_URL + sep + '_t=' + Date.now(), { cache: 'no-store' });
-  if (!r.ok) throw new Error('Không tải được thông tin cập nhật (HTTP ' + r.status + ').');
-  const info = await r.json();
-  if (!info || !info.version || !info.url) throw new Error('File thông tin cập nhật không đúng định dạng.');
-  if (compareVer(info.version, CURRENT_VERSION || '0') <= 0) {
-    if (manual) toast('Bạn đang dùng phiên bản mới nhất (v' + (CURRENT_VERSION || '?') + ').', 'ok');
-    return;
+  try {
+    // Thêm tham số ngẫu nhiên để GitHub raw/CDN không trả nội dung cũ sau khi publish bản mới.
+    const sep = UPDATE_MANIFEST_URL.includes('?') ? '&' : '?';
+    const r = await fetchWithTimeout(UPDATE_MANIFEST_URL + sep + '_t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const info = await r.json();
+    if (!info || !info.version || !info.url) throw new Error('File thông tin cập nhật không đúng định dạng.');
+    if (compareVer(info.version, CURRENT_VERSION || '0') <= 0) {
+      if (manual) toast('Bạn đang dùng phiên bản mới nhất (v' + (CURRENT_VERSION || '?') + ').', 'ok');
+      return;
+    }
+    showUpdateDialog(info);
+  } catch (er) {
+    throw new Error(friendlyUpdateError(er));
   }
-  showUpdateDialog(info);
 }
 
 function showUpdateDialog(info) {
   if (S.updateDialogOpen) return;
+  // #modal dùng chung với Cài đặt: đừng làm mất các ô người dùng sửa nhưng chưa bấm Lưu.
+  if (settingsHasUnsavedChanges() && !confirm('Các thay đổi trong Cài đặt chưa được Lưu. Tiếp tục kiểm tra phiên bản mới?')) return;
   S.updateDialogOpen = true;
   const m = modal(`<h3>Có phiên bản mới: v${esc(info.version)}</h3>
     <div class="hint" style="margin:0 0 6px">Phiên bản hiện tại: v${esc(CURRENT_VERSION || '?')}</div>
@@ -1024,7 +1123,9 @@ function showUpdateDialog(info) {
     <div id="uState" class="hint" style="margin-top:10px;min-height:20px"></div>
     <div class="foot"><button class="btn" id="uClose">Để sau</button><button class="btn primary" id="uInstall">Tải về và cập nhật</button></div>`, true);
   let busy = false;
-  const close = () => { if (busy) return; S.updateDialogOpen = false; m.close(); };
+  let countingDown = false;
+  const close = () => { if (busy) return; S.updateDialogOpen = false; activeModalClose = null; m.close(); };
+  activeModalClose = close; // Esc phải gọi close() này (chặn lúc busy + xóa cờ), không chỉ ẩn div
   $('#uClose').onclick = close;
   m.el.onmousedown = (e) => { if (e.target === m.el) close(); };
 
@@ -1032,6 +1133,7 @@ function showUpdateDialog(info) {
   $('#uInstall').onclick = async () => {
     const btn = $('#uInstall');
     const state = $('#uState');
+    if (busy) return;
     busy = true;
     $('#uClose').style.display = 'none';
     btn.disabled = true;
@@ -1039,21 +1141,22 @@ function showUpdateDialog(info) {
     try {
       if (!window.flowBridge?.downloadUpdate) {
         window.open(info.url, '_blank');
-        S.updateDialogOpen = false; m.close();
+        S.updateDialogOpen = false; activeModalClose = null; m.close();
         return;
       }
       window.flowBridge.onUpdateProgress((pct) => {
         btn.textContent = pct >= 0 ? `Đang tải… ${pct}%` : 'Đang tải…';
       });
-      const file = await window.flowBridge.downloadUpdate(info.url);
+      const file = await withTimeout(window.flowBridge.downloadUpdate(info.url), INSTALL_TIMEOUT_MS, 'Tải bản cài đặt quá lâu (quá 30 giây). Vui lòng kiểm tra mạng rồi bấm “Thử lại”.');
       btn.textContent = 'Đang cập nhật…';
       state.textContent = 'Đã tải 100%. Đang cập nhật…';
       // Helper đã được khởi và xác nhận chạy; app vẫn mở để kịp hiện thông báo.
-      await window.flowBridge.installUpdate(file, info.version);
+      await withTimeout(window.flowBridge.installUpdate(file, info.version), INSTALL_TIMEOUT_MS, 'Cài đặt quá lâu (quá 30 giây). Vui lòng bấm “Thử lại”.');
       let n = 3;
+      countingDown = true;
       const tick = () => {
         btn.textContent = n > 0 ? `Đóng sau ${n}s…` : 'Đang đóng…';
-        const reopenNote = '<div style="margin-top:4px;font-size:11px;color:var(--muted)">Mở lại app sau khoảng 10 giây.</div>';
+        const reopenNote = '<div style="margin-top:4px;font-size:11px;color:var(--muted)">Mở lại sau 10–20 giây; nếu chưa thấy bản mới, mở lại lần nữa.</div>';
         state.innerHTML = n > 0
           ? `App sẽ đóng sau <b>${n} giây</b> để hoàn tất cài đặt.<br>Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.${reopenNote}`
           : `Đang đóng. Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.${reopenNote}`;
@@ -1062,8 +1165,15 @@ function showUpdateDialog(info) {
       };
       tick();
     } catch (er) {
-      btn.disabled = false; btn.textContent = 'Thử lại';
-      fail(er);
+      toast(friendlyUpdateError(er), 'err');
+    } finally {
+      // Lỗi/mạng treo: hiện lại "Để sau" và cho bấm thử lại. Đang đếm ngược thì giữ nguyên.
+      if (!countingDown) {
+        busy = false;
+        const closeBtn = $('#uClose'); if (closeBtn) closeBtn.style.display = '';
+        if (document.contains(btn)) { btn.disabled = false; btn.textContent = 'Thử lại'; }
+        if (state && document.contains(state)) state.textContent = '';
+      }
     }
   };
 }

@@ -90,7 +90,14 @@ app.get('/favicon.ico', (req, res) => res.sendStatus(204));
 // ---------- tĩnh ----------
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/files/koc', (req, res, next) => express.static(path.join(cfg.dataDir, 'koc'))(req, res, next));
+// Chặn id dự án lạ trước khi chạm file system. id KOC là tên file nên KHÔNG dùng hàm này cho /api/koc/:id.
+function rejectInvalidProjectId(req, res) {
+  if (store.isValidProjectId(req.params.id)) return false;
+  res.status(400).json({ error: 'Mã dự án không hợp lệ' });
+  return true;
+}
 app.get('/files/p/:id/:file', (req, res) => {
+  if (rejectInvalidProjectId(req, res)) return;
   const p = store.assetPath(req.params.id, req.params.file);
   if (!fs.existsSync(p)) return res.sendStatus(404);
   res.sendFile(p);
@@ -229,35 +236,109 @@ app.post('/api/flow/close', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Chỉ sao lưu dữ liệu thật. chrome-profile bị Chrome khoá (EBUSY) nên KHÔNG đụng vào; logs/backups cũng bỏ qua.
+const BACKUP_ENTRIES = ['projects', 'koc', 'config.json', 'templates.json', 'auto.json', 'paused.json'];
+
+// Đếm số file + tổng byte của một mục (file đơn hoặc thư mục, đệ quy) để ghi vào manifest.
+async function backupEntryStats(target) {
+  const fsp = fs.promises;
+  let files = 0;
+  let bytes = 0;
+  const top = await fsp.stat(target);
+  if (top.isFile()) return { files: 1, bytes: top.size };
+  if (!top.isDirectory()) return { files, bytes };
+  const stack = [target];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const ent of await fsp.readdir(cur, { withFileTypes: true })) {
+      const full = path.join(cur, ent.name);
+      if (ent.isDirectory()) stack.push(full);
+      else if (ent.isFile()) {
+        files++;
+        try { bytes += (await fsp.stat(full)).size; } catch (_) {}
+      }
+    }
+  }
+  return { files, bytes };
+}
+
 async function doBackup() {
   const fsp = fs.promises;
   const backupRoot = path.join(cfg.dataDir, 'backups');
+  await fsp.mkdir(backupRoot, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const dest = path.join(backupRoot, stamp);
-  await fsp.mkdir(dest, { recursive: true });
-  const entries = await fsp.readdir(cfg.dataDir);
-  for (const e of entries) {
-    if (e === 'backups' || e === 'logs') continue;
-    const src = path.join(cfg.dataDir, e);
-    const target = path.join(dest, e);
-    await fsp.cp(src, target, { recursive: true, force: true });
-  }
-  cfg.set({ lastBackupAt: Date.now() });
-  // Dọn backup cũ hơn 2 ngày để không tốn dung lượng.
+  let dest = path.join(backupRoot, stamp);
+  for (let i = 2; fs.existsSync(dest); i++) dest = path.join(backupRoot, `${stamp}-${i}`);
+  const tmp = path.join(backupRoot, `.tmp-${stamp}-${crypto.randomBytes(4).toString('hex')}`);
+  let ownsTmp = false;
   try {
-    const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
-    const backups = await fsp.readdir(backupRoot);
-    for (const name of backups) {
-      const full = path.join(backupRoot, name);
-      try {
-        const st = await fsp.stat(full);
-        if (st.isDirectory() && st.mtimeMs < cutoff) {
-          await fsp.rm(full, { recursive: true, force: true });
-        }
-      } catch (_) {}
+    await fsp.mkdir(tmp);
+    ownsTmp = true;
+    const copied = [];
+    let projectsEmpty = false;
+    for (const name of BACKUP_ENTRIES) {
+      const src = path.join(cfg.dataDir, name);
+      let st;
+      try { st = await fsp.stat(src); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
+      const target = path.join(tmp, name);
+      if (st.isDirectory()) await fsp.cp(src, target, { recursive: true, force: true });
+      else if (st.isFile()) await fsp.copyFile(src, target);
+      else continue;
+      copied.push(name);
     }
-  } catch (_) {}
-  return { ok: true, path: dest, at: Date.now() };
+    // Dù chưa có project nào thì backup vẫn phải có thư mục projects (đánh dấu trong manifest).
+    if (!copied.includes('projects')) {
+      await fsp.mkdir(path.join(tmp, 'projects'), { recursive: true });
+      projectsEmpty = true;
+      copied.push('projects');
+    }
+    // Verify tối thiểu TRƯỚC khi rename: có projects/ và có config.json nếu nguồn có.
+    const pStat = await fsp.stat(path.join(tmp, 'projects'));
+    if (!pStat.isDirectory()) throw new Error('Backup không hợp lệ: thiếu thư mục projects.');
+    if (copied.includes('config.json')) {
+      const cStat = await fsp.stat(path.join(tmp, 'config.json'));
+      if (!cStat.isFile()) throw new Error('Backup không hợp lệ: thiếu config.json.');
+    }
+    const entries = [];
+    for (const name of copied) {
+      const s = await backupEntryStats(path.join(tmp, name));
+      const entry = { name, files: s.files, bytes: s.bytes, fileCount: s.files, totalBytes: s.bytes };
+      if (name === 'projects' && projectsEmpty) entry.empty = true;
+      entries.push(entry);
+    }
+    let pkg = {};
+    try { pkg = require('./package.json'); } catch (_) {}
+    const manifest = {
+      createdAt: new Date().toISOString(),
+      appVersion: pkg.version || '1.0.0',
+      entries,
+      includesChromeProfile: false,
+    };
+    if (projectsEmpty) manifest.projectsEmpty = true;
+    await fsp.writeFile(path.join(tmp, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    // Đổi tên nguyên tử: backup chỉ "tồn tại" khi mọi thứ đã copy + verify xong.
+    await fsp.rename(tmp, dest);
+    ownsTmp = false;
+    // Không để lỗi ghi config biến một backup đã hoàn tất thành lỗi 400.
+    try { cfg.set({ lastBackupAt: Date.now() }); } catch (_) {}
+    return { ok: true, path: dest, at: Date.now() };
+  } catch (e) {
+    if (ownsTmp) { try { await fsp.rm(tmp, { recursive: true, force: true }); } catch (_) {} }
+    throw e;
+  } finally {
+    // Dọn backup cũ hơn 2 ngày; KHÔNG xoá thư mục .tmp-* (đang xử lý hoặc do lần trước bỏ lại).
+    try {
+      const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+      for (const name of await fsp.readdir(backupRoot)) {
+        if (name.startsWith('.tmp-')) continue;
+        const full = path.join(backupRoot, name);
+        try {
+          const st = await fsp.stat(full);
+          if (st.isDirectory() && st.mtimeMs < cutoff) await fsp.rm(full, { recursive: true, force: true });
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
 }
 app.post('/api/backup', async (req, res) => {
   try {
@@ -270,12 +351,6 @@ app.post('/api/backup/open', (req, res) => {
   try { fs.mkdirSync(backupRoot, { recursive: true }); } catch (_) {}
   require('child_process').spawn('explorer.exe', [backupRoot], { detached: true, stdio: 'ignore' }).unref();
   res.json({ ok: true });
-});
-app.post('/api/backup', async (req, res) => {
-  try {
-    const out = await doBackup();
-    res.json(out);
-  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get('/api/backup/list', (req, res) => {
   try {
@@ -388,6 +463,7 @@ app.get('/api/projects/:id', (req, res) => {
   p ? res.json(p) : res.sendStatus(404);
 });
 app.delete('/api/projects/:id', async (req, res) => {
+  if (rejectInvalidProjectId(req, res)) return;
   try {
     const out = await writeLock.run(() => {
       const p = store.load(req.params.id);
@@ -415,6 +491,7 @@ app.post('/api/projects/:id/assets', express.raw({ type: () => true, limit: '40m
 
 // cập nhật một phần: tên, bước, prompt, danh sách ảnh đầu vào...
 app.patch('/api/projects/:id', async (req, res) => {
+  if (rejectInvalidProjectId(req, res)) return;
   try {
     const out = await writeLock.run(() => {
       const p = store.load(req.params.id);
@@ -1415,6 +1492,7 @@ try {
   if (fs.existsSync(backupRoot)) {
     const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
     for (const name of fs.readdirSync(backupRoot)) {
+      if (name.startsWith('.tmp-')) continue; // thư mục tạm không bị dọn, dù để lại từ lần trước
       const full = path.join(backupRoot, name);
       try {
         const st = fs.statSync(full);
@@ -1427,7 +1505,11 @@ try {
 try {
   const c = cfg.get();
   if (!c.lastBackupAt || Date.now() - c.lastBackupAt > 7 * 24 * 60 * 60 * 1000) {
-    setTimeout(() => { try { doBackup(); appendLog('Tự sao lưu dữ liệu (định kỳ 7 ngày).'); } catch (e) { appendLog('Tự sao lưu lỗi: ' + e.message); } }, 10000);
+    setTimeout(() => {
+      doBackup()
+        .then(() => appendLog('Tự sao lưu dữ liệu (định kỳ 7 ngày).'))
+        .catch((e) => appendLog('Tự sao lưu lỗi: ' + e.message));
+    }, 10000);
   }
 } catch (_) {}
 // Dọn tab Flow còn sót từ lần chạy trước (dự án có thể đã bị xóa nhưng tab vẫn mở khiến Flow chạy tiếp).

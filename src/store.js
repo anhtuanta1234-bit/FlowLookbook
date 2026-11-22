@@ -64,7 +64,16 @@ function saveTemplates(t) {
 }
 
 // ---------- Dự án ----------
-const pdir = (id) => path.join(projectsDir(), id);
+// Chỉ lấy phần cuối của id: không để id điều khiển đường dẫn ra ngoài projects/ (path traversal).
+// '.'/'..' là trường hợp đặc biệt của basename → đưa về tên giả vô hại để remove() không xoá nhầm cả thư mục cha.
+const pdir = (id) => {
+  const base = path.basename(String(id || ''));
+  return path.join(projectsDir(), base === '.' || base === '..' ? '__invalid__' : base);
+};
+// ID dự án do tool tạo (uid(5)) luôn là 10 ký tự hex thường. Dùng để chặn id lạ trước khi đụng file system.
+function isValidProjectId(id) {
+  return /^[a-f0-9]{10}$/.test(String(id || ''));
+}
 const pfile = (id) => path.join(pdir(id), 'project.json');
 
 function hasActiveWork(proj) {
@@ -261,6 +270,6 @@ module.exports = {
   uid, safeName, templates, saveTemplates,
   createProject, nameExists, save, load, list, remove, assetPath, saveAsset,
   listKoc, saveKoc, kocPath, removeKoc, outputDirFor, pdir,
-  outputFolderFor, hasActiveWork, sceneOrder, normalizeProject,
+  outputFolderFor, hasActiveWork, sceneOrder, normalizeProject, isValidProjectId,
   _test: { legacyOutputFolder, suffixedFolder },
 };

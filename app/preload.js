@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('flowBridge', {
   onUpdateProgress: (cb) => ipcRenderer.on('flow:update-progress', (_e, percent) => cb(percent)),
   // App mới đọc marker này lúc khởi động để báo cập nhật thành công đúng tên phiên bản.
   consumeUpdateSuccess: () => ipcRenderer.invoke('flow:consume-update-success'),
+  // Lỗi installer thật (exit≠0 / UAC) được helper ghi lại, báo ở lần mở app tiếp theo.
+  consumeUpdateError: () => ipcRenderer.invoke('flow:consume-update-error'),
   // Gọi sau khi giao diện đếm ngược 3 giây để người dùng kịp đọc thông báo.
   quitForUpdate: () => ipcRenderer.invoke('flow:quit-for-update'),
 });

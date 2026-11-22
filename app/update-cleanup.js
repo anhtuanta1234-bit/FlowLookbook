@@ -17,14 +17,14 @@ function compareVersion(a, b) {
 
 function runCleanup(job, currentVersion, log = () => {}, opts = {}) {
   const deleted = [];
-  if (!job) return { deleted };
+  if (!job) return { deleted, skipped: true, reason: 'no job' };
   if (compareVersion(currentVersion, job.fromVersion || '0') <= 0) {
     log('cleanup skipped: version not advanced (' + currentVersion + ' <= ' + job.fromVersion + ')');
-    return { deleted };
+    return { deleted, skipped: true, reason: 'version not advanced' };
   }
   if (opts.enabled === false) {
     log('cleanup skipped: disabled by setting');
-    return { deleted };
+    return { deleted, skipped: true, reason: 'disabled' };
   }
   log('cleanup start: ' + job.fromVersion + ' -> ' + currentVersion);
 
@@ -57,7 +57,7 @@ function runCleanup(job, currentVersion, log = () => {}, opts = {}) {
   }
 
   log('cleanup done: ' + deleted.length + ' file(s), ' + (bytes / 1048576).toFixed(1) + ' MB freed');
-  return { deleted };
+  return { deleted, skipped: false };
 }
 
 module.exports = { compareVersion, runCleanup };
