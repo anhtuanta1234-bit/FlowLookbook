@@ -961,7 +961,9 @@ $('#btnSettings').onclick = async () => {
 // Đọc version.json từ link đặt sẵn trong server.js. Không cần người dùng cấu hình gì.
 async function checkUpdate(manual) {
   if (!UPDATE_MANIFEST_URL) { if (manual) toast('Tính năng cập nhật tự động chưa được thiết lập. Vui lòng liên hệ người phát triển.', ''); return; }
-  const r = await fetch(UPDATE_MANIFEST_URL, { cache: 'no-store' });
+  // Thêm tham số ngẫu nhiên để GitHub raw/CDN không trả nội dung cũ sau khi publish bản mới.
+  const sep = UPDATE_MANIFEST_URL.includes('?') ? '&' : '?';
+  const r = await fetch(UPDATE_MANIFEST_URL + sep + '_t=' + Date.now(), { cache: 'no-store' });
   if (!r.ok) throw new Error('Không tải được thông tin cập nhật (HTTP ' + r.status + ').');
   const info = await r.json();
   if (!info || !info.version || !info.url) throw new Error('File thông tin cập nhật không đúng định dạng.');

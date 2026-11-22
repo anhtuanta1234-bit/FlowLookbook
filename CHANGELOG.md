@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.2 - 2026-11-22
+- Thêm cache-buster khi kiểm tra phiên bản: app luôn đọc `version.json` mới nhất, không bị CDN trả bản cũ.
+
+
 ## v1.1.1 - 2026-11-22
 - Tự động tắt app, cài bản mới im lặng rồi **tự mở lại** — không cần bấm lại shortcut hay cài lại tay.
 - Chặn đặt tên sản phẩm trùng nhau (không phân biệt hoa/thường), có thông báo ngay khi trùng.
