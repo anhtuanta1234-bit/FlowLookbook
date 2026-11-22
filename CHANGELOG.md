@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.18 - 2026-11-22
+- Bỏ đoạn prompt phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." khỏi mẫu prompt mặc định của bước 1; không thêm vào các bước khác.
+
+
 ## v1.1.17 - 2026-11-22
 - Sửa lỗi sao lưu không chứa dự án: loại Chrome profile (bị khoá gây lỗi EBUSY) ra khỏi backup, copy vào thư mục tạm rồi đổi tên, có manifest và kiểm tra trước khi báo thành công.
 - Sửa lỗi bấm shortcut lần 2 làm đóng nhầm Chrome/hàng đợi của app đang chạy.

@@ -30,7 +30,7 @@ function suffixedFolder(base, suffix) {
 
 const DEFAULT_TEMPLATES = {
   stage1: {
-    vi: 'Yêu cầu: tách toàn bộ da thịt ra khỏi trang phục, trang phục đặt trên nền trắng, tư thế quần áo giống ảnh tham chiếu 100%, không đặt nằm, trang phục không bị mờ nhòe (làm nét trang phục, vẫn giữ nguyên chi tiết), rõ ràng và giống chi tiết ảnh tham chiếu 100%.\n\nPhong cách ảnh chụp đời thực: shot on 35mm lens, f/2.8, ánh sáng tự nhiên từ cửa sổ, slight film grain, không HDR, không làm mịn quá mức, không sharpen quá đà. Giữ nguyên texture vải và chi tiết.\n\nTránh: da nhựa, CGI, render 3D, hiệu ứng AI, mờ nhòe, biến dạng trang phục.',
+    vi: 'Yêu cầu: tách toàn bộ da thịt ra khỏi trang phục, trang phục đặt trên nền trắng, tư thế quần áo giống ảnh tham chiếu 100%, không đặt nằm, trang phục không bị mờ nhòe (làm nét trang phục, vẫn giữ nguyên chi tiết), rõ ràng và giống chi tiết ảnh tham chiếu 100%.',
     negative: 'plastic skin, CGI, 3D render, AI artifacts, blur, distortion, over-sharpening, over-smoothing',
   },
   stage2: {
