@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.1.12 - 2026-11-22
+- Sửa lỗi Windows hiện hộp “Chọn một ứng dụng để mở 'TA'” khi bấm cập nhật: `Start-Process -ArgumentList` tách đường dẫn `C:\Users\TA ANH TUAN\...` tại dấu cách.
+- Helper giờ đọc toàn bộ đường dẫn từ file JSON trong `%TEMP%`, không truyền qua đối số dòng lệnh; thêm test với đường dẫn có dấu cách thật.
+- Gộp thành một nút “Tải về và cập nhật”: tải 100% → hiện “Đang cập nhật…” → đếm ngược “Đóng sau 3s… Mở lại app để dùng phiên bản v…” → app tự đóng để hoàn tất cài đặt. Không còn nút “Tải lại để cập nhật”.
+- Nếu không khởi được tiến trình cập nhật, app không đóng, hiện nút “Thử lại” và xoá marker để không báo thành công sai.
+
+
 ## v1.1.11 - 2026-11-22
 - Bản đích để kiểm tra trực tiếp luồng cập nhật đếm ngược 3 giây trên máy phát triển.
 

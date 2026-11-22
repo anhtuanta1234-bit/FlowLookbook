@@ -7,9 +7,11 @@ contextBridge.exposeInMainWorld('flowBridge', {
   pickFolder: (current) => ipcRenderer.invoke('flow:pick-folder', current),
   // Tải installer phiên bản mới về máy. tiến độ gửi qua onUpdateProgress.
   downloadUpdate: (url) => ipcRenderer.invoke('flow:download-update', url),
-  // Cài installer đã tải. Chỉ được gọi khi người dùng bấm nút "Tải lại để cập nhật".
+  // Khởi cài installer đã tải. Gọi ngay sau khi tải xong từ nút "Tải về và cập nhật".
   installUpdate: (file, version) => ipcRenderer.invoke('flow:install-update', file, version),
   onUpdateProgress: (cb) => ipcRenderer.on('flow:update-progress', (_e, percent) => cb(percent)),
   // App mới đọc marker này lúc khởi động để báo cập nhật thành công đúng tên phiên bản.
   consumeUpdateSuccess: () => ipcRenderer.invoke('flow:consume-update-success'),
+  // Gọi sau khi giao diện đếm ngược 3 giây để người dùng kịp đọc thông báo.
+  quitForUpdate: () => ipcRenderer.invoke('flow:quit-for-update'),
 });

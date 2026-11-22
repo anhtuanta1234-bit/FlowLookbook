@@ -1023,52 +1023,43 @@ function showUpdateDialog(info) {
     <div class="update-notes">${esc(info.notes || 'Bản cập nhật mới.')}</div>
     <div id="uState" class="hint" style="margin-top:10px;min-height:20px"></div>
     <div class="foot"><button class="btn" id="uClose">Để sau</button><button class="btn primary" id="uInstall">Tải về và cập nhật</button></div>`, true);
-  let installing = false;
-  const close = () => { if (installing) return; S.updateDialogOpen = false; m.close(); };
+  let busy = false;
+  const close = () => { if (busy) return; S.updateDialogOpen = false; m.close(); };
   $('#uClose').onclick = close;
   m.el.onmousedown = (e) => { if (e.target === m.el) close(); };
 
-  const showReloadRequired = (file) => {
-    installing = true;
-    const state = $('#uState');
-    const btn = $('#uInstall');
-    const closeBtn = $('#uClose');
-    closeBtn.style.display = 'none';
-    btn.disabled = false;
-    btn.textContent = 'Tải lại để cập nhật';
-    btn.className = 'btn primary';
-    state.innerHTML = `<span class="badge ok" style="display:inline-flex;margin-bottom:8px">Đã tải xong v${esc(info.version)} — app vẫn đang mở</span><div>Bấm nút bên dưới để <b>cài đặt</b> bản mới. App sẽ đếm ngược 3 giây rồi tắt để cài đặt.</div>`;
-    btn.onclick = () => {
-      btn.disabled = true;
-      const tick = (n) => {
-        btn.textContent = n > 0 ? `Tắt app sau ${n}s…` : 'Đang cài đặt…';
-        state.innerHTML = n > 0
-          ? `App sẽ tắt sau <b>${n} giây</b> để cài bản <b>v${esc(info.version)}</b>.<br>Sau khi cài xong (khoảng 30–60 giây), <b>mở lại app bằng shortcut trên Desktop</b> để dùng phiên bản mới.`
-          : 'Đang cài đặt im lặng. Mở lại app bằng shortcut sau khoảng 30–60 giây.';
-        if (n > 0) setTimeout(() => tick(n - 1), 1000);
-        else window.flowBridge.installUpdate(file, info.version).catch((er) => {
-          btn.disabled = false;
-          btn.textContent = 'Tải lại để cập nhật';
-          fail(er);
-        });
-      };
-      tick(3);
-    };
-  };
-
+  // Một nút duy nhất: tải → cài → đếm ngược 3s → đóng app để hoàn tất cài đặt.
   $('#uInstall').onclick = async () => {
-    const btn = $('#uInstall'); btn.disabled = true; btn.textContent = 'Đang tải…';
+    const btn = $('#uInstall');
+    const state = $('#uState');
+    busy = true;
+    $('#uClose').style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Đang tải…';
     try {
       if (!window.flowBridge?.downloadUpdate) {
-        window.open(info.url, '_blank'); close(); return;
+        window.open(info.url, '_blank');
+        S.updateDialogOpen = false; m.close();
+        return;
       }
-      const state = $('#uState');
       window.flowBridge.onUpdateProgress((pct) => {
-        if (state) state.textContent = pct >= 0 ? `Đang tải bản cập nhật… ${pct}%` : 'Đang tải bản cập nhật…';
+        btn.textContent = pct >= 0 ? `Đang tải… ${pct}%` : 'Đang tải…';
       });
       const file = await window.flowBridge.downloadUpdate(info.url);
-      // App vẫn mở. Chỉ khi người dùng bấm nút bắt buộc bên dưới mới cài và tải lại.
-      showReloadRequired(file);
+      btn.textContent = 'Đang cập nhật…';
+      state.textContent = 'Đã tải 100%. Đang cập nhật…';
+      // Helper đã được khởi và xác nhận chạy; app vẫn mở để kịp hiện thông báo.
+      await window.flowBridge.installUpdate(file, info.version);
+      let n = 3;
+      const tick = () => {
+        btn.textContent = n > 0 ? `Đóng sau ${n}s…` : 'Đang đóng…';
+        state.innerHTML = n > 0
+          ? `App sẽ đóng sau <b>${n} giây</b> để hoàn tất cài đặt.<br>Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.`
+          : `Đang đóng. Mở lại app bằng shortcut để dùng phiên bản <b>v${esc(info.version)}</b>.`;
+        if (n > 0) { n--; setTimeout(tick, 1000); }
+        else window.flowBridge?.quitForUpdate?.();
+      };
+      tick();
     } catch (er) {
       btn.disabled = false; btn.textContent = 'Thử lại';
       fail(er);

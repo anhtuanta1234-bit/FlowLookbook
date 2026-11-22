@@ -218,7 +218,12 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
   // Người dùng mở lại bằng shortcut; app mới sẽ hiện thông báo thành công nếu phiên bản khớp.
   // Dùng helper thay vì chuỗi cmd `start /WAIT` vì chuỗi đó có thể không chờ/không chạy
   // tuỳ cách Windows xử lý dấu nháy. Mọi bước đều ghi log để dễ kiểm tra.
-  const ps = `param([string]$Installer, [string]$AppExe, [string]$Log, [string]$Token)
+  const ps = `param([string]$Config)
+$c = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
+$Installer = $c.installer
+$AppExe = $c.appExe
+$Log = $c.log
+$Token = $c.token
 function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
 W "helper start token=$Token"
 for ($i = 0; $i -lt 100; $i++) {
@@ -235,20 +240,27 @@ try {
 }
 W "install finished - user will relaunch manually"
 W "helper end"
+Remove-Item -LiteralPath $Config -Force -ErrorAction SilentlyContinue
 `;
+  const token = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   const helper = path.join(os.tmpdir(), 'flow-update-helper.ps1');
+  const config = path.join(os.tmpdir(), 'flow-update-params.json');
   fs.writeFileSync(helper, ps, 'utf8');
+  // KHÔNG truyền đường dẫn có dấu cách qua -ArgumentList: PowerShell 5.1 sẽ tách
+  // "C:\Users\TA ANH TUAN\..." thành nhiều arg, Windows hiện hộp "Chọn ứng dụng để mở 'TA'".
+  // Ghi hết vào JSON, chỉ truyền đường dẫn ngắn (không dấu cách) của file helper + config.
+  fs.writeFileSync(config, JSON.stringify({
+    installer: file, appExe: currentExe, log: UPDATE_LOG, token,
+  }), 'utf8');
   updateLog('helper written: ' + helper);
 
   // spawn(detached:true) trên Windows làm PowerShell thoát ngay mà KHÔNG chạy -File.
   // Phải dùng một PowerShell trung gian gọi Start-Process để helper là "cháu" tách biệt,
   // sống sót sau khi app đóng. Token giúp phân biệt lần chạy này với log cũ.
-  const token = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
   const inner = "Start-Process -FilePath 'powershell.exe' -ArgumentList @(" +
-    "'-NoProfile','-ExecutionPolicy','Bypass','-File'," + q(helper) + "," +
-    "'-Installer'," + q(file) + ",'-AppExe'," + q(currentExe) +
-    ",'-Log'," + q(UPDATE_LOG) + ",'-Token'," + q(token) + ") -WindowStyle Hidden";
+    "'-NoProfile','-ExecutionPolicy','Bypass','-File'," + q(helper) +
+    ",'-Config'," + q(config) + ") -WindowStyle Hidden";
   updateLog('helper spawn token=' + token);
   const wrapper = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', inner,
@@ -257,7 +269,7 @@ W "helper end"
   wrapper.on('exit', (code) => updateLog('helper wrapper exit=' + code));
 
   // Đợi helper ghi xác nhận rồi mới tắt app — không bao giờ tắt khi helper chưa chạy.
-  await new Promise((resolve) => {
+  await new Promise((resolve, reject) => {
     const startedAt = Date.now();
     const iv = setInterval(() => {
       let started = false;
@@ -265,14 +277,29 @@ W "helper end"
       catch (_) {}
       if (started || Date.now() - startedAt > 8000) {
         clearInterval(iv);
-        updateLog(started ? 'helper confirmed running' : 'helper start timeout — vẫn tiếp tục');
-        resolve();
+        if (started) {
+          updateLog('helper confirmed running');
+          resolve();
+          return;
+        }
+        // Không xác nhận được thì TUYỆT ĐỐI không tắt app: báo lỗi để giao diện hiện nút Thử lại.
+        updateLog('helper start timeout — hủy cập nhật, app vẫn mở');
+        try { fs.rmSync(PENDING_CLEANUP, { force: true }); } catch (_) {}
+        try { fs.rmSync(UPDATE_SUCCESS, { force: true }); } catch (_) {}
+        reject(new Error('Không khởi được tiến trình cập nhật. Vui lòng bấm “Thử lại”.'));
       }
     }, 100);
   });
 
-  setTimeout(() => app.quit(), 300);
-  return 'installing';
+  // Không tự đóng ở đây: giao diện sẽ đếm ngược 3 giây rồi gọi flow:quit-for-update.
+  return 'ready';
+});
+
+// Giao diện gọi sau khi đã hiện thông báo 3 giây cho người dùng đọc kịp.
+ipcMain.handle('flow:quit-for-update', () => {
+  updateLog('quit requested for update');
+  setTimeout(() => app.quit(), 200);
+  return 'quitting';
 });
 
 // Bấm shortcut lần nữa khi app đang mở: đưa cửa sổ hiện có lên trước, không mở trùng.
