@@ -160,6 +160,13 @@ async function init() {
     UPDATE_MANIFEST_URL = v.updateUrl || '';
     const el = $('#appVer'); if (el && CURRENT_VERSION) el.textContent = 'v' + CURRENT_VERSION;
   } catch (_) {}
+  // Bản mới vừa cài xong và mở lại: chỉ báo thành công nếu đúng phiên bản đang chạy.
+  try {
+    const done = await window.flowBridge?.consumeUpdateSuccess?.();
+    if (done && (!CURRENT_VERSION || compareVer(done, CURRENT_VERSION) === 0)) {
+      toast('Cập nhật phiên bản v' + done + ' thành công!', 'ok', { duration: 15000 });
+    }
+  } catch (_) {}
   S.koc = await api('GET', '/api/koc');
   S.projects = await api('GET', '/api/projects');
   try { S.projectDeleteApi = (await api('GET', '/api/projects/delete-capabilities')).safeDelete === true; } catch (_) { S.projectDeleteApi = false; }
@@ -1014,30 +1021,50 @@ function showUpdateDialog(info) {
   const m = modal(`<h3>Có phiên bản mới: v${esc(info.version)}</h3>
     <div class="hint" style="margin:0 0 6px">Phiên bản hiện tại: v${esc(CURRENT_VERSION || '?')}</div>
     <div class="update-notes">${esc(info.notes || 'Bản cập nhật mới.')}</div>
+    <div id="uState" class="hint" style="margin-top:10px;min-height:20px"></div>
     <div class="foot"><button class="btn" id="uClose">Để sau</button><button class="btn primary" id="uInstall">Tải về và cập nhật</button></div>`, true);
-  const close = () => { S.updateDialogOpen = false; m.close(); };
+  let installing = false;
+  const close = () => { if (installing) return; S.updateDialogOpen = false; m.close(); };
   $('#uClose').onclick = close;
   m.el.onmousedown = (e) => { if (e.target === m.el) close(); };
+
+  const showReloadRequired = (file) => {
+    installing = true;
+    const state = $('#uState');
+    const btn = $('#uInstall');
+    const closeBtn = $('#uClose');
+    closeBtn.style.display = 'none';
+    btn.disabled = false;
+    btn.textContent = 'Tải lại để cập nhật';
+    btn.className = 'btn primary';
+    state.innerHTML = `<span class="badge ok" style="display:inline-flex;margin-bottom:8px">Đã tải xong v${esc(info.version)} — app vẫn đang mở</span><div>Bấm nút bên dưới để <b>cài đặt và tải lại</b> sang bản mới. App sẽ đóng vài chục giây rồi tự mở lại.</div>`;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = 'Đang tải lại…';
+      state.textContent = 'Đang chuyển sang phiên bản mới. App sẽ đóng vài chục giây rồi tự mở lại…';
+      try {
+        await window.flowBridge.installUpdate(file, info.version);
+      } catch (er) {
+        btn.disabled = false;
+        btn.textContent = 'Tải lại để cập nhật';
+        fail(er);
+      }
+    };
+  };
+
   $('#uInstall').onclick = async () => {
     const btn = $('#uInstall'); btn.disabled = true; btn.textContent = 'Đang tải…';
     try {
       if (!window.flowBridge?.downloadUpdate) {
-        // Trình duyệt: không có quyền tự cài, chỉ mở link tải.
         window.open(info.url, '_blank'); close(); return;
       }
-      const t = toast('Đang tải bản cập nhật…', '', { duration: 10 * 60 * 1000 });
+      const state = $('#uState');
       window.flowBridge.onUpdateProgress((pct) => {
-        const txt = t.querySelector('.ttxt');
-        if (txt) txt.textContent = pct >= 0 ? `Đang tải bản cập nhật… ${pct}%` : 'Đang tải bản cập nhật…';
+        if (state) state.textContent = pct >= 0 ? `Đang tải bản cập nhật… ${pct}%` : 'Đang tải bản cập nhật…';
       });
       const file = await window.flowBridge.downloadUpdate(info.url);
-      if (window.flowBridge.installUpdate) {
-        t.querySelector('.ttxt').textContent = 'Đã tải xong. Đang cài đặt…';
-        await window.flowBridge.installUpdate(file);
-        close();
-      } else {
-        t.querySelector('.ttxt').textContent = 'Đã tải xong: ' + file;
-      }
+      // App vẫn mở. Chỉ khi người dùng bấm nút bắt buộc bên dưới mới cài và tải lại.
+      showReloadRequired(file);
     } catch (er) {
       btn.disabled = false; btn.textContent = 'Thử lại';
       fail(er);

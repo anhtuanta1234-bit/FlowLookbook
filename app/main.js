@@ -12,6 +12,7 @@ const APP_URL = `http://127.0.0.1:${PORT}`;
 const ROOT = path.join(__dirname, '..');
 const ICON = path.join(__dirname, 'icon.png');
 const PENDING_CLEANUP = path.join(app.getPath('userData'), 'pending-cleanup.json');
+const UPDATE_SUCCESS = path.join(app.getPath('userData'), 'update-success.json');
 // Chỉ máy có mã nguồn ở E:\FlowLookbook mới có thư mục dist để dọn installer cũ.
 const SOURCE_ROOT = process.platform === 'win32' && fs.existsSync('E:\\FlowLookbook') ? 'E:\\FlowLookbook' : '';
 
@@ -164,7 +165,7 @@ function autoCleanEnabled() {
 }
 
 // App cũ ghi lại việc cần dọn trước khi thoát; app mới sẽ đọc sau khi đã mở lại.
-function writePendingCleanup(installer) {
+function writePendingCleanup(installer, targetVersion) {
   try {
     fs.writeFileSync(PENDING_CLEANUP, JSON.stringify({
       fromVersion: app.getVersion(),
@@ -174,6 +175,10 @@ function writePendingCleanup(installer) {
     }, null, 2));
     updateLog('pending cleanup saved');
   } catch (er) { updateLog('pending cleanup error=' + er.message); }
+  try {
+    fs.writeFileSync(UPDATE_SUCCESS, JSON.stringify({ version: targetVersion || '', at: Date.now() }));
+    updateLog('update-success marker saved');
+  } catch (er) { updateLog('update-success marker error=' + er.message); }
 }
 
 // Chạy lúc app mới đã khởi động: chỉ dọn khi phiên bản thật sự tăng.
@@ -186,12 +191,23 @@ function cleanupOldInstallers() {
   catch (er) { updateLog('cleanup error=' + er.message); }
 }
 
-ipcMain.handle('flow:install-update', async (_e, file) => {
-  updateLog('install requested: ' + file);
+// Bản mới đọc marker này ngay lúc khởi động để hiện thông báo thành công.
+ipcMain.handle('flow:consume-update-success', () => {
+  try {
+    if (!fs.existsSync(UPDATE_SUCCESS)) return '';
+    let version = '';
+    try { version = JSON.parse(fs.readFileSync(UPDATE_SUCCESS, 'utf8')).version || ''; } catch (_) {}
+    fs.rmSync(UPDATE_SUCCESS, { force: true });
+    return version;
+  } catch (_) { return ''; }
+});
+
+ipcMain.handle('flow:install-update', async (_e, file, version) => {
+  updateLog('install requested: ' + file + ' (target=' + (version || '?') + ')');
   if (typeof file !== 'string' || !fs.existsSync(file)) throw new Error('Không tìm thấy file cài đặt đã tải.');
   if (!app.isPackaged) { await shell.openPath(file); return 'opened'; }
 
-  writePendingCleanup(file);
+  writePendingCleanup(file, version);
   const { spawn } = require('child_process');
   const currentExe = app.getPath('exe');
   // Helper PowerShell tách riêng: đợi app đóng hẳn → cài im lặng → mở lại.

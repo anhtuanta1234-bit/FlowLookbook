@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.1.7 - 2026-11-22
+- Đổi luồng cập nhật: bấm “Tải về và cập nhật” chỉ tải, app không tắt; hiện hộp thoại bắt buộc với nút “Tải lại để cập nhật”.
+- Chỉ khi bấm nút “Tải lại để cập nhật” mới cài im lặng, đóng app ngắn rồi tự mở lại bản mới.
+- Sau khi mở lại, hiện thông báo “Cập nhật phiên bản vX thành công!” — đối chiếu với phiên bản thật đang chạy, không báo sai.
+- Thêm test chặn việc cài/đóng app ngay lúc tải xong và đảm bảo thông báo thành công khớp phiên bản.
+
+
 ## v1.1.6 - 2026-11-22
 - Sau khi app mới tự mở lại thành công, tự xóa installer vừa tải và các installer cũ trong `dist` (giữ lại bản mới nhất), ghi rõ vào `update.log`.
 - Thêm công tắc “Tự dọn file cài đặt cũ” trong Cài đặt, bật mặc định; không đụng vào dự án hay thư mục app đang chạy.
