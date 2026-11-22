@@ -1,0 +1,5 @@
+{
+  "version": "1.1.1",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.1/Flow%20Lookbook%20Setup%201.1.1.exe",
+  "notes": "- Tự động tắt app, cài bản mới im lặng rồi **tự mở lại** — không cần bấm lại shortcut hay cài lại tay.\n- Chặn đặt tên sản phẩm trùng nhau (không phân biệt hoa/thường), có thông báo ngay khi trùng.\n- Giữ nguyên shortcut Desktop/Start Menu qua mỗi lần nâng cấp.\n- Tự động đẩy mã nguồn, tạo bản phát hành và viết ghi chú phiên bản lên GitHub."
+}

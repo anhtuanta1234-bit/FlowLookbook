@@ -1,0 +1,67 @@
+{
+  "name": "flowlookbook",
+  "version": "1.1.1",
+  "description": "Flow Lookbook - Tạo ảnh lookbook thời trang hàng loạt với Google Flow",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "build": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
+    "auth:github": "node scripts/auth-github.js",
+    "release": "node scripts/release.js",
+    "release:minor": "node scripts/release.js --minor",
+    "release:major": "node scripts/release.js --major"
+  },
+  "keywords": [],
+  "author": "Flow Lookbook",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0",
+    "playwright-core": "^1.65.1"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.flowlookbook.app",
+    "productName": "Flow Lookbook",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**/*",
+      "src/**/*",
+      "public/**/*",
+      "server.js",
+      "package.json",
+      "version.json",
+      "!data/**",
+      "!output/**",
+      "!node_modules/.cache/**"
+    ],
+    "win": {
+      "icon": "app/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Flow Lookbook",
+      "installerIcon": "app/icon.ico",
+      "uninstallerIcon": "app/icon.ico"
+    }
+  }
+}

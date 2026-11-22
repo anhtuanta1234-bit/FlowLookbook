@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Lookbook — Tạo ảnh lookbook thời trang hàng loạt với Google Flow</title>
+<meta name="description" content="Flow Lookbook giúp tạo ảnh lookbook thời trang nữ hàng loạt trên Google Flow: tách trang phục, ghép KOC, ghép cảnh thật và lưu ảnh 2K tự động. Chạy ngay trên máy của bạn.">
+<meta name="application-name" content="Flow Lookbook">
+<meta name="author" content="Flow Lookbook">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0a0f1a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
+<meta property="og:title" content="Flow Lookbook">
+<meta property="og:description" content="Tạo ảnh lookbook thời trang hàng loạt với Google Flow: tách trang phục, ghép KOC, ghép cảnh thật, lưu ảnh 2K tự động.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/logo.svg">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="apple-touch-icon" href="/logo.svg">
+<link rel="preload" href="/fonts/be-vietnam-pro-vietnamese-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/style.css?v=20261122-autoupdate-full-1">
+<script>
+  // đặt giao diện sáng/tối trước khi vẽ để không bị nháy
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua, tới nội dung chính</a>
+
+<header class="top" role="banner">
+  <a class="brand" href="/" aria-label="Flow Lookbook — trang chủ">
+    <img class="brand-logo" src="/logo.svg" alt="Logo Flow Lookbook" width="30" height="30">
+    <h1 class="brand-name"><span class="b1">Flow</span> Lookbook</h1>
+    <span id="appVer" class="ver-badge" data-tip="Phiên bản hiện tại. Bấm Cài đặt → Kiểm tra cập nhật để xem có phiên bản mới.">v1.0.0</span>
+  </a>
+  <span class="brand-sub">Ảnh lookbook thời trang hàng loạt</span>
+  <div class="grow"></div>
+  <div id="flowStatus" class="chip" role="status" aria-live="polite" data-tip="Tool kết nối với Google Flow và chạy ngầm — bạn xem kết quả trực tiếp ngay trong tool">Đang kiểm tra Flow…</div>
+  <button id="btnOpenFlow" class="btn ghost sm" type="button" data-tip="Mở cửa sổ Chrome để đăng nhập Google / Flow lần đầu. Sau đó tool tự chạy ngầm, không cần mở lại">Đăng nhập Flow</button>
+  <button id="btnDisconnectFlow" class="btn ghost sm" type="button" data-tip="Đóng cửa sổ Chrome mà tool đang chạy. Sau khi ngắt, các lượt đang chạy sẽ dừng lại.">Ngắt kết nối Flow</button>
+  <button id="btnAuto" class="btn sm" type="button" aria-pressed="true" data-tip="Bật: tool tự tải ảnh 2K về thư mục và tự sang bước sau. Tắt: bạn tự thao tác bằng tay.">Tự động: Bật</button>
+  <button id="btnKoc" class="btn ghost sm" type="button" data-tip="Quản lý ảnh mặt KOC dùng xuyên suốt cho mọi sản phẩm">Thư viện KOC</button>
+  <button id="btnSettings" class="btn ghost sm" type="button" data-tip="Thư mục lưu ảnh 2K và số lượt chạy cùng lúc">Cài đặt</button>
+  <button id="btnReload" class="btn ghost sm" type="button" data-tip="Tải lại giao diện cho mượt. Việc đang chạy vẫn tiếp tục, dữ liệu không mất." aria-label="Tải lại giao diện">Tải lại</button>
+  <button id="btnTheme" class="ib" type="button" data-tip="Đổi giao diện Sáng / Tối" aria-label="Đổi giao diện sáng hoặc tối"></button>
+</header>
+
+<div id="pauseBanner" class="banner hidden" role="alert"></div>
+
+<div class="layout" id="layout">
+  <nav class="side" aria-label="Danh sách sản phẩm">
+    <form id="newProjectForm" class="newp">
+      <label class="sr" for="newProjectName">Tên sản phẩm mới</label>
+      <input id="newProjectName" placeholder="Tên sản phẩm mới…" autocomplete="off" maxlength="80">
+      <button class="btn primary sm" type="submit" data-tip="Tạo sản phẩm mới (tên này cũng là tên thư mục chứa ảnh 2K)">Tạo</button>
+    </form>
+    <div class="side-title">Sản phẩm của bạn</div>
+    <div class="project-actions">
+      <div id="projectSelectionCount" class="project-selection-count" aria-live="polite">Chưa chọn dự án</div>
+      <div class="project-action-buttons">
+        <button id="btnDeleteSelected" class="btn sm danger" type="button" disabled>Xóa đã chọn</button>
+        <button id="btnDeleteAll" class="btn sm danger ghost" type="button" disabled>Xóa tất cả</button>
+      </div>
+    </div>
+    <div id="projectList" class="plist" role="list"></div>
+    <button id="btnCollapse" class="side-collapse" type="button" data-tip="Thu gọn danh sách sản phẩm cho rộng chỗ làm việc" aria-label="Thu gọn danh sách sản phẩm"><span>Thu gọn</span></button>
+  </nav>
+
+  <main id="main" class="main" tabindex="-1">
+    <section class="empty" aria-labelledby="emptyTitle">
+      <img src="/logo.svg" alt="" width="76" height="76">
+      <h2 id="emptyTitle">Bắt đầu một sản phẩm mới</h2>
+      <p>Nhập tên sản phẩm ở cột bên trái rồi bấm <b>Tạo</b>. Mỗi sản phẩm đi qua 3 bước:</p>
+      <ol class="how">
+        <li><b>Tách trang phục</b> khỏi người, đặt trên nền trắng.</li>
+        <li><b>Ghép KOC</b> mặc trang phục đó.</li>
+        <li><b>Ghép cảnh thật</b> — nhiều cảnh cùng lúc, ảnh 2K tự lưu vào thư mục sản phẩm.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
+<div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true" aria-label="Xem ảnh phóng to"></div>
+<div id="tip" class="tip" role="tooltip"></div>
+<div id="ctxmenu" class="ctxmenu hidden" role="menu"></div>
+<noscript><p style="padding:24px">Flow Lookbook cần bật JavaScript để hoạt động.</p></noscript>
+
+<script src="/cropper.js?v=20261121-slot-fit-1"></script>
+<script src="/app.js?v=20261122-unique-names-1"></script>
+</body>
+</html>
