@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.11 - 2026-11-22
+- Bản đích để kiểm tra trực tiếp luồng cập nhật đếm ngược 3 giây trên máy phát triển.
+
+
 ## v1.1.10 - 2026-11-22
 - Đổi sang luồng cập nhật đếm ngược 3 giây: bấm “Tải lại để cập nhật” → app tắt để cài im lặng → bạn mở lại bằng shortcut, không còn phụ thuộc helper tự khởi chạy app.
 - Thông báo “Cập nhật … thành công” chỉ hiện khi phiên bản thật đã khớp bản đích; mở app quá sớm sẽ giữ thông báo cho lần mở sau.
