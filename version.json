@@ -1,5 +1,5 @@
 {
-  "version": "1.1.13",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.13/Flow.Lookbook.Setup.1.1.13.exe",
-  "notes": "- Bản đích để kiểm tra trực tiếp luồng “một nút Tải về và cập nhật” trên máy phát triển."
+  "version": "1.1.14",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.14/Flow.Lookbook.Setup.1.1.14.exe",
+  "notes": "- Dọn luôn file `.exe.blockmap` của các bản cũ trong `dist` (Explorer giấu đuôi `.blockmap` nên nhìn tưởng là file `.exe` cũ chưa được xóa).\n- Thêm test kiểm tra xóa cả blockmap bản cũ nhưng vẫn giữ blockmap của bản hiện tại."
 }

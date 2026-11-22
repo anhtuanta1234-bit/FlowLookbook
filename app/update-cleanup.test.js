@@ -15,10 +15,14 @@ test('dọn installer vừa tải + bản cũ trong dist, giữ lại bản hi�
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-cleanup-'));
   const dist = path.join(base, 'dist');
   fs.mkdirSync(dist);
-  const oldOnes = ['Flow Lookbook Setup 1.0.0.exe', 'Flow Lookbook Setup 1.1.4.exe'];
+  const oldOnes = [
+    'Flow Lookbook Setup 1.0.0.exe', 'Flow Lookbook Setup 1.0.0.exe.blockmap',
+    'Flow Lookbook Setup 1.1.4.exe', 'Flow Lookbook Setup 1.1.4.exe.blockmap',
+  ];
   const currentOne = 'Flow Lookbook Setup 1.1.5.exe';
+  const currentBlockmap = currentOne + '.blockmap';
   const unrelated = 'other-file.exe';
-  for (const name of [...oldOnes, currentOne, unrelated]) fs.writeFileSync(path.join(dist, name), 'x');
+  for (const name of [...oldOnes, currentOne, currentBlockmap, unrelated]) fs.writeFileSync(path.join(dist, name), 'x');
 
   const downloaded = path.join(base, 'Downloads', 'Flow Lookbook Setup.exe');
   fs.mkdirSync(path.dirname(downloaded), { recursive: true });
@@ -27,10 +31,11 @@ test('dọn installer vừa tải + bản cũ trong dist, giữ lại bản hi�
   const logs = [];
   const res = runCleanup({ fromVersion: '1.1.4', installer: downloaded, sourceRoot: base }, '1.1.5', (m) => logs.push(m));
 
-  assert.equal(res.deleted.length, 3, '2 bản cũ trong dist + 1 file vừa tải');
+  assert.equal(res.deleted.length, 5, '4 file bản cũ trong dist (exe + blockmap) + 1 file vừa tải');
   assert.equal(fs.existsSync(downloaded), false);
   for (const name of oldOnes) assert.equal(fs.existsSync(path.join(dist, name)), false);
   assert.equal(fs.existsSync(path.join(dist, currentOne)), true, 'phải giữ installer bản hiện tại');
+  assert.equal(fs.existsSync(path.join(dist, currentBlockmap)), true, 'phải giữ blockmap bản hiện tại');
   assert.equal(fs.existsSync(path.join(dist, unrelated)), true, 'không xóa file lạ');
   assert.ok(logs.some((l) => l.includes('cleanup done')));
   fs.rmSync(base, { recursive: true, force: true });

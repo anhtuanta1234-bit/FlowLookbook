@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.14 - 2026-11-22
+- Dọn luôn file `.exe.blockmap` của các bản cũ trong `dist` (Explorer giấu đuôi `.blockmap` nên nhìn tưởng là file `.exe` cũ chưa được xóa).
+- Thêm test kiểm tra xóa cả blockmap bản cũ nhưng vẫn giữ blockmap của bản hiện tại.
+
+
 ## v1.1.13 - 2026-11-22
 - Bản đích để kiểm tra trực tiếp luồng “một nút Tải về và cập nhật” trên máy phát triển.
 

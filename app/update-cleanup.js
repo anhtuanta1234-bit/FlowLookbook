@@ -1,5 +1,6 @@
 // Dọn file cài đặt cũ SAU khi bản mới đã mở lại thành công.
-// Chỉ xóa các file installer do chính app tạo ra: file vừa tải + các file cũ trong dist.
+// Chỉ xóa các file installer do chính app tạo ra: file vừa tải + các file cũ trong dist,
+// kể cả file .exe.blockmap đi kèm (Explorer thường giấu đuôi .blockmap nên nhìn như .exe cũ).
 // Không đụng vào thư mục data/, thư mục app đang cài hay registry.
 const fs = require('fs');
 const path = require('path');
@@ -43,12 +44,13 @@ function runCleanup(job, currentVersion, log = () => {}, opts = {}) {
 
   // File installer vừa được tải về để cài bản mới — sau khi cài xong không cần giữ.
   tryDelete(job.installer, 'downloaded');
+  tryDelete(job.installer && job.installer + '.blockmap', 'downloaded');
 
-  // Máy phát triển: giữ lại đúng installer của bản hiện tại, xóa các bản cũ hơn.
+  // Máy phát triển: giữ lại installer + blockmap của bản hiện tại, xóa các bản cũ hơn.
   const dist = job.sourceRoot ? path.join(job.sourceRoot, 'dist') : '';
   if (dist && fs.existsSync(dist)) {
     for (const name of fs.readdirSync(dist)) {
-      const m = name.match(/^Flow Lookbook Setup (\d+\.\d+\.\d+)\.exe$/i);
+      const m = name.match(/^Flow Lookbook Setup (\d+\.\d+\.\d+)\.exe(?:\.blockmap)?$/i);
       if (!m || compareVersion(m[1], currentVersion) >= 0) continue;
       tryDelete(path.join(dist, name), 'old build');
     }
