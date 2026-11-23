@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.28 - 2026-11-23
+- Bước 3 (cách 1): gặp "hoạt động bất thường" thì đóng tab Flow của cảnh, mở tab Flow/dự án mới và chạy lại cảnh đó; không tạm dừng toàn tool, các cảnh khác vẫn chạy.
+- Nếu bị chặn lặp lại, tool giãn nhẹ thời gian chờ ở các lần sau (lần đầu vẫn nhanh), tối đa 5 lần; hết 5 lần báo đúng "Cảnh <số> hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại" kèm nút "Mở Flow".
+
+
 ## v1.1.27 - 2026-11-23
 - Bước 3: khi Flow báo "hoạt động bất thường" ở một cảnh, tool tự đóng tab Flow của cảnh đó, mở cửa sổ Flow mới với dự án mới rồi chạy tiếp; tối đa 5 lần.
 - Sau 5 lần vẫn lỗi, hiện đúng thông báo "Cảnh <số> hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại" kèm nút "Mở Flow" mở đúng dự án của cảnh đó. Các cảnh khác và bước 1/2 không bị dừng theo.

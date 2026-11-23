@@ -55,8 +55,14 @@ function shouldReopenFlow({ code, stage, sceneId, reopens = 0 }) {
   return code === 'FLOW_BLOCKED' && stage === 3 && !!sceneId && reopens < MAX_FLOW_REOPEN;
 }
 
+// Giãn nhẹ khi bị chặn lặp lại nhiều lần; lần đầu vẫn nhanh để không chậm luồng bình thường.
+function flowReopenDelayMs(reopens = 1) {
+  if (reopens <= 2) return 2500;
+  return 2500 + (reopens - 2) * 1500;
+}
+
 function flowBlockedMessage(sceneOrder) {
   return `Cảnh ${sceneOrder} hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại`;
 }
 
-module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage };
+module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage };

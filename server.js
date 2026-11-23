@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage } = require('./src/workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage } = require('./src/workflow');
 const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
@@ -958,6 +958,7 @@ async function execute(job) {
       } catch (e) {
         if (!shouldReopenFlow({ code: e.code, stage: job.stage, sceneId: job.sceneId, reopens }) || canceled()) throw e;
         reopens++;
+        const waitMs = flowReopenDelayMs(reopens);
         await flow.closeSceneTab(job.projectId, job.stage, job.sceneId);
         update((r, p) => {
           const s = st(p); if (s) delete s.flowUrl; // lần sau chắc chắn tạo dự án Flow mới
@@ -965,8 +966,8 @@ async function execute(job) {
           r.abuseReopens = reopens;
           r.note = `Flow báo hoạt động bất thường — mở dự án Flow mới (lần ${reopens}/${MAX_FLOW_REOPEN})…`;
         });
-        appendLog(`flow blocked project=${job.projectId} scene=${job.sceneId} — mở lại Flow lần ${reopens}/${MAX_FLOW_REOPEN}`);
-        await new Promise((res) => setTimeout(res, 2500));
+        appendLog(`flow blocked project=${job.projectId} scene=${job.sceneId} — mở lại Flow lần ${reopens}/${MAX_FLOW_REOPEN}; chờ ${waitMs}ms`);
+        await new Promise((res) => setTimeout(res, waitMs));
       }
     }
     logPhase(`done ${result.count} ảnh`);

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage } = require('./workflow');
 
 test('automatic HQ completion persists the next stage and event together', () => {
   const project = { stage: 2, maxStage: 2 };
@@ -101,4 +101,12 @@ test('Flow báo bất thường ở bước 3 thì mở lại Flow, tối đa 5 
 
 test('thông báo hết 5 lần đúng nội dung yêu cầu', () => {
   assert.equal(flowBlockedMessage(2), 'Cảnh 2 hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại');
+});
+
+test('mở lại Flow bị chặn lặp thì giãn nhẹ chờ, lần đầu giữ nhanh', () => {
+  assert.equal(flowReopenDelayMs(1), 2500);
+  assert.equal(flowReopenDelayMs(2), 2500);
+  assert.equal(flowReopenDelayMs(3), 4000);
+  assert.equal(flowReopenDelayMs(4), 5500);
+  assert.equal(flowReopenDelayMs(5), 7000);
 });
