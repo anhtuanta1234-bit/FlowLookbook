@@ -95,6 +95,17 @@ function is2kDimensions(size) {
   return long >= 2048 && short >= 1024;
 }
 
+// Ảnh ĐÃ CHỌN / cắt gọn dùng làm tham chiếu cho bước sau: vẫn cần cạnh dài 2K,
+// nhưng cạnh ngắn chỉ cần 512px — cắt sát hai bên từ bản 2K vẫn giữ đủ chi tiết.
+// Chuẩn 2K của ảnh tải về / tự tải (is2kDimensions, validate2kFile) GIỮ NGUYÊN 1024px.
+const REFERENCE_SHORT_EDGE = 512;
+function is2kForReference(size) {
+  if (!Number.isFinite(size?.width) || !Number.isFinite(size?.height)) return false;
+  const long = Math.max(size.width, size.height);
+  const short = Math.min(size.width, size.height);
+  return long >= 2048 && short >= REFERENCE_SHORT_EDGE;
+}
+
 function validate2kFile(file) {
   const size = imageDimensions(file);
   if (!size) throw new Error('File không phải ảnh JPEG, PNG hoặc WebP hợp lệ.');
@@ -104,4 +115,4 @@ function validate2kFile(file) {
   return size;
 }
 
-module.exports = { imageDimensionsFromBuffer, imageDimensions, imageExtFromBuffer, is2kDimensions, validate2kFile };
+module.exports = { imageDimensionsFromBuffer, imageDimensions, imageExtFromBuffer, is2kDimensions, is2kForReference, validate2kFile };

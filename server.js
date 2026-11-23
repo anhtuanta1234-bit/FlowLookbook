@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
 const { completeHqStage, finishHqBatch, dropQueuedRuns } = require('./src/workflow');
-const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions } = require('./src/image');
+const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
 
@@ -548,12 +548,12 @@ const pick = (o, keys) => Object.fromEntries(keys.filter((k) => k in o).map((k) 
 function syncApprovedHq(p, st) {
   if (!st.approved) { st.hq = null; return; }
   const size = imageDimensions(store.assetPath(p.id, st.approved));
-  if (is2kDimensions(size)) { st.hq = { status: 'done', for: st.approved, manual: true }; return; }
-  // Cắt từ bản 1K (hoặc ảnh nhỏ): báo rõ để chọn lại ảnh gốc, lấy 2K rồi cắt trên bản nét.
+  if (is2kForReference(size)) { st.hq = { status: 'done', for: st.approved, manual: true }; return; }
+  // Cắt từ bản 1K (hoặc ảnh nhỏ quá): báo rõ để chọn lại ảnh gốc, lấy 2K rồi cắt trên bản nét.
   if (autoOn && cfg.get().hqIntermediate !== false) {
     st.hq = {
       status: 'error', code: 'cropped', for: st.approved,
-      error: `Ảnh đã chọn chỉ ${size ? size.width + '×' + size.height : 'không đọc được kích thước'}, chưa đạt 2K. Hãy bấm “Chọn ảnh này” lại ở ảnh gốc bên dưới để tool lấy bản 2K, rồi cắt trên bản 2K.`,
+      error: `Ảnh đã chọn chỉ ${size ? size.width + '×' + size.height : 'không đọc được kích thước'}, chưa đạt chuẩn ảnh tham chiếu (cần cạnh dài ≥ 2048px và cạnh ngắn ≥ 512px). Hãy bấm “Chọn ảnh này” lại ở ảnh gốc bên dưới để tool lấy bản 2K, rồi cắt trên bản 2K.`,
     };
   } else {
     st.hq = null;

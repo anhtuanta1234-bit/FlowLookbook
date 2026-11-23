@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const cfg = require('./config');
 const { cleanPrompt, cleanPromptsIn } = require('./prompt-cleanup');
+const { imageDimensions, is2kForReference } = require('./image');
 
 const projectsDir = () => path.join(cfg.dataDir, 'projects');
 const kocDir = () => path.join(cfg.dataDir, 'koc');
@@ -186,6 +187,15 @@ function normalizeProject(p) {
   if (!Number.isInteger(p.s3.nextOrder) || p.s3.nextOrder <= maxOrder) p.s3.nextOrder = maxOrder + 1;
   p.stage = [1, 2, 3].includes(p.stage) ? p.stage : 1;
   p.maxStage = Math.max(p.maxStage || 1, p.stage);
+  // Ảnh cắt gọn từ bản 2K trước đây bị gắn "chưa đạt 2K" ở ngưỡng cạnh ngắn 1024px.
+  // Theo chuẩn ảnh tham chiếu mới (≥512px) ảnh đó hợp lệ → bỏ lỗi cũ ngay khi đọc dự án.
+  for (const key of ['s1', 's2']) {
+    const st = p[key];
+    if (st?.hq?.code === 'cropped' && st.approved
+      && is2kForReference(imageDimensions(assetPath(p.id, st.approved)))) {
+      st.hq = { status: 'done', for: st.approved, manual: true };
+    }
+  }
   // Dự án cũ lưu sẵn prompt 35mm trong project.json → dọn ngay khi đọc, kể cả bản Anh.
   cleanPromptsIn(p);
   return p;

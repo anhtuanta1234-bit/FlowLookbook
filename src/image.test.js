@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, validate2kFile } = require('./image');
+const { imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference, validate2kFile } = require('./image');
 
 test('reads PNG dimensions and recognizes portrait 2K by its long edge', () => {
   const png = Buffer.alloc(24);
@@ -65,6 +65,20 @@ test('2K means both a long edge >= 2048 and a short edge >= 1024', () => {
   assert.equal(is2kDimensions({ width: 2752, height: 1536 }), true);
   assert.equal(is2kDimensions({ width: 1536, height: 2048 }), true);
   assert.equal(is2kDimensions({ width: 2047, height: 1536 }), false);
+});
+
+test('ảnh cắt gọn từ 2K vẫn là ảnh tham chiếu hợp lệ (cạnh ngắn >= 512)', () => {
+  // Chuẩn tải về/manual-hq giữ nguyên 1024 → ảnh 716×2246 vẫn bị từ chối ở chuẩn cũ.
+  assert.equal(is2kDimensions({ width: 716, height: 2246 }), false);
+  // Chuẩn ảnh tham chiếu (đã cắt) nới xuống 512 → ảnh của user được chấp nhận.
+  assert.equal(is2kForReference({ width: 716, height: 2246 }), true);
+  assert.equal(is2kForReference({ width: 2246, height: 716 }), true);
+  assert.equal(is2kForReference({ width: 2048, height: 512 }), true);
+  assert.equal(is2kForReference({ width: 2048, height: 511 }), false);
+  // Vẫn chặn ảnh dải/thanh dẹt và ảnh không đọc được kích thước.
+  assert.equal(is2kForReference({ width: 2048, height: 100 }), false);
+  assert.equal(is2kForReference({ width: 1536, height: 2752 }), true);
+  assert.equal(is2kForReference(null), false);
 });
 
 test('detects the real image format from bytes, not the file name', () => {

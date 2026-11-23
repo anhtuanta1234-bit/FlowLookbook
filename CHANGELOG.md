@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.26 - 2026-11-23
+- Cắt sát ảnh từ bản 2K giờ vẫn được tính là ảnh 2K dùng cho bước sau (cạnh ngắn chỉ cần 512px, thay vì 1024px), không còn báo "chưa đạt 2K" với ảnh như 716×2246.
+- Ảnh đã cắt từ trước đang báo lỗi tự hết khi mở lại dự án; chuẩn 2K của ảnh tải về và ảnh tự tải vẫn giữ nguyên.
+
+
 ## v1.1.25 - 2026-11-23
 - Sửa lỗi bộ dọn prompt cũ xóa mất đoạn "Phong cách ảnh chụp đời thực… KOL/KOC" khi mở lại dự án hoặc đọc mẫu prompt.
 - Máy cài mới để trống ô prompt cả 3 bước; 3 prompt riêng của chủ máy nằm trong `data/templates.json`, không đóng gói vào installer.

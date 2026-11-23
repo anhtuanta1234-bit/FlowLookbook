@@ -1,5 +1,5 @@
 {
-  "version": "1.1.25",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.25/Flow.Lookbook.Setup.1.1.25.exe",
-  "notes": "- Sửa lỗi bộ dọn prompt cũ xóa mất đoạn \"Phong cách ảnh chụp đời thực… KOL/KOC\" khi mở lại dự án hoặc đọc mẫu prompt.\n- Máy cài mới để trống ô prompt cả 3 bước; 3 prompt riêng của chủ máy nằm trong `data/templates.json`, không đóng gói vào installer.\n- Ô tiếng Anh vẫn tự dịch bằng Google ngay khi sửa ô tiếng Việt (và tự dịch lúc mở nếu ô Anh còn trống)."
+  "version": "1.1.26",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.26/Flow.Lookbook.Setup.1.1.26.exe",
+  "notes": "- Cắt sát ảnh từ bản 2K giờ vẫn được tính là ảnh 2K dùng cho bước sau (cạnh ngắn chỉ cần 512px, thay vì 1024px), không còn báo \"chưa đạt 2K\" với ảnh như 716×2246.\n- Ảnh đã cắt từ trước đang báo lỗi tự hết khi mở lại dự án; chuẩn 2K của ảnh tải về và ảnh tự tải vẫn giữ nguyên."
 }
