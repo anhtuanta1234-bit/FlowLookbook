@@ -131,19 +131,55 @@ ipcMain.handle('flow:pick-folder', async (e, current) => {
 });
 
 // ---------- tự tải / cập nhật ----------
+const UPDATE_LOG = path.join(app.getPath('userData'), 'update.log');
+function updateLog(msg) {
+  try { fs.appendFileSync(UPDATE_LOG, `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
+}
+
+// Tránh chồng 2 lượt tải cùng một installer khi user bấm "Thử lại" trong lúc tải cũ còn chạy.
+let activeDownload = null;
+
+// File do bản cũ tải (không có marker) vẫn được tận dụng nếu khớp content-length trên GitHub.
+// Nhờ vậy lần bấm lại không phải tải lại 118 MB — đây là lỗi gặp ở v1.1.18.
+async function reuseExistingInstaller(dest, checked, e) {
+  let st;
+  try { st = fs.statSync(dest); } catch (_) { return false; }
+  if (!st.isFile() || st.size < 20 * 1024 * 1024) return false;
+  try {
+    const saved = JSON.parse(fs.readFileSync(dest + '.complete', 'utf8'));
+    if (saved.size === st.size && saved.url === checked.url) {
+      updateLog('reuse downloaded installer (marker): ' + dest);
+      e.sender.send('flow:update-progress', 100);
+      return true;
+    }
+  } catch (_) {}
+  // Không có marker: hỏi HEAD xem kích thước có khớp không (tốn vài KB, không tải lại cả file).
+  try {
+    const head = await fetch(checked.url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(15000) });
+    const len = Number(head.headers.get('content-length') || 0);
+    if (head.ok && len > 0 && len === st.size) {
+      updateLog('reuse downloaded installer (HEAD size match): ' + dest);
+      // Tạo marker để những lần sau khỏi gọi HEAD.
+      try { fs.writeFileSync(dest + '.complete', JSON.stringify({ size: st.size, url: checked.url })); } catch (_) {}
+      e.sender.send('flow:update-progress', 100);
+      return true;
+    }
+    updateLog('existing installer size mismatch: local=' + st.size + ' remote=' + len);
+  } catch (er) {
+    updateLog('HEAD verify skipped: ' + er.message);
+  }
+  return false;
+}
+
 // Tải installer về thư mục Downloads của người dùng, báo tiến độ cho giao diện.
-ipcMain.handle('flow:download-update', async (e, url) => {
-  const checked = validateInstallerUrl(url);
-  if (!checked.ok) throw new Error(checked.reason);
+async function downloadInstaller(e, checked) {
+  // Giữ nguyên tên file do release script tạo. Redirect sang CDN của GitHub (release-assets.*)
+  // có tên khác nên KHÔNG được dùng tên đó làm file đích.
+  const dest = path.join(app.getPath('downloads'), checked.fileName);
+  if (await reuseExistingInstaller(dest, checked, e)) return dest;
+
   const res = await fetch(checked.url, { redirect: 'follow' });
   if (!res.ok) throw new Error('Không tải được bản cập nhật (HTTP ' + res.status + ').');
-  // Redirect tới CDN của GitHub vẫn hợp lệ, nhưng tên file phải giữ nguyên.
-  let finalName = checked.fileName;
-  try {
-    const finalUrl = validateInstallerUrl(res.url || checked.url);
-    if (finalUrl.ok) finalName = finalUrl.fileName;
-  } catch (_) {}
-  const dest = path.join(app.getPath('downloads'), finalName);
   const total = Number(res.headers.get('content-length') || 0);
   const reader = res.body?.getReader();
   if (!reader) throw new Error('Không đọc được dữ liệu tải về.');
@@ -159,20 +195,29 @@ ipcMain.handle('flow:download-update', async (e, url) => {
     }
     await new Promise((resolve, reject) => { out.end(resolve); out.on('error', reject); });
     if (received < 20 * 1024 * 1024) throw new Error('File tải về quá nhỏ, có thể bị lỗi. Vui lòng thử lại.');
+    try { fs.writeFileSync(dest + '.complete', JSON.stringify({ size: received, url: checked.url })); } catch (_) {}
   } catch (er) {
     out.destroy();
     try { fs.rmSync(dest, { force: true }); } catch (_) {}
+    try { fs.rmSync(dest + '.complete', { force: true }); } catch (_) {}
     throw er;
   }
   e.sender.send('flow:update-progress', 100);
   return dest;
-});
-
-// Chạy installer im lặng sau khi app đã đóng. Bản dev thì chỉ mở file để kiểm tra.
-const UPDATE_LOG = path.join(app.getPath('userData'), 'update.log');
-function updateLog(msg) {
-  try { fs.appendFileSync(UPDATE_LOG, `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
 }
+
+ipcMain.handle('flow:download-update', async (e, url) => {
+  const checked = validateInstallerUrl(url);
+  if (!checked.ok) throw new Error(checked.reason);
+  if (activeDownload && activeDownload.url === checked.url) {
+    updateLog('download already in progress, reusing promise');
+    return activeDownload.promise;
+  }
+  const promise = downloadInstaller(e, checked);
+  activeDownload = { url: checked.url, promise };
+  try { return await promise; }
+  finally { if (activeDownload && activeDownload.promise === promise) activeDownload = null; }
+});
 
 // Cài đặt tự dọn file cũ: mặc định bật, có thể tắt trong Cài đặt.
 function autoCleanEnabled() {

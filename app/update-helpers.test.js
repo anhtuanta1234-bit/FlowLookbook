@@ -32,6 +32,8 @@ test('validateInstallerUrl chỉ nhận HTTPS GitHub + đúng tên installer', (
   assert.equal(validateInstallerUrl('https://github.com/x/%2E%2E%2FFlow.Lookbook.Setup.1.1.17.exe').ok, false);
   assert.equal(validateInstallerUrl('https://github.com/x/setup.exe').ok, false);
   assert.equal(validateInstallerUrl('not a url').ok, false);
+  // GitHub redirect sang release-assets.* — host này phải nằm trong whitelist.
+  assert.equal(validateInstallerUrl('https://release-assets.githubusercontent.com/x/Flow.Lookbook.Setup.1.1.18.exe').ok, true);
 });
 
 test('validateInstallerUrl chặn username/password trong URL', () => {

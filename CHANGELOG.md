@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.19 - 2026-11-23
+- Sửa lỗi báo "Tải bản cài đặt quá lâu (quá 30 giây)" dù file vẫn tải tiếp: giờ timeout theo tiến độ, 30s không có tiến độ mới báo lỗi, tối đa 10 phút.
+- Tận dụng file installer đã tải trọn vẹn trong Downloads (so kích thước với GitHub) nên bấm Thử lại không phải tải lại 118 MB; chặn 2 lượt tải chồng nhau.
+
+
 ## v1.1.18 - 2026-11-22
 - Bỏ đoạn prompt phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." khỏi mẫu prompt mặc định của bước 1; không thêm vào các bước khác.
 

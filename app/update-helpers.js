@@ -8,6 +8,7 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
   'github.com',
   'objects.githubusercontent.com',
   'github-releases.githubusercontent.com',
+  'release-assets.githubusercontent.com',
 ]);
 
 const INSTALLER_NAME = /^Flow\.Lookbook\.Setup\.(\d+\.\d+\.\d+)\.exe$/i;

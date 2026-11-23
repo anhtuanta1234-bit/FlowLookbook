@@ -32,7 +32,7 @@ test('một nút duy nhất: tải xong tự cập nhật, không còn nút tả
   const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
   const start = src.indexOf('window.flowBridge.downloadUpdate');
   assert.ok(start >= 0, 'phải có lượt tải installer');
-  const block = src.slice(start, start + 1200);
+  const block = src.slice(start, start + 2000);
   assert.ok(block.includes('Đang cập nhật'), 'tải xong phải hiện “Đang cập nhật…”');
   assert.ok(block.includes('installUpdate(file, info.version)'), 'tải xong phải tự gọi cài, không cần bấm tiếp');
   assert.ok(!src.includes('showReloadRequired'), 'không được giữ nút “Tải lại để cập nhật”');
@@ -111,4 +111,23 @@ test('helper báo lỗi installer thì báo lại cho user ở lần mở sau', 
   assert.ok(main.includes("ipcMain.handle('flow:consume-update-error'"), 'main phải có IPC báo lỗi');
   assert.ok(main.includes('status.ok === false'), 'chỉ báo lỗi khi helper xác nhận thất bại');
   assert.ok(main.includes('LAST_UPDATE_ERROR'), 'phải giữ lỗi lại cho giao diện đọc');
+});
+
+test('tải installer dùng timeout theo tiến độ, không cắt ngang ở 30s cố định', () => {
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  assert.ok(ui.includes('withActivityTimeout'), 'phải có timeout theo hoạt động');
+  assert.ok(ui.includes('DOWNLOAD_HARD_MS'), 'phải có hard cap để không treo vĩnh viễn');
+  assert.ok(ui.includes('lastProgressAt = Date.now()'), 'sự kiện tiến độ phải gia hạn timeout');
+  assert.ok(!ui.includes("window.flowBridge.downloadUpdate(info.url), INSTALL_TIMEOUT_MS"),
+    'không được dùng lại timeout 30s cố định cho lượt tải');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('?v=20261123-download-idle-timeout-1'), 'phải bump cache-buster khi đổi app.js');
+});
+
+test('file installer đã tải trọn vẹn thì tận dụng, không tải lại 118 MB', () => {
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(main.includes('reuseExistingInstaller'), 'phải có hàm tận dụng file cũ');
+  assert.ok(main.includes('content-length'), 'phải so kích thước với server trước khi tin file cũ');
+  assert.ok(main.includes('.complete'), 'file tải mới phải ghi marker để lần sau khỏi HEAD');
+  assert.ok(main.includes('activeDownload'), 'phải chặn 2 lượt tải cùng lúc khi bấm Thử lại');
 });
