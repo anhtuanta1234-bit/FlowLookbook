@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage } = require('./workflow');
 
 test('automatic HQ completion persists the next stage and event together', () => {
   const project = { stage: 2, maxStage: 2 };
@@ -86,4 +86,19 @@ test('an image without its Flow reference is reported instead of counted as comp
   assert.equal(finishHqBatch(run, { failedWithoutRef: 1 }), null);
   assert.equal(run.preview2kDoneAt, undefined);
   assert.match(run.upgradeError, /thiếu liên kết Flow/);
+});
+
+test('Flow báo bất thường ở bước 3 thì mở lại Flow, tối đa 5 lần', () => {
+  assert.equal(MAX_FLOW_REOPEN, 5);
+  const blocked = (reopens) => shouldReopenFlow({ code: 'FLOW_BLOCKED', stage: 3, sceneId: 'sc1', reopens });
+  assert.equal(blocked(0), true);
+  assert.equal(blocked(4), true);
+  assert.equal(blocked(5), false, 'hết 5 lần thì không mở lại nữa');
+  assert.equal(shouldReopenFlow({ code: 'FLOW_BLOCKED', stage: 2, reopens: 0 }), false, 'bước 1/2 vẫn dừng toàn tool');
+  assert.equal(shouldReopenFlow({ code: 'FLOW_BLOCKED', stage: 3, reopens: 0 }), false, 'không có cảnh thì không mở lại');
+  assert.equal(shouldReopenFlow({ code: 'OTHER', stage: 3, sceneId: 'sc1', reopens: 0 }), false);
+});
+
+test('thông báo hết 5 lần đúng nội dung yêu cầu', () => {
+  assert.equal(flowBlockedMessage(2), 'Cảnh 2 hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại');
 });

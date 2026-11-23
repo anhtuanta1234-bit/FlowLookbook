@@ -1,5 +1,5 @@
 {
-  "version": "1.1.26",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.26/Flow.Lookbook.Setup.1.1.26.exe",
-  "notes": "- Cắt sát ảnh từ bản 2K giờ vẫn được tính là ảnh 2K dùng cho bước sau (cạnh ngắn chỉ cần 512px, thay vì 1024px), không còn báo \"chưa đạt 2K\" với ảnh như 716×2246.\n- Ảnh đã cắt từ trước đang báo lỗi tự hết khi mở lại dự án; chuẩn 2K của ảnh tải về và ảnh tự tải vẫn giữ nguyên."
+  "version": "1.1.27",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.27/Flow.Lookbook.Setup.1.1.27.exe",
+  "notes": "- Bước 3: khi Flow báo \"hoạt động bất thường\" ở một cảnh, tool tự đóng tab Flow của cảnh đó, mở cửa sổ Flow mới với dự án mới rồi chạy tiếp; tối đa 5 lần.\n- Sau 5 lần vẫn lỗi, hiện đúng thông báo \"Cảnh <số> hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại\" kèm nút \"Mở Flow\" mở đúng dự án của cảnh đó. Các cảnh khác và bước 1/2 không bị dừng theo."
 }

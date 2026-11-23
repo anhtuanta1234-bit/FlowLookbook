@@ -139,6 +139,21 @@ async function releaseTab(t) {
   await t.page.close().catch(() => {});
 }
 
+// Đóng đúng tab Flow của một bước/cảnh. generate() đã release tab khi lỗi, nhưng đề phòng
+// tab còn sót thì đóng hẳn để lần sau chắc chắn mở cửa sổ Flow + dự án mới.
+async function closeSceneTab(projectId, stage, sceneId) {
+  const key = `${projectId}:${stage}${sceneId ? ':' + sceneId : ''}`;
+  const pr = tabs.get(key);
+  if (!pr) return 0;
+  tabs.delete(key);
+  try {
+    const t = await pr;
+    if (t.users > 1) { t.users--; return 0; }
+    await t.page.close().catch(() => {});
+  } catch (_) {}
+  return 1;
+}
+
 // Đóng ngay các tab Flow của một dự án (dùng khi bạn xóa dự án: không để Flow chạy tiếp việc của dự án đó).
 async function closeProjectTabs(projectId) {
   const prefix = projectId + ':';
@@ -818,4 +833,4 @@ async function download2kOnce({ url, flowRef, target, projectId }) {
   }
 }
 
-module.exports = { status, open, reveal, hide, close: () => chrome.close(), generate, download2k, fetchFull, closeProjectTabs, closeStrayTabs, _test: { getTab, releaseTab, attachFiles, composerThumbSrcs, composerAttachCount, closePicker, verifyComposerOrder } };
+module.exports = { status, open, reveal, hide, close: () => chrome.close(), generate, download2k, fetchFull, closeSceneTab, closeProjectTabs, closeStrayTabs, _test: { getTab, releaseTab, attachFiles, composerThumbSrcs, composerAttachCount, closePicker, verifyComposerOrder } };

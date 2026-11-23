@@ -47,4 +47,16 @@ function finishHqBatch(run, { failedRefs = [], failedWithoutRef = 0, paused = fa
   return null;
 }
 
-module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns };
+// Flow báo "hoạt động bất thường" ở bước 3: đóng tab cũ, mở Flow + dự án mới, tối đa 5 lần.
+// Chỉ áp dụng cho từng cảnh; bước 1/2 vẫn dừng toàn tool như cũ để bảo vệ tài khoản.
+const MAX_FLOW_REOPEN = 5;
+
+function shouldReopenFlow({ code, stage, sceneId, reopens = 0 }) {
+  return code === 'FLOW_BLOCKED' && stage === 3 && !!sceneId && reopens < MAX_FLOW_REOPEN;
+}
+
+function flowBlockedMessage(sceneOrder) {
+  return `Cảnh ${sceneOrder} hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại`;
+}
+
+module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage };

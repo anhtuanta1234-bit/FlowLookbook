@@ -69,7 +69,7 @@ function toast(msg, kind = '', opts = {}) {
   const el = document.createElement('div'); el.className = 'toast ' + kind; el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
   const tx = document.createElement('span'); tx.className = 'ttxt'; tx.textContent = msg; el.append(tx);
   const btns = document.createElement('div'); btns.className = 'tbtns';
-  if (kind === 'err' && /flow/i.test(msg)) { const o = document.createElement('button'); o.className = 'btn sm'; o.textContent = 'Mở Flow'; o.title = 'Mở Flow để xem và xử lý trực tiếp'; o.onclick = () => { api('POST', '/api/flow/reveal', S.id ? { projectId: S.id, stage: S.stage } : {}).catch(fail); }; btns.append(o); }
+  if (kind === 'err' && /flow/i.test(msg) && !opts.action) { const o = document.createElement('button'); o.className = 'btn sm'; o.textContent = 'Mở Flow'; o.title = 'Mở Flow để xem và xử lý trực tiếp'; o.onclick = () => { api('POST', '/api/flow/reveal', S.id ? { projectId: S.id, stage: S.stage } : {}).catch(fail); }; btns.append(o); }
   if (opts.action) { const o = document.createElement('button'); o.className = 'btn sm primary'; o.textContent = opts.action.label; o.title = opts.action.title || ''; o.onclick = () => { try { opts.action.onClick(); } catch (er) { fail(er); } }; btns.append(o); }
   const x = document.createElement('button'); x.className = 'tclose'; x.type = 'button'; x.setAttribute('aria-label', 'Tắt thông báo'); x.title = 'Tắt'; x.textContent = '×'; btns.append(x);
   el.append(btns);
@@ -251,7 +251,18 @@ function announceProjectCompletions(previous, current) {
         const count = run.images?.length || S.cfg.imagesPerRun || 4;
         toast(`${label}: đã tạo xong ${count} ảnh 2K ở ${step}.`, 'ok');
       } else if (run.status === 'error' && oldStatus !== 'error') {
-        toast(`${label}: lượt chạy ${step} bị lỗi. ${run.error || 'Hãy mở dự án để kiểm tra.'}`, 'err');
+        if (run.errorCode === 'FLOW_BLOCKED_GIVE_UP') {
+          toast(run.error, 'err', {
+            duration: 20000,
+            action: {
+              label: 'Mở Flow',
+              title: 'Mở Flow ở dự án của cảnh này để kiểm tra',
+              onClick: () => api('POST', '/api/flow/reveal', { projectId: current.id, stage: 3, sceneId: item.scene?.id }).catch(fail),
+            },
+          });
+        } else {
+          toast(`${label}: lượt chạy ${step} bị lỗi. ${run.error || 'Hãy mở dự án để kiểm tra.'}`, 'err');
+        }
       }
     }
     if (item.stage < 3 && item.state?.hq?.status === 'done' && old?.state?.hq?.status !== 'done') {
@@ -625,7 +636,7 @@ function runsHtml(runs, ctx) {
         ${active ? `<span class="badge acc" data-prog>${esc(r.note || (r.status === 'queued' ? 'đang xếp hàng…' : 'đang tạo · ' + (r.progress || 0) + '%'))}</span>` : ''}
         ${r.status === 'done' ? `<span class="badge ok">xong · ${Math.round(((r.finishedAt || 0) - (r.startedAt || 0)) / 1000)} giây</span>` : ''}
         ${r.status === 'error' ? '<span class="badge err">lỗi</span>' : ''}${sharpStatus}</div>
-      ${r.status === 'error' && !S.dismissed.has(r.id) ? `<div class="err-text"><span>${esc(r.error)}</span><span class="errbtns"><button class="btn sm primary" data-act="retryrun" data-stage="${ctx.stage}" ${ctx.sceneId ? `data-sid="${ctx.sceneId}"` : ''} data-run="${r.id}" ${S.flow.paused ? 'disabled title="Hãy kiểm tra Flow và bấm Tiếp tục chạy trước"' : 'data-tip="Tạo lượt mới cho bước/cảnh này; lượt lỗi cũ vẫn được giữ lại"'}>Thử lại lượt</button><button class="btn sm" data-act="revealflow" data-stage="${ctx.stage}" ${ctx.sceneId ? `data-sid="${ctx.sceneId}"` : ''} data-tip="Mở Flow ở đúng dự án này để xem lỗi">Mở Flow</button><button class="tclose" data-act="dismisserr" data-run="${r.id}" aria-label="Tắt thông báo lỗi" data-tip="Tắt">×</button></span></div>` : ''}
+      ${r.status === 'error' && !S.dismissed.has(r.id) ? `<div class="err-text${r.errorCode === 'FLOW_BLOCKED_GIVE_UP' ? ' flow-giveup' : ''}"><span>${esc(r.error)}</span><span class="errbtns"><button class="btn sm primary" data-act="retryrun" data-stage="${ctx.stage}" ${ctx.sceneId ? `data-sid="${ctx.sceneId}"` : ''} data-run="${r.id}" ${S.flow.paused ? 'disabled title="Hãy kiểm tra Flow và bấm Tiếp tục chạy trước"' : 'data-tip="Tạo lượt mới cho bước/cảnh này; lượt lỗi cũ vẫn được giữ lại"'}>Thử lại lượt</button><button class="btn sm" data-act="revealflow" data-stage="${ctx.stage}" ${ctx.sceneId ? `data-sid="${ctx.sceneId}"` : ''} data-tip="Mở Flow ở đúng dự án này để xem lỗi">Mở Flow</button><button class="tclose" data-act="dismisserr" data-run="${r.id}" aria-label="Tắt thông báo lỗi" data-tip="Tắt">×</button></span></div>` : ''}
       ${cells ? `<div class="grid4">${cells}</div>` : ''}
     </div>`;
   };
@@ -650,7 +661,7 @@ function sceneHtml(s, i) {
     </div>`;
 }
 
-const runSig = (r) => [r.note, r.inputNote, r.id, r.status, r.images.map((i) => i.file).join(), r.chosen, r.error, !!S.flow.paused, S.dismissed.has(r.id), r.rerunOf, r.upgrading, JSON.stringify(r.upgradeProgress || null), r.upgradeError];
+const runSig = (r) => [r.note, r.inputNote, r.id, r.status, r.images.map((i) => i.file).join(), r.chosen, r.error, r.errorCode, r.abuseReopens, !!S.flow.paused, S.dismissed.has(r.id), r.rerunOf, r.upgrading, JSON.stringify(r.upgradeProgress || null), r.upgradeError];
 function resultsSig(p) {
   if (S.stage === 3) return JSON.stringify(p.s3.scenes.map((s) => [s.id, s.file, s.label, s.chosen, s.runs.slice(0, 6).map(runSig)]));
   const st = p[PK[S.stage]];

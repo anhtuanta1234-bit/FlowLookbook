@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
-const { completeHqStage, finishHqBatch, dropQueuedRuns } = require('./src/workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowBlockedMessage } = require('./src/workflow');
 const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
@@ -880,6 +880,7 @@ async function execute(job) {
   // Ghi lại thời gian từng pha để tìm nguyên nhân treo/chậm (xem debug-flow-stall-delay.md).
   const startedAt = Date.now();
   let phaseAt = startedAt;
+  let reopens = 0; // số lần đã đóng tab Flow / mở dự án mới vì Flow báo "hoạt động bất thường"
   const logPhase = (note) => {
     const now = Date.now();
     const line = `flow project=${job.projectId} stage=${job.stage}${job.sceneId ? ':' + job.sceneId : ''} run=${job.runId} phase="${note}" +${now - phaseAt}ms total=${now - startedAt}ms`;
@@ -923,29 +924,51 @@ async function execute(job) {
     const files = job.rerunRef ? [] : buildFiles(proj, job.stage, currentStage);
     logPhase('start');
     update((r) => { r.status = 'running'; r.startedAt = Date.now(); });
-    const result = await flow.generate({
-      key: `${job.projectId}:${job.stage}${job.sceneId ? ':' + job.sceneId : ''}`,
-      url: st(proj)?.flowUrl || null,
-      files,
-      prompt: job.promptEn,
-      rerunRef: job.rerunRef,
-      isCanceled: canceled,
-      onUrl: (url) => update((r, p) => { st(p).flowUrl = url; }),
-      onPhase: (note) => { logPhase(note); return update((r) => { r.note = note; }); },
-      // Giới hạn tần suất ghi tiến độ (200ms) để nhiều luồng chạy vẫn mượt, không ghi đĩa liên tục.
-      onProgress: (pct, tiles) => {
-        const now = Date.now();
-        if (pct < 100 && now - lastProgressAt < 200) return;
-        lastProgressAt = now;
-        update((r) => { r.progress = pct; r.tiles = tiles; if (pct > 0) delete r.note; });
-      },
-      // từng ảnh về tới đâu, hiện ở tool tới đó
-      onTile: async (ix, img) => {
-        const saved = await update((r, p) => { r.images.push({ id: store.uid(3), file: store.saveAsset(p.id, img.buffer, img.ext || 'png'), flowRef: img.flowRef, slot: ix }); r.images.sort((x, y) => x.slot - y.slot); });
-        // Không ghi được ảnh (đầy đĩa / mất quyền) thì phải báo lỗi, không được coi như đã lấy xong.
-        if (!saved) throw new Error('Không lưu được ảnh Flow về dự án. Kiểm tra dung lượng ổ đĩa và quyền ghi.');
-      },
-    });
+    const flowKey = `${job.projectId}:${job.stage}${job.sceneId ? ':' + job.sceneId : ''}`;
+    let result;
+    for (;;) {
+      // Mỗi lần lặp đọc lại dự án: flowUrl đã bị xóa ở lần trước → getTab bấm "Dự án mới".
+      const fresh = store.load(job.projectId);
+      const flowUrl = fresh && st(fresh)?.flowUrl ? st(fresh).flowUrl : null;
+      try {
+        result = await flow.generate({
+          key: flowKey,
+          url: flowUrl,
+          files,
+          prompt: job.promptEn,
+          rerunRef: job.rerunRef,
+          isCanceled: canceled,
+          onUrl: (url) => update((r, p) => { st(p).flowUrl = url; }),
+          onPhase: (note) => { logPhase(note); return update((r) => { r.note = note; }); },
+          // Giới hạn tần suất ghi tiến độ (200ms) để nhiều luồng chạy vẫn mượt, không ghi đĩa liên tục.
+          onProgress: (pct, tiles) => {
+            const now = Date.now();
+            if (pct < 100 && now - lastProgressAt < 200) return;
+            lastProgressAt = now;
+            update((r) => { r.progress = pct; r.tiles = tiles; if (pct > 0) delete r.note; });
+          },
+          // từng ảnh về tới đâu, hiện ở tool tới đó
+          onTile: async (ix, img) => {
+            const saved = await update((r, p) => { r.images.push({ id: store.uid(3), file: store.saveAsset(p.id, img.buffer, img.ext || 'png'), flowRef: img.flowRef, slot: ix }); r.images.sort((x, y) => x.slot - y.slot); });
+            // Không ghi được ảnh (đầy đĩa / mất quyền) thì phải báo lỗi, không được coi như đã lấy xong.
+            if (!saved) throw new Error('Không lưu được ảnh Flow về dự án. Kiểm tra dung lượng ổ đĩa và quyền ghi.');
+          },
+        });
+        break;
+      } catch (e) {
+        if (!shouldReopenFlow({ code: e.code, stage: job.stage, sceneId: job.sceneId, reopens }) || canceled()) throw e;
+        reopens++;
+        await flow.closeSceneTab(job.projectId, job.stage, job.sceneId);
+        update((r, p) => {
+          const s = st(p); if (s) delete s.flowUrl; // lần sau chắc chắn tạo dự án Flow mới
+          r.images = []; r.tiles = []; r.progress = 0; // bỏ ảnh dở của lượt bị chặn
+          r.abuseReopens = reopens;
+          r.note = `Flow báo hoạt động bất thường — mở dự án Flow mới (lần ${reopens}/${MAX_FLOW_REOPEN})…`;
+        });
+        appendLog(`flow blocked project=${job.projectId} scene=${job.sceneId} — mở lại Flow lần ${reopens}/${MAX_FLOW_REOPEN}`);
+        await new Promise((res) => setTimeout(res, 2500));
+      }
+    }
     logPhase(`done ${result.count} ảnh`);
     update((r, p) => {
       if (result.url) st(p).flowUrl = result.url;
@@ -958,6 +981,19 @@ async function execute(job) {
     // Lượt bị hủy vì dự án đã bị xóa: không báo lỗi, không tạm dừng.
     if (e.code === 'CANCELED') return;
     appendLog(`flow error project=${job.projectId} stage=${job.stage}${job.sceneId ? ':' + job.sceneId : ''} run=${job.runId} +${Date.now() - startedAt}ms: ${e?.message || e}`);
+    // Bước 3 đã mở lại Flow đủ 5 lần mà vẫn bị chặn: chỉ báo riêng cho cảnh này,
+    // không tạm dừng toàn tool để các cảnh khác vẫn chạy bình thường.
+    if (e.code === 'FLOW_BLOCKED' && job.stage === 3 && job.sceneId && reopens >= MAX_FLOW_REOPEN) {
+      const pp = store.load(job.projectId);
+      const order = pp ? store.sceneOrder(pp, job.sceneId) : 0;
+      const message = flowBlockedMessage(order);
+      update((r) => {
+        r.status = 'error'; r.error = message; r.errorCode = 'FLOW_BLOCKED_GIVE_UP';
+        r.abuseReopens = reopens; r.tiles = []; delete r.note;
+      });
+      appendLog(`flow blocked exhausted project=${job.projectId} scene=${job.sceneId}: ${message}`);
+      return;
+    }
     if (e.code === 'FLOW_BLOCKED') setPaused({ at: Date.now(), message: e.message });
     update((r) => { r.status = 'error'; r.error = e.message; delete r.note; });
   }

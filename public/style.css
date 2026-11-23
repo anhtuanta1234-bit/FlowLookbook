@@ -206,6 +206,7 @@ textarea{width:100%;resize:vertical;line-height:1.55}
 .rc .bar2 .ib.ok:hover{background:var(--ok);color:#fff}
 .rc .tag{position:absolute;left:7px;top:7px;background:var(--ok);color:#fff;font-size:11px;font-weight:600;padding:1px 9px;border-radius:99px}
 .err-text{color:var(--err);font-size:12.5px;margin-bottom:6px}
+.err-text.flow-giveup{color:var(--warn);font-weight:600}
 details.old{margin-top:6px}
 details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4px 2px}
 
