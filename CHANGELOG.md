@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.23 - 2026-11-23
+- Dọn luôn đoạn prompt phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." trong các DỰ ÁN CŨ: prompt được lưu riêng trong project.json nên đổi mẫu mặc định trước đây không có tác dụng với dự án đã tạo. Giờ tự migrate lúc mở app, cả bản tiếng Việt lẫn tiếng Anh (kể cả prompt đã lưu trong các lượt chạy).
+- Mẫu prompt đã lưu trong templates.json cũng được dọn khi đọc, không chỉ mẫu mặc định.
+
+
 ## v1.1.22 - 2026-11-23
 - Sửa triệt để lỗi tải xong 100% nhưng đóng app rồi mở lại vẫn không lên phiên bản: helper đọc sai định dạng lock (app ghi JSON, helper so sánh như chuỗi thường) nên luôn abort trước khi chạy installer — từ v1.1.17 đến v1.1.21 không lượt nào cài được.
 - App giờ xác nhận helper bằng file "ready" ghi sau khi đã qua kiểm tra token, không còn tin câu log ghi trước đó; helper báo lỗi ngay thay vì thoát im lặng, và không cài khi app vẫn còn mở sau 60s.

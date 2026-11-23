@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const cfg = require('./config');
+const { cleanPrompt, cleanPromptsIn } = require('./prompt-cleanup');
 
 const projectsDir = () => path.join(cfg.dataDir, 'projects');
 const kocDir = () => path.join(cfg.dataDir, 'koc');
@@ -48,7 +49,17 @@ Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đ�
 };
 
 function templates() {
-  try { return { ...DEFAULT_TEMPLATES, ...JSON.parse(fs.readFileSync(templatesFile(), 'utf8')) }; } catch (_) { return DEFAULT_TEMPLATES; }
+  try {
+    const saved = JSON.parse(fs.readFileSync(templatesFile(), 'utf8'));
+    const merged = { ...DEFAULT_TEMPLATES, ...saved };
+    // templates.json do bản cũ lưu cũng có thể dính đoạn prompt đã bỏ.
+    for (const st of Object.keys(merged)) {
+      if (merged[st] && typeof merged[st] === 'object') {
+        for (const k of Object.keys(merged[st])) merged[st][k] = cleanPrompt(merged[st][k]);
+      }
+    }
+    return merged;
+  } catch (_) { return DEFAULT_TEMPLATES; }
 }
 function saveTemplates(t) {
   fs.mkdirSync(cfg.dataDir, { recursive: true });
@@ -177,7 +188,31 @@ function normalizeProject(p) {
   if (!Number.isInteger(p.s3.nextOrder) || p.s3.nextOrder <= maxOrder) p.s3.nextOrder = maxOrder + 1;
   p.stage = [1, 2, 3].includes(p.stage) ? p.stage : 1;
   p.maxStage = Math.max(p.maxStage || 1, p.stage);
+  // Dự án cũ lưu sẵn prompt 35mm trong project.json → dọn ngay khi đọc, kể cả bản Anh.
+  cleanPromptsIn(p);
   return p;
+}
+
+// Chạy 1 lần lúc server khởi động: ghi đè project.json của các dự án cũ đã được dọn.
+function migrateProjects(log = () => {}) {
+  let changed = 0;
+  fs.mkdirSync(projectsDir(), { recursive: true });
+  for (const id of fs.readdirSync(projectsDir())) {
+    const file = pfile(id);
+    let raw;
+    try {
+      if (!fs.statSync(file).isFile()) continue;
+      raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    } catch (_) { continue; }
+    const before = JSON.stringify(raw);
+    cleanPromptsIn(raw);
+    if (JSON.stringify(raw) !== before) {
+      try { save(raw); changed++; }
+      catch (er) { log('prompt migrate failed ' + id + ': ' + er.message); }
+    }
+  }
+  if (changed) log('dọn prompt 35mm cũ trong ' + changed + ' dự án');
+  return changed;
 }
 
 // Số thứ tự hiển thị/tên file của một cảnh (ổn định qua các lần xóa/thêm cảnh).
@@ -260,7 +295,7 @@ function outputDirFor(proj) {
 
 module.exports = {
   uid, safeName, templates, saveTemplates,
-  createProject, nameExists, save, load, list, remove, assetPath, saveAsset,
+  createProject, nameExists, save, load, list, remove, assetPath, saveAsset, migrateProjects,
   listKoc, saveKoc, kocPath, removeKoc, outputDirFor, pdir,
   outputFolderFor, hasActiveWork, sceneOrder, normalizeProject, isValidProjectId,
   _test: { legacyOutputFolder, suffixedFolder },

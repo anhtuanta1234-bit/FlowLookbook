@@ -1468,6 +1468,10 @@ app.post('/api/projects/:id/open-output', (req, res) => {
   res.json({ ok: true });
 });
 
+// Dọn prompt 35mm còn lưu trong project.json của các dự án CŨ. Đổi mẫu mặc định chỉ có tác dụng
+// với dự án mới — nếu không migrate, user cập nhật app vẫn thấy đoạn đã bỏ trong dự án cũ.
+try { store.migrateProjects(appendLog); } catch (e) { appendLog('prompt migrate lỗi: ' + e.message); }
+
 let interruptedCount = 0;
 // Khi máy chủ khởi động lại, các lượt đang chạy dở không còn ai theo dõi: đánh dấu lỗi để giao diện không treo.
 function recoverInterruptedRuns() {
