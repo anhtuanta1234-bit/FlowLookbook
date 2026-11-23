@@ -879,6 +879,31 @@ function modal(html, narrow) {
   m.onmousedown = (e) => { if (e.target === m) close(); };
   return { el: m, close };
 }
+// Hộp nhập chữ ngay trong app — Electron KHÔNG hỗ trợ hộp thoại nhập liệu của trình duyệt.
+// Trả về chuỗi đã trim, hoặc null nếu bấm Hủy / Esc / bấm ra nền.
+function askText(title, label, initial, hint) {
+  return new Promise((resolve) => {
+    const m = modal(`<h3>${esc(title)}</h3>
+      ${hint ? `<div class="hint">${esc(hint)}</div>` : ''}
+      <label class="lbl" for="askTxt">${esc(label)}</label>
+      <input id="askTxt" style="width:100%;box-sizing:border-box" value="${esc(initial || '')}" autocomplete="off" spellcheck="false">
+      <div class="foot"><button class="btn primary" id="askOk">Lưu</button><button class="btn" id="askCancel">Hủy</button></div>`, true);
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      activeModalClose = null; // Esc/bấm nền đã xử lý ở đây, đừng để close() cũ treo promise
+      m.close();
+    };
+    activeModalClose = () => finish(null);
+    m.el.onmousedown = (e) => { if (e.target === m.el) finish(null); };
+    $('#askOk').onclick = () => finish($('#askTxt').value.trim() || 'koc');
+    $('#askCancel').onclick = () => finish(null);
+    $('#askTxt').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#askOk').click(); } };
+    setTimeout(() => { const el = $('#askTxt'); el.focus(); el.select(); }, 0);
+  });
+}
 // Công cụ cắt riêng (public/cropper.js): mượt, không mất chuột, có tỉ lệ, lưới, thu phóng
 function cropDialog(blob, title) { return window.openCropper(blob, title); }
 
@@ -963,7 +988,9 @@ async function kocDialog(selectMode) {
     <div class="foot"><button class="btn" id="kAdd">${I.plus} Thêm KOC</button><button class="btn primary" id="kClose">Xong</button></div>`);
   $('#kClose').onclick = () => { m.close(); if (S.p) refresh(); };
   $('#kAdd').onclick = () => pickFiles(false, async ([f]) => {
-    if (!f) return; const name = prompt('Đặt tên cho KOC này:', f.name.replace(/\.[^.]+$/, '')) || 'koc';
+    if (!f) return;
+    const name = await askText('Thêm KOC', 'Đặt tên cho KOC này:', f.name.replace(/\.[^.]+$/, ''), 'Tên này chỉ để phân biệt các ảnh KOC trong thư viện.');
+    if (name === null) return kocDialog(selectMode); // hủy: hiện lại thư viện
     try { await api('POST', `/api/koc?name=${encodeURIComponent(name)}`, undefined, await normalizedBlob(f)); m.close(); kocDialog(selectMode); } catch (er) { fail(er); }
   });
   m.el.onclick = async (e) => {

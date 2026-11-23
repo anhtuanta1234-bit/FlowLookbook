@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.24 - 2026-11-23
+- Sửa lỗi không thêm được ảnh KOC: Electron không hỗ trợ hộp nhập tên của trình duyệt, giờ thay bằng ô nhập ngay trong hộp thoại của app, điền sẵn tên file.
+- Bấm Hủy / Esc / bấm ra nền khi đặt tên KOC giờ hiện lại thư viện KOC, không để hộp thoại treo.
+
+
 ## v1.1.23 - 2026-11-23
 - Dọn luôn đoạn prompt phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." trong các DỰ ÁN CŨ: prompt được lưu riêng trong project.json nên đổi mẫu mặc định trước đây không có tác dụng với dự án đã tạo. Giờ tự migrate lúc mở app, cả bản tiếng Việt lẫn tiếng Anh (kể cả prompt đã lưu trong các lượt chạy).
 - Mẫu prompt đã lưu trong templates.json cũng được dọn khi đọc, không chỉ mẫu mặc định.

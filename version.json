@@ -1,5 +1,5 @@
 {
-  "version": "1.1.23",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.23/Flow.Lookbook.Setup.1.1.23.exe",
-  "notes": "- Dọn luôn đoạn prompt phong cách chụp 35mm/film grain và danh sách \"Tránh: da nhựa, CGI...\" trong các DỰ ÁN CŨ: prompt được lưu riêng trong project.json nên đổi mẫu mặc định trước đây không có tác dụng với dự án đã tạo. Giờ tự migrate lúc mở app, cả bản tiếng Việt lẫn tiếng Anh (kể cả prompt đã lưu trong các lượt chạy).\n- Mẫu prompt đã lưu trong templates.json cũng được dọn khi đọc, không chỉ mẫu mặc định."
+  "version": "1.1.24",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.24/Flow.Lookbook.Setup.1.1.24.exe",
+  "notes": "- Sửa lỗi không thêm được ảnh KOC: Electron không hỗ trợ hộp nhập tên của trình duyệt, giờ thay bằng ô nhập ngay trong hộp thoại của app, điền sẵn tên file.\n- Bấm Hủy / Esc / bấm ra nền khi đặt tên KOC giờ hiện lại thư viện KOC, không để hộp thoại treo."
 }
