@@ -23,7 +23,9 @@ test('helper được khởi qua Start-Process trung gian, không spawn detached
   assert.ok(src.includes("Start-Process -FilePath 'powershell.exe'"), 'phải dùng Start-Process tách tiến trình');
   assert.ok(!src.includes('detached: true'), 'KHÔNG được spawn detached: PowerShell không chạy -File');
   assert.ok(src.includes('helper confirmed running'), 'phải đợi helper xác nhận trước khi tắt app');
-  assert.ok(src.includes("'helper start token=' + token"), 'phải đối chiếu đúng token của lần này');
+  assert.ok(src.includes("stripBom(fs.readFileSync(UPDATE_READY, 'utf8')).trim() === token"),
+    'phải đối chiếu đúng token của lần này qua file ready, bỏ BOM');
+  assert.ok(src.includes('stripBom'), 'phải chịu file UTF-8 có BOM do PowerShell 5.1 ghi');
   assert.ok(src.includes("'-Config',"), 'phải truyền cấu hình qua file, không qua đối số');
   assert.ok(!src.includes("'-Installer',"), 'KHÔNG được đưa đường dẫn có dấu cách vào -ArgumentList');
 });
@@ -125,6 +127,18 @@ test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗ
   assert.ok(ui.includes("btn.textContent = pct >= 0 ? `Đang tải… ${pct}%`"), 'phải giữ thông báo tiến độ trong lúc tải');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('?v=20261123-no-update-timeout-1'), 'phải bump cache-buster khi đổi app.js');
+});
+
+test('xác nhận helper bằng file ready, không tin câu log ghi trước khi kiểm tra lock', () => {
+  const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(main.includes('UPDATE_READY'), 'phải có file ready');
+  assert.ok(main.includes("stripBom(fs.readFileSync(UPDATE_READY, 'utf8')).trim() === token"),
+    'phải so token trong file ready, bỏ BOM');
+  assert.ok(!main.includes("includes('helper start token=' + token)"), 'không được soi câu log cũ');
+  assert.ok(main.includes('st && st.ok === false'), 'helper báo lỗi sớm thì rollback ngay, không đóng app');
+  assert.ok(main.includes('cancelled stale helper'), 'lúc mở app phải huỷ helper còn sót của phiên trước');
+  assert.ok(main.includes('targetAdvanced && !installConfirmed'),
+    'phải phát hiện trường hợp báo thành công nhưng version không tăng');
 });
 
 test('file installer đã tải trọn vẹn thì tận dụng, không tải lại 118 MB', () => {

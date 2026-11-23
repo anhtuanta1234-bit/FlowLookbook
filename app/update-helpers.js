@@ -64,36 +64,59 @@ $Token = $c.token
 $Lock = $c.lock
 $Cancel = $c.cancel
 $Status = $c.status
+$Ready = $c.ready
 $ProcessName = $c.processName
 function W($m) { Add-Content -LiteralPath $Log -Value ("[" + (Get-Date -Format o) + "] " + $m) }
+# Set-Content -Encoding UTF8 trên PS 5.1 ghi BOM → Node JSON.parse lỗi và so sánh token hỏng.
+function Write-Text($Path, $Text) {
+  [IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
 function WriteStatus($ok, $code, $err) {
   $data = @{ token = $Token; ok = $ok }
   if ($null -ne $code) { $data.exitCode = $code }
   if ($err) { $data.error = $err }
-  try { Set-Content -LiteralPath $Status -Value ($data | ConvertTo-Json -Compress) -Encoding UTF8 } catch {}
+  try { Write-Text $Status ($data | ConvertTo-Json -Compress) } catch {}
+}
+# App ghi lock dạng JSON {"token":...,"at":...}; bản cũ ghi chuỗi thường.
+# Đọc được cả hai, nếu không helper sẽ abort ở mọi lượt cập nhật (lỗi v1.1.17 -> v1.1.21).
+function Get-Token($Path) {
+  $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue
+  if ($null -eq $raw) { return '' }
+  $raw = $raw.Trim()
+  try { $obj = $raw | ConvertFrom-Json -ErrorAction Stop; if ($obj -and $obj.token) { return [string]$obj.token } } catch {}
+  return $raw
 }
 W "helper start token=$Token"
-try {
-  $lockToken = (Get-Content -LiteralPath $Lock -Raw -ErrorAction Stop).Trim()
-  if ($lockToken -ne $Token) { W "helper abort: khoa khong khop token"; exit 1 }
-} catch { W "helper abort: khong doc duoc khoa"; exit 1 }
+$lockToken = Get-Token $Lock
+if ($lockToken -ne $Token) {
+  W "helper abort: khoa khong khop token"
+  WriteStatus $false $null "helper abort: khoa khong khop token"
+  exit 1
+}
+# Chỉ báo ready SAU KHI qua kiểm tra lock. App dùng file này để xác nhận helper thật sự sống.
+try { Write-Text $Ready $Token } catch {}
+W "helper ready token=$Token"
 
 for ($i = 0; $i -lt 150; $i++) {
   if (Test-Path -LiteralPath $Cancel) {
-    try {
-      $cancelToken = (Get-Content -LiteralPath $Cancel -Raw -ErrorAction SilentlyContinue).Trim()
-      if ($cancelToken -eq $Token) {
-        W "helper cancelled by token"
-        Remove-Item -LiteralPath $Lock -Force -ErrorAction SilentlyContinue
-        exit 0
-      }
-    } catch {}
+    $cancelToken = Get-Token $Cancel
+    if ($cancelToken -eq $Token) {
+      W "helper cancelled by token"
+      Remove-Item -LiteralPath $Lock -Force -ErrorAction SilentlyContinue
+      exit 0
+    }
   }
   $running = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $AppExe }
   if (-not $running) { break }
   Start-Sleep -Milliseconds 400
 }
 W "waited ticks=$i stillRunning=$([bool]$running)"
+if ($running) {
+  $msg = "app van con mo sau 60s"
+  W "helper abort: $msg"
+  WriteStatus $false $null $msg
+  exit 1
+}
 try {
   $proc = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru -ErrorAction Stop
   $code = [int]$proc.ExitCode

@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
-const { runCleanup } = require('./update-cleanup');
+const { runCleanup, compareVersion } = require('./update-cleanup');
 const { sameVersion, shouldKeepPending, validateInstallerUrl, buildHelperScript } = require('./update-helpers');
 
 const PORT = process.env.PORT || 4177;
@@ -24,7 +24,11 @@ const UPDATE_SUCCESS = path.join(app.getPath('userData'), 'update-success.json')
 const UPDATE_LOCK = path.join(os.tmpdir(), 'flow-update.lock');
 const UPDATE_CANCEL = path.join(os.tmpdir(), 'flow-update-cancel.json');
 const UPDATE_STATUS = path.join(os.tmpdir(), 'flow-update-status.json');
+// Helper ghi file này NGAY SAU KHI qua kiểm tra lock. App chỉ tin đây là "helper đang sống".
+const UPDATE_READY = path.join(os.tmpdir(), 'flow-update-ready.json');
 let LAST_UPDATE_ERROR = '';
+// PowerShell 5.1 ghi UTF-8 có BOM; JSON.parse/so sánh token của Node không chịu BOM.
+const stripBom = (s) => String(s == null ? '' : s).replace(/^\uFEFF/, '');
 // Chỉ máy có mã nguồn ở E:\FlowLookbook mới có thư mục dist để dọn installer cũ.
 const SOURCE_ROOT = process.platform === 'win32' && fs.existsSync('E:\\FlowLookbook') ? 'E:\\FlowLookbook' : '';
 
@@ -228,7 +232,7 @@ function autoCleanEnabled() {
 }
 
 // App cũ ghi lại việc cần dọn trước khi thoát; app mới sẽ đọc sau khi đã mở lại.
-function writePendingCleanup(installer, targetVersion) {
+function writePendingCleanup(installer, targetVersion, token) {
   fs.writeFileSync(PENDING_CLEANUP, JSON.stringify({
     fromVersion: app.getVersion(),
     installer,
@@ -236,12 +240,14 @@ function writePendingCleanup(installer, targetVersion) {
     createdAt: Date.now(),
   }, null, 2));
   updateLog('pending cleanup saved');
-  fs.writeFileSync(UPDATE_SUCCESS, JSON.stringify({ version: targetVersion || '', at: Date.now() }));
+  // Lưu cả token để lần mở sau đối chiếu với trạng thái helper — tránh nhận nhầm
+  // status của một lượt cài cũ (user bấm Thử lại nhiều lần).
+  fs.writeFileSync(UPDATE_SUCCESS, JSON.stringify({ version: targetVersion || '', at: Date.now(), token: token || '' }));
   updateLog('update-success marker saved');
 }
 
 function clearUpdateMarkers() {
-  for (const f of [PENDING_CLEANUP, UPDATE_SUCCESS, UPDATE_LOCK, UPDATE_CANCEL, UPDATE_STATUS]) {
+  for (const f of [PENDING_CLEANUP, UPDATE_SUCCESS, UPDATE_LOCK, UPDATE_CANCEL, UPDATE_STATUS, UPDATE_READY]) {
     try { fs.rmSync(f, { force: true }); } catch (_) {}
   }
 }
@@ -250,7 +256,7 @@ function clearUpdateMarkers() {
 function readHelperStatus() {
   try {
     if (!fs.existsSync(UPDATE_STATUS)) return null;
-    const s = JSON.parse(fs.readFileSync(UPDATE_STATUS, 'utf8'));
+    const s = JSON.parse(stripBom(fs.readFileSync(UPDATE_STATUS, 'utf8')));
     try { fs.rmSync(UPDATE_STATUS, { force: true }); } catch (_) {}
     return s;
   } catch (_) { return null; }
@@ -259,7 +265,7 @@ function readHelperStatus() {
 // Chạy lúc app mới đã khởi động: chỉ dọn khi phiên bản thật sự tăng.
 function cleanupOldInstallers() {
   let job = null;
-  try { job = JSON.parse(fs.readFileSync(PENDING_CLEANUP, 'utf8')); }
+  try { job = JSON.parse(stripBom(fs.readFileSync(PENDING_CLEANUP, 'utf8'))); }
   catch (_) { return; }
   let result = null;
   try { result = runCleanup(job, app.getVersion(), updateLog, { enabled: autoCleanEnabled() }); }
@@ -277,7 +283,7 @@ ipcMain.handle('flow:consume-update-success', () => {
   try {
     if (!fs.existsSync(UPDATE_SUCCESS)) return '';
     let version = '';
-    try { version = JSON.parse(fs.readFileSync(UPDATE_SUCCESS, 'utf8')).version || ''; } catch (_) {}
+    try { version = JSON.parse(stripBom(fs.readFileSync(UPDATE_SUCCESS, 'utf8'))).version || ''; } catch (_) {}
     // Mở lại quá sớm (installer chưa xong) thì GIỮ marker, không báo thành công sai.
     // So sánh bằng số phiên bản để "v1.1.17" / "1.1.17.0" vẫn khớp với app.getVersion().
     if (version && !sameVersion(version, app.getVersion())) return '';
@@ -309,11 +315,12 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
   try {
     if (fs.existsSync(UPDATE_LOCK)) {
       let lock = {};
-      try { lock = JSON.parse(fs.readFileSync(UPDATE_LOCK, 'utf8')); } catch (_) {}
+      try { lock = JSON.parse(stripBom(fs.readFileSync(UPDATE_LOCK, 'utf8'))); } catch (_) {}
       if (lock.token && lock.token !== token && Date.now() - (lock.at || 0) < 10 * 60 * 1000) {
         throw new Error('Đang có một lượt cập nhật khác. Vui lòng đợi vài phút rồi thử lại.');
       }
       try { fs.rmSync(UPDATE_LOCK, { force: true }); } catch (_) {}
+      try { fs.rmSync(UPDATE_READY, { force: true }); } catch (_) {}
     }
     fs.writeFileSync(UPDATE_LOCK, JSON.stringify({ token, at: Date.now() }), { flag: 'wx' });
   } catch (er) {
@@ -333,7 +340,7 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
   };
 
   try {
-    writePendingCleanup(file, version);
+    writePendingCleanup(file, version, token);
     fs.writeFileSync(helper, buildHelperScript(), 'utf8');
     // KHÔNG truyền đường dẫn có dấu cách qua -ArgumentList: PowerShell 5.1 sẽ tách
     // "C:\Users\TA ANH TUAN\..." thành nhiều arg, Windows hiện hộp "Chọn ứng dụng để mở 'TA'".
@@ -345,6 +352,7 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
       lock: UPDATE_LOCK,
       cancel: UPDATE_CANCEL,
       status: UPDATE_STATUS,
+      ready: UPDATE_READY,
       processName: path.basename(app.getPath('exe'), '.exe'),
     }), 'utf8');
     updateLog('helper written: ' + helper);
@@ -363,23 +371,34 @@ ipcMain.handle('flow:install-update', async (_e, file, version) => {
     wrapper.on('error', (er) => updateLog('helper spawn error=' + er.message));
     wrapper.on('exit', (code) => updateLog('helper wrapper exit=' + code));
 
-    // Đợi helper ghi xác nhận rồi mới cho UI đếm ngược. Timeout 15s (AV/PS cold start
-    // có thể chậm hơn 8s) → ghi file huỷ để helper tự thoát, rollback toàn bộ marker.
+    // Đợi helper ghi file ready (chỉ ghi SAU khi đã qua kiểm tra lock) rồi mới cho UI
+    // đếm ngược. Trước đây chỉ soi câu "helper start" trong log — câu đó ghi TRƯỚC khi
+    // kiểm tra lock nên helper đã abort mà app vẫn tưởng đang chạy → đóng app, không cài.
+    // Timeout 15s (AV/PS cold start có thể chậm hơn 8s) → huỷ + rollback marker.
     await new Promise((resolve, reject) => {
       const startedAt = Date.now();
       const iv = setInterval(() => {
-        let started = false;
-        try { started = fs.readFileSync(UPDATE_LOG, 'utf8').includes('helper start token=' + token); }
-        catch (_) {}
-        if (started) {
+        let ready = false;
+        try { ready = stripBom(fs.readFileSync(UPDATE_READY, 'utf8')).trim() === token; } catch (_) {}
+        if (ready) {
           clearInterval(iv);
           updateLog('helper confirmed running');
           resolve();
           return;
         }
+        let st = null;
+        try {
+          if (fs.existsSync(UPDATE_STATUS)) st = JSON.parse(stripBom(fs.readFileSync(UPDATE_STATUS, 'utf8')));
+        } catch (_) {}
+        if (st && st.ok === false) {
+          clearInterval(iv);
+          cancelAndRollback('helper abort: ' + (st.error || 'unknown'));
+          reject(new Error(st.error || 'Không khởi được tiến trình cập nhật. Vui lòng bấm “Thử lại”.'));
+          return;
+        }
         if (Date.now() - startedAt > 15000) {
           clearInterval(iv);
-          cancelAndRollback('helper start timeout');
+          cancelAndRollback('helper ready timeout');
           reject(new Error('Không khởi được tiến trình cập nhật. Vui lòng bấm “Thử lại”.'));
         }
       }, 100);
@@ -420,12 +439,45 @@ if (app.requestSingleInstanceLock()) {
       return;
     }
     const status = readHelperStatus();
-    if (status && status.ok === false) {
-      // NSIS thất bại: đừng giữ marker thành công, báo lỗi thật cho user ở lần mở này.
+
+    // App đã mở lại thì mọi helper của phiên trước (nếu còn sống) PHẢI dừng,
+    // nếu không nó sẽ cài ngay lúc user đang dùng app. Ghi lệnh huỷ theo đúng token cũ.
+    let marker = {};
+    try {
+      marker = JSON.parse(stripBom(fs.readFileSync(UPDATE_SUCCESS, 'utf8')));
+      if (typeof marker === 'string') marker = { version: marker };
+    } catch (_) {}
+    try {
+      if (fs.existsSync(UPDATE_LOCK)) {
+        let stale = {};
+        try { stale = JSON.parse(stripBom(fs.readFileSync(UPDATE_LOCK, 'utf8'))); } catch (_) {}
+        if (stale.token && Date.now() - (stale.at || 0) < 10 * 60 * 1000) {
+          fs.writeFileSync(UPDATE_CANCEL, stale.token, 'utf8');
+          updateLog('cancelled stale helper token=' + stale.token);
+        }
+      }
+    } catch (_) {}
+    for (const f of [UPDATE_LOCK, UPDATE_READY]) { try { fs.rmSync(f, { force: true }); } catch (_) {} }
+
+    const targetVersion = String(marker.version || '');
+    const targetAdvanced = targetVersion && compareVersion(targetVersion, app.getVersion()) > 0;
+    const statusMatches = !!status && (!marker.token || !status.token || status.token === marker.token);
+    const installConfirmed = !!status && status.ok === true && statusMatches;
+
+    if (status && status.ok === false && statusMatches) {
+      // NSIS thất bại / helper abort: đừng giữ marker thành công, báo lỗi thật cho user.
       updateLog('helper reported install failure: ' + (status.error || 'exit=' + status.exitCode));
       LAST_UPDATE_ERROR = 'Cài đặt phiên bản mới thất bại'
         + (status.error ? ': ' + status.error : '')
         + '. App vẫn dùng bản cũ, bạn có thể thử lại trong Cài đặt.';
+      clearUpdateMarkers();
+    } else if (targetAdvanced && !installConfirmed) {
+      // Marker hứa lên bản mới nhưng app vẫn bản cũ → cài không ăn (helper chết im,
+      // hoặc NSIS trả 0 mà không ghi đè). Không để marker treo mãi, báo lỗi rõ ràng.
+      updateLog('update did not apply: target=' + targetVersion + ' current=' + app.getVersion()
+        + ' status=' + (status ? JSON.stringify(status) : 'none'));
+      LAST_UPDATE_ERROR = 'Cài đặt phiên bản ' + targetVersion + ' không thành công. App vẫn dùng bản '
+        + app.getVersion() + '. Vui vào Cài đặt → Kiểm tra phiên bản mới để thử lại.';
       clearUpdateMarkers();
     } else {
       if (status) updateLog('helper reported install success, exit=' + status.exitCode);

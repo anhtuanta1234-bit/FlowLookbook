@@ -45,6 +45,7 @@ function runCleanup(job, currentVersion, log = () => {}, opts = {}) {
   // File installer vừa được tải về để cài bản mới — sau khi cài xong không cần giữ.
   tryDelete(job.installer, 'downloaded');
   tryDelete(job.installer && job.installer + '.blockmap', 'downloaded');
+  tryDelete(job.installer && job.installer + '.complete', 'downloaded marker');
 
   // Máy phát triển: giữ lại installer + blockmap của bản hiện tại, xóa các bản cũ hơn.
   const dist = job.sourceRoot ? path.join(job.sourceRoot, 'dist') : '';

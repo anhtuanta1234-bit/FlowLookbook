@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v1.1.22 - 2026-11-23
+- Sửa triệt để lỗi tải xong 100% nhưng đóng app rồi mở lại vẫn không lên phiên bản: helper đọc sai định dạng lock (app ghi JSON, helper so sánh như chuỗi thường) nên luôn abort trước khi chạy installer — từ v1.1.17 đến v1.1.21 không lượt nào cài được.
+- App giờ xác nhận helper bằng file "ready" ghi sau khi đã qua kiểm tra token, không còn tin câu log ghi trước đó; helper báo lỗi ngay thay vì thoát im lặng, và không cài khi app vẫn còn mở sau 60s.
+- Khi mở lại app: huỷ helper còn sót của phiên trước, xoá lock/ready cũ; nếu marker báo sẽ lên bản mới nhưng phiên bản không tăng thì hiện lỗi rõ ràng và dọn marker để lần sau thử lại được ngay.
+- Sửa thêm lỗi PowerShell 5.1 ghi file ready/status kèm BOM làm Node so sai token và JSON.parse lỗi — helper giờ ghi UTF-8 không BOM, app cũng bỏ BOM khi đọc (kể cả file cũ).
+- Dọn luôn file marker `.complete` đi kèm installer sau khi cập nhật thành công.
+- Thêm test chạy thật script PowerShell với đúng lock JSON / lock sai token, và test luồng ready-rollback trong main.
+
+
 ## v1.1.21 - 2026-11-23
 - Bỏ nốt đoạn phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." khỏi mẫu prompt mặc định của bước 2 và bước 3 (trước đây mới chỉ bỏ ở bước 1); thêm test chặn tái diễn ở mọi bước.
 
