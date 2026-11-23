@@ -1060,10 +1060,8 @@ $('#btnSettings').onclick = async () => {
 // ---------- cập nhật ----------
 // Đọc version.json từ link đặt sẵn trong server.js. Không cần người dùng cấu hình gì.
 const UPDATE_TIMEOUT_MS = 15000;
-const INSTALL_TIMEOUT_MS = 30000;
-// Installer ~118 MB: mạng chậm có thể tải 1-3 phút. Chỉ coi là kẹt khi KHÔNG có tiến độ trong 30s.
-const DOWNLOAD_IDLE_MS = 30000;
-const DOWNLOAD_HARD_MS = 10 * 60 * 1000;
+// Không đặt timeout cho tải/cài installer: file ~118 MB có thể tải rất lâu tuỳ mạng.
+// Giao diện cứ hiện tiến độ; chỉ báo lỗi khi Electron báo lỗi thật (HTTP lỗi, file hỏng, NSIS thất bại).
 
 // fetch có AbortController: mạng treo thì tự hủy sau 15s, không để nút kẹt "Đang…".
 async function fetchWithTimeout(url, opt = {}, ms = UPDATE_TIMEOUT_MS) {
@@ -1078,38 +1076,11 @@ async function fetchWithTimeout(url, opt = {}, ms = UPDATE_TIMEOUT_MS) {
     clearTimeout(timer);
   }
 }
-// IPC tải/cài installer không nhận signal → dùng Promise.race để không chờ vô hạn.
-function withTimeout(promise, ms, message) {
-  let timer;
-  const guard = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(message)), ms); });
-  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
-}
-// Timeout theo HOẠT ĐỘNG: cứ có sự kiện tiến độ là gia hạn. 118 MB trên mạng chậm cũ
-// cũng tải được, nhưng vẫn có hard cap 10 phút để không treo vĩnh viễn.
-function withActivityTimeout(promise, getLastActivity, idleMs, hardMs, idleMessage, hardMessage) {
-  return new Promise((resolve, reject) => {
-    let done = false;
-    let iv = null;
-    let hardTimer = null;
-    const settle = (ok, value) => {
-      if (done) return;
-      done = true;
-      if (iv) clearInterval(iv);
-      if (hardTimer) clearTimeout(hardTimer);
-      if (ok) resolve(value); else reject(value);
-    };
-    iv = setInterval(() => {
-      if (Date.now() - getLastActivity() > idleMs) settle(false, new Error(idleMessage));
-    }, 1000);
-    hardTimer = setTimeout(() => settle(false, new Error(hardMessage)), hardMs);
-    Promise.resolve(promise).then((v) => settle(true, v), (e) => settle(false, e));
-  });
-}
 // Mọi lỗi cập nhật đều đổi sang tiếng Việt thân thiện trước khi hiện toast (không lọt AbortError/SyntaxError).
 function friendlyUpdateError(er) {
   const name = er?.name || '';
   const msg = String(er?.message || er || '');
-  if (name === 'AbortError' || /quá 15 giây|quá 30 giây|không có tiến độ|quá 10 phút/i.test(msg)) return msg;
+  if (name === 'AbortError' || /quá 15 giây/i.test(msg)) return msg;
   if (name === 'SyntaxError' || /unexpected token|invalid json|is not valid json/i.test(msg)) return 'Thông tin cập nhật từ máy chủ không đúng định dạng. Vui lòng thử lại sau.';
   if (/failed to fetch|networkerror|network request failed|load failed|timeout/i.test(msg)) return 'Không kết nối được máy chủ cập nhật. Vui lòng kiểm tra mạng rồi thử lại.';
   if (/^HTTP \d+/.test(msg)) return 'Không tải được thông tin cập nhật (' + msg + '). Vui lòng thử lại sau.';
@@ -1168,23 +1139,15 @@ function showUpdateDialog(info) {
         S.updateDialogOpen = false; activeModalClose = null; m.close();
         return;
       }
-      let lastProgressAt = Date.now();
       window.flowBridge.onUpdateProgress((pct) => {
-        lastProgressAt = Date.now();
         btn.textContent = pct >= 0 ? `Đang tải… ${pct}%` : 'Đang tải…';
       });
-      const file = await withActivityTimeout(
-        window.flowBridge.downloadUpdate(info.url),
-        () => lastProgressAt,
-        DOWNLOAD_IDLE_MS,
-        DOWNLOAD_HARD_MS,
-        'Tải bản cài đặt không có tiến độ trong 30 giây. Vui lòng kiểm tra mạng rồi bấm “Thử lại”.',
-        'Tải bản cài đặt quá lâu (quá 10 phút). Vui lòng kiểm tra mạng rồi bấm “Thử lại”.',
-      );
+      // Không timeout ở đây. Electron trả lỗi thật thì Promise reject → catch bên dưới hiện toast.
+      const file = await window.flowBridge.downloadUpdate(info.url);
       btn.textContent = 'Đang cập nhật…';
       state.textContent = 'Đã tải 100%. Đang cập nhật…';
       // Helper đã được khởi và xác nhận chạy; app vẫn mở để kịp hiện thông báo.
-      await withTimeout(window.flowBridge.installUpdate(file, info.version), INSTALL_TIMEOUT_MS, 'Cài đặt quá lâu (quá 30 giây). Vui lòng bấm “Thử lại”.');
+      await window.flowBridge.installUpdate(file, info.version);
       let n = 3;
       countingDown = true;
       const tick = () => {

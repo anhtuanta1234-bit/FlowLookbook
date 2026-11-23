@@ -113,15 +113,18 @@ test('helper báo lỗi installer thì báo lại cho user ở lần mở sau', 
   assert.ok(main.includes('LAST_UPDATE_ERROR'), 'phải giữ lỗi lại cho giao diện đọc');
 });
 
-test('tải installer dùng timeout theo tiến độ, không cắt ngang ở 30s cố định', () => {
+test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗi thật', () => {
   const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
-  assert.ok(ui.includes('withActivityTimeout'), 'phải có timeout theo hoạt động');
-  assert.ok(ui.includes('DOWNLOAD_HARD_MS'), 'phải có hard cap để không treo vĩnh viễn');
-  assert.ok(ui.includes('lastProgressAt = Date.now()'), 'sự kiện tiến độ phải gia hạn timeout');
-  assert.ok(!ui.includes("window.flowBridge.downloadUpdate(info.url), INSTALL_TIMEOUT_MS"),
-    'không được dùng lại timeout 30s cố định cho lượt tải');
+  assert.ok(!ui.includes('withActivityTimeout'), 'không được có timeout theo tiến độ');
+  assert.ok(!ui.includes('withTimeout('), 'không được có timeout cố định cho tải/cài');
+  assert.ok(!ui.includes('quá 30 giây'), 'không được hiện câu báo quá 30s');
+  assert.ok(!ui.includes('không có tiến độ'), 'không được hiện câu báo không có tiến độ');
+  assert.ok(!ui.includes('quá 10 phút'), 'không được hiện câu báo quá 10 phút');
+  assert.ok(ui.includes('await window.flowBridge.downloadUpdate(info.url)'), 'phải chờ tải đến khi Electron trả kết quả');
+  assert.ok(ui.includes('await window.flowBridge.installUpdate(file, info.version)'), 'phải chờ cài đến khi Electron trả kết quả');
+  assert.ok(ui.includes("btn.textContent = pct >= 0 ? `Đang tải… ${pct}%`"), 'phải giữ thông báo tiến độ trong lúc tải');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('?v=20261123-download-idle-timeout-1'), 'phải bump cache-buster khi đổi app.js');
+  assert.ok(html.includes('?v=20261123-no-update-timeout-1'), 'phải bump cache-buster khi đổi app.js');
 });
 
 test('file installer đã tải trọn vẹn thì tận dụng, không tải lại 118 MB', () => {

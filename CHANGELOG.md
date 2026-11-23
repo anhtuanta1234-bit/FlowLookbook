@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.20 - 2026-11-23
+- Bỏ hẳn thông báo timeout khi tải/cài bản cập nhật: cứ hiện tiến độ bình thường, chỉ báo lỗi khi file cài thật sự lỗi hoặc NSIS cài thất bại.
+
+
 ## v1.1.19 - 2026-11-23
 - Sửa lỗi báo "Tải bản cài đặt quá lâu (quá 30 giây)" dù file vẫn tải tiếp: giờ timeout theo tiến độ, 30s không có tiến độ mới báo lỗi, tối đa 10 phút.
 - Tận dụng file installer đã tải trọn vẹn trong Downloads (so kích thước với GitHub) nên bấm Thử lại không phải tải lại 118 MB; chặn 2 lượt tải chồng nhau.
