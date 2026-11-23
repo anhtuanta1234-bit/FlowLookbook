@@ -39,6 +39,19 @@ test('không đụng vào prompt sạch', () => {
   assert.equal(cleanPrompt(clean), clean);
 });
 
+const NEW_STYLE_VI = 'yêu cầu, nhân vật ảnh 1 mặc trang phục ảnh 2(cam kết giữ nguyên 100%  toàn bộ chi tiết trang phục ảnh 2), chụp toàn thân,\n\n'
+  + 'Phong cách ảnh chụp đời thực cực kỳ tự nhiên như một KOL/KOC ngoài đời đang được chụp ngẫu hứng máy ảnh thật.Ảnh tông màu sáng, da người giữ nguyên texture tự nhiên, không làm mịn quá mức, không bóng da nhựa, không nét giả AI. Giữ tổng thể mềm mại và chân thật.';
+
+test('giữ nguyên đoạn phong cách KOL/KOC mới (không nhầm với bản 35mm cũ)', () => {
+  assert.equal(cleanPrompt(NEW_STYLE_VI), NEW_STYLE_VI);
+});
+
+test('giữ cả bản dịch tiếng Anh của phong cách KOL/KOC', () => {
+  const en = 'Requirements: image 1 character wears image 2 outfit, full body shot,\n\n'
+    + 'The real-life photo style is extremely natural like a real-life KOL/KOC being spontaneously photographed with a real camera. Skin keeps its natural texture, no plastic skin shine, no fake AI sharpness.';
+  assert.equal(cleanPrompt(en), en);
+});
+
 test('cleanPromptsIn đi qua mọi trường của project, kể cả runs và scenes', () => {
   const proj = {
     name: 'Dự án A',

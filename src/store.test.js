@@ -26,11 +26,7 @@ test('mẫu prompt mặc định của mọi bước không chứa đoạn phong
   }
 });
 
-test('mẫu prompt các bước vẫn giữ yêu cầu cốt lõi (giữ khuôn mặt / trang phục)', () => {
+test('máy cài mới có ô prompt trống; prompt riêng nằm ở data/templates.json', () => {
   const all = templates();
-  assert.match(all.stage1.vi, /tách toàn bộ da thịt/);
-  assert.match(all.stage2.vi, /mặc trang phục ảnh 2/);
-  assert.match(all.stage2.vi, /giữ nguyên 100% khuôn mặt/);
-  assert.match(all.stage3.vi, /bối cảnh giống ảnh 2/);
-  assert.match(all.stage3.vi, /giữ nguyên 100% khuôn mặt/);
+  for (const step of Object.keys(all)) assert.equal(all[step].vi, '', `${step}.vi phải trống`);
 });

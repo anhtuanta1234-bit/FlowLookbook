@@ -29,21 +29,19 @@ function suffixedFolder(base, suffix) {
   return `${base.slice(0, Math.max(1, 80 - tail.length)).trimEnd()}${tail}`;
 }
 
+// Máy cài mới: ô prompt để trống. Chính chủ máy lưu 3 prompt riêng trong data/templates.json
+// (không nằm trong repo/installer) nên chỉ máy đó có sẵn, máy khác cài lên vẫn trống.
 const DEFAULT_TEMPLATES = {
   stage1: {
-    vi: 'Yêu cầu: tách toàn bộ da thịt ra khỏi trang phục, trang phục đặt trên nền trắng, tư thế quần áo giống ảnh tham chiếu 100%, không đặt nằm, trang phục không bị mờ nhòe (làm nét trang phục, vẫn giữ nguyên chi tiết), rõ ràng và giống chi tiết ảnh tham chiếu 100%.',
+    vi: '',
     negative: 'plastic skin, CGI, 3D render, AI artifacts, blur, distortion, over-sharpening, over-smoothing',
   },
   stage2: {
-    vi: `Yêu cầu: nhân vật ảnh 1 mặc trang phục ảnh 2 (cam kết giữ nguyên 100% toàn bộ chi tiết trang phục ảnh 2 và cam kết giữ 100% khuôn mặt nhân vật ảnh 1), biểu cảm tươi cười nhẹ nhàng, chụp toàn thân.
-
-Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính, không làm đẹp quá mức. Ánh sáng: match lighting của ảnh tham chiếu, ánh sáng tự nhiên, không studio lighting.`,
+    vi: '',
     negative: 'plastic skin, CGI, render, doll face, extra fingers, distorted body, strong HDR, studio lighting, AI artifacts, over-smoothing',
   },
   stage3: {
-    vi: `Yêu cầu: nhân vật ảnh 1 chụp ở bối cảnh giống ảnh 2 (cam kết giữ nguyên 100% trang phục ảnh 1, cam kết giữ 100% khuôn mặt nhân vật ảnh 1, giữ nguyên toàn bộ chi tiết cảnh ảnh 2), giữ nguyên toàn bộ ngoại cảnh giống 100% ảnh 2 (không thay chi tiết ngoại cảnh), biểu cảm tươi cười nhẹ nhàng, góc máy chụp giống 100% ảnh 2, nhân vật ảnh 1 chụp tư thế giống tối đa ảnh 2.
-
-Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính. Ánh sáng: match lighting của ảnh cảnh (ảnh 2) chính xác, ánh sáng tự nhiên, không studio lighting.`,
+    vi: '',
     negative: 'plastic skin, CGI, render, doll face, extra fingers, distorted body, strong HDR, studio lighting, AI artifacts, over-smoothing, changing background details',
   },
 };

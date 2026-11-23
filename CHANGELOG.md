@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.1.25 - 2026-11-23
+- Sửa lỗi bộ dọn prompt cũ xóa mất đoạn "Phong cách ảnh chụp đời thực… KOL/KOC" khi mở lại dự án hoặc đọc mẫu prompt.
+- Máy cài mới để trống ô prompt cả 3 bước; 3 prompt riêng của chủ máy nằm trong `data/templates.json`, không đóng gói vào installer.
+- Ô tiếng Anh vẫn tự dịch bằng Google ngay khi sửa ô tiếng Việt (và tự dịch lúc mở nếu ô Anh còn trống).
+
+
 ## v1.1.24 - 2026-11-23
 - Sửa lỗi không thêm được ảnh KOC: Electron không hỗ trợ hộp nhập tên của trình duyệt, giờ thay bằng ô nhập ngay trong hộp thoại của app, điền sẵn tên file.
 - Bấm Hủy / Esc / bấm ra nền khi đặt tên KOC giờ hiện lại thư viện KOC, không để hộp thoại treo.

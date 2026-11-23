@@ -3,6 +3,10 @@
 // nên phải dọn riêng, nếu không người dùng vẫn thấy câu cũ dù đã cập nhật app.
 
 const MARKERS = /shot on 35mm|slight film grain|Phong cách ảnh chụp đời thực|Real-life photo style|Tránh:\s*da nhựa|Avoid:\s*plastic skin/i;
+// Phong cách MỚI (KOL/KOC, ảnh đời thực, KHÔNG có 35mm/film grain) là prompt mặc định hiện tại:
+// phải giữ nguyên, không được dọn nhầm như đoạn phong cách cũ.
+const NEW_STYLE = /^(?:Phong cách ảnh chụp đời thực|(?:the\s+)?real-life photo style)[\s\S]*\bKOL\s*\/\s*KOC\b/i;
+const isNewStyle = (p) => NEW_STYLE.test(p) && !/shot on 35mm|slight film grain/i.test(p);
 // Đoạn đứng riêng (toàn bộ là phong cách chụp / danh sách "Tránh") → bỏ cả đoạn.
 const DEAD_PARAGRAPH = /^(?:Phong cách ảnh chụp đời thực|Real-life photo style|Tránh:[^\n]*(?:da nhựa|plastic skin)|Avoid:[^\n]*(?:plastic skin|da nhựa))/i;
 // Câu dính vào cuối đoạn yêu cầu → chỉ bỏ câu đó, giữ lại yêu cầu chính.
@@ -13,9 +17,9 @@ function cleanPrompt(text) {
   const kept = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
-    .filter((p) => p && !DEAD_PARAGRAPH.test(p))
+    .filter((p) => p && (isNewStyle(p) || !DEAD_PARAGRAPH.test(p)))
     .map((p) => {
-      if (!STYLE_SENTENCE.test(p)) return p;
+      if (isNewStyle(p) || !STYLE_SENTENCE.test(p)) return p;
       // Chia theo câu: dấu "." trong f/2.8 không bị coi là ranh giới (không có space sau nó).
       return p.split(/(?<=[.!?])\s+/)
         .filter((s) => !STYLE_SENTENCE.test(s))
