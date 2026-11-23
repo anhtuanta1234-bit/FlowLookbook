@@ -666,9 +666,11 @@ app.post('/api/projects/:id/rerun', async (req, res) => {
       if (!p) return { code: 404 };
       const { stage, runId, imageId, sceneId } = req.body;
       const st = stageState(p, stage, sceneId);
-      const sourceRun = st?.runs.find((r) => r.id === runId);
+      if (!st) return { code: 400, error: 'Không tìm thấy bước hoặc cảnh cần làm lại.' };
+      if (!runId || !imageId) return { code: 400, error: 'Thiếu thông tin ảnh cần làm lại (runId, imageId).' };
+      const sourceRun = st.runs.find((r) => r.id === runId);
       const src = sourceRun?.images.find((i) => i.id === imageId);
-      if (!src) return { code: 400, error: 'Không tìm thấy ảnh.' };
+      if (!src) return { code: 400, error: 'Không tìm thấy ảnh trong lượt chạy này. Hãy tải lại dự án và thử lại.' };
       if (!st.flowUrl) return { code: 400, error: 'Ảnh này chưa có dự án Flow để chạy lại.' };
       const promptEn = String(sourceRun.promptEn || '').trim();
       if (!promptEn) return { code: 400, error: 'Lượt gốc không còn lưu prompt tiếng Anh. Tool dừng để tránh chạy lại bằng prompt khác.' };
@@ -1004,6 +1006,7 @@ async function execute(job) {
 // Chạy nền. Nhiều cảnh / cả bộ ảnh tải SONG SONG (giới hạn toàn cục bởi dlLock = cài đặt "concurrent2k"),
 // nhưng MỌI thao tác ghi dữ liệu project đều đi qua writeLock để không ghi đè lẫn nhau.
 const writeLock = { p: Promise.resolve(), run(fn) { const r = this.p.then(fn, fn); this.p = r.catch(() => {}); return r; } };
+const activeSharpUpgrades = new Set();
 // Đọc–sửa–ghi một lượt (run) trong project. Không tự khoá: hãy gọi bên trong writeLock.run.
 function withRun(projectId, stage, sceneId, runId, fn) {
   const p = store.load(projectId); if (!p) return;
@@ -1014,7 +1017,11 @@ function withRun(projectId, stage, sceneId, runId, fn) {
   pushProject(p);
 }
 async function sharpUpgrade(projectId, stage, runId, sceneId, retryRefs = null, retryRound = 0) {
+  const key = `${projectId}:${stage}:${sceneId || ''}:${runId}`;
+  if (activeSharpUpgrades.has(key)) return;
+  activeSharpUpgrades.add(key);
   let retryJob = null;
+  try {
   // 1) Chuẩn bị (ghi dữ liệu dưới khoá): đọc trạng thái + đánh dấu đang lấy 2K.
   const prep = await writeLock.run(() => {
     const p0 = store.load(projectId); if (!p0) return null;
@@ -1110,6 +1117,9 @@ async function sharpUpgrade(projectId, stage, runId, sceneId, retryRefs = null, 
     const timer = setTimeout(() => sharpUpgrade(projectId, stage, runId, sceneId, retryJob.refs, retryJob.round), 15000 * retryJob.round);
     timer.unref?.();
   }
+  } finally {
+    activeSharpUpgrades.delete(key);
+  }
 }
 
 function resumePendingSharpUpgrades(includeLegacy = false) {
@@ -1123,7 +1133,7 @@ function resumePendingSharpUpgrades(includeLegacy = false) {
           const pending = run.preview2kPending || [];
           const shouldCheck = includeLegacy
             ? run.status === 'done' && run.images?.length
-            : pending.length > 0 || !!run.upgradeError;
+            : pending.length > 0 || !!run.upgradeError || !!run.upgrading;
           if (!shouldCheck) continue;
 
           const missing = (run.images || []).filter((im) => !is2kAsset(p.id, im.file));
@@ -1146,6 +1156,8 @@ function resumePendingSharpUpgrades(includeLegacy = false) {
             continue;
           }
 
+          const upgradeKey = `${p.id}:${stage}:${sceneId || ''}:${run.id}`;
+          if (activeSharpUpgrades.has(upgradeKey)) continue;
           run.preview2kPending = refs;
           run.upgrading = true;
           run.upgradeProgress = { done: 0, total: refs.length };
@@ -1180,9 +1192,11 @@ app.post('/api/projects/:id/approve', async (req, res) => {
       if (!p) return { code: 404 };
       const { stage, runId, imageId, sceneId } = req.body;
       const st = stageState(p, stage, sceneId);
-      const run = st?.runs.find((r) => r.id === runId);
+      if (!st) return { code: 400, error: 'Không tìm thấy bước hoặc cảnh cần chọn ảnh.' };
+      if (!runId || !imageId) return { code: 400, error: 'Thiếu thông tin ảnh cần chọn (runId, imageId).' };
+      const run = st.runs.find((r) => r.id === runId);
       const img = run?.images.find((i) => i.id === imageId);
-      if (!img) return { code: 400, error: 'Không tìm thấy ảnh.' };
+      if (!img) return { code: 400, error: 'Không tìm thấy ảnh trong lượt chạy này. Hãy tải lại dự án và thử lại.' };
       for (const r of st.runs) r.chosen = null; // mỗi bước / cảnh chỉ có đúng 1 ảnh được chọn
       run.chosen = imageId;
       let startUpgrade = false;

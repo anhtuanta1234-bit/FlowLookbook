@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.1.29 - 2026-11-23
+- Sửa lỗi kẹt cờ hộp thoại cập nhật: nếu dialog "Có phiên bản mới" bị modal khác thay thế, nút "Kiểm tra phiên bản mới" có thể im lặng; giờ reset cờ đúng và chỉ chặn khi dialog cập nhật thật sự đang mở.
+- Làm rõ lỗi chọn/làm lại ảnh khi thiếu `runId/imageId` hoặc ảnh không còn trong lượt chạy, thay vì báo chung "Không tìm thấy ảnh".
+- Đóng tab Flow xong tự tính lại các lượt nâng 2K đang treo; tránh trùng lượt nâng 2K cùng lúc và tự tiếp tục các lượt bị treo trạng thái nâng cấp.
+- Cải thiện khả năng truy cập danh sách dự án: mục dự án có vai trò nút và nhãn mở dự án rõ ràng.
+
+
 ## v1.1.28 - 2026-11-23
 - Bước 3 (cách 1): gặp "hoạt động bất thường" thì đóng tab Flow của cảnh, mở tab Flow/dự án mới và chạy lại cảnh đó; không tạm dừng toàn tool, các cảnh khác vẫn chạy.
 - Nếu bị chặn lặp lại, tool giãn nhẹ thời gian chờ ở các lần sau (lần đầu vẫn nhanh), tối đa 5 lần; hết 5 lần báo đúng "Cảnh <số> hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại" kèm nút "Mở Flow".

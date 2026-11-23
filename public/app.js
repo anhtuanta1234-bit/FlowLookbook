@@ -14,7 +14,7 @@ const compareVer = (a, b) => {
   }
   return 0;
 };
-const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null };
+const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 const sortedProjects = () => [...S.projects].sort((a, b) => projectNameOrder.compare(a.name || '', b.name || ''));
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -349,7 +349,7 @@ function renderSidebar() {
   morph($('#projectList'), sortedProjects().map((p) => {
     const busy = projectHasActiveWork(p);
     const checked = S.selectedProjectIds.has(p.id);
-    return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="listitem" tabindex="0" data-tip="${esc(p.name)}">
+    return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án ${esc(p.name)}" data-tip="${esc(p.name)}">
       <input class="project-select" type="checkbox" data-pid="${p.id}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Chọn dự án ${esc(p.name)} để xóa" title="${busy ? 'Đang xử lý; chưa thể xóa' : 'Chọn để xóa nhiều dự án cùng lúc'}">
       <div class="pav" aria-hidden="true">${esc((p.name.trim()[0] || '?').toUpperCase())}</div>
       <div class="ptxt"><div class="nm">${esc(p.name)}</div><div class="sub">${projectSummary(p)}</div></div>
@@ -882,6 +882,8 @@ async function recrop(group, file, sid) {
 let activeModalClose = null;
 function modal(html, narrow) {
   const m = $('#modal'); m.innerHTML = `<div class="box ${narrow ? 'narrow' : ''}">${html}</div>`; m.classList.remove('hidden');
+  // #modal dùng chung: nếu dialog cập nhật bị modal khác thay thế, phải xóa cờ để lần sau mở lại được.
+  S.updateDialogOpen = false;
   const close = () => {
     m.classList.add('hidden'); m.innerHTML = '';
     if (activeModalClose === close) activeModalClose = null;
@@ -1146,15 +1148,16 @@ async function checkUpdate(manual) {
 }
 
 function showUpdateDialog(info) {
-  if (S.updateDialogOpen) return;
+  if (S.updateDialogOpen && $('#uInstall')) return;
+  S.updateDialogOpen = false;
   // #modal dùng chung với Cài đặt: đừng làm mất các ô người dùng sửa nhưng chưa bấm Lưu.
   if (settingsHasUnsavedChanges() && !confirm('Các thay đổi trong Cài đặt chưa được Lưu. Tiếp tục kiểm tra phiên bản mới?')) return;
-  S.updateDialogOpen = true;
   const m = modal(`<h3>Có phiên bản mới: v${esc(info.version)}</h3>
     <div class="hint" style="margin:0 0 6px">Phiên bản hiện tại: v${esc(CURRENT_VERSION || '?')}</div>
     <div class="update-notes">${esc(info.notes || 'Bản cập nhật mới.')}</div>
     <div id="uState" class="hint" style="margin-top:10px;min-height:20px"></div>
     <div class="foot"><button class="btn" id="uClose">Để sau</button><button class="btn primary" id="uInstall">Tải về và cập nhật</button></div>`, true);
+  S.updateDialogOpen = true;
   let busy = false;
   let countingDown = false;
   const close = () => { if (busy) return; S.updateDialogOpen = false; activeModalClose = null; m.close(); };
