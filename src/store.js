@@ -36,21 +36,13 @@ const DEFAULT_TEMPLATES = {
   stage2: {
     vi: `Yêu cầu: nhân vật ảnh 1 mặc trang phục ảnh 2 (cam kết giữ nguyên 100% toàn bộ chi tiết trang phục ảnh 2 và cam kết giữ 100% khuôn mặt nhân vật ảnh 1), biểu cảm tươi cười nhẹ nhàng, chụp toàn thân.
 
-Phong cách ảnh chụp đời thực cực kỳ tự nhiên như một KOL/KOC ngoài đời được chụp ngẫu hứng bằng máy ảnh thật. Ảnh tông màu sáng, da người giữ nguyên texture tự nhiên, không làm mịn quá mức, không bóng da nhựa, không nét giả AI. Biểu cảm và dáng pose tự nhiên như ảnh đăng Instagram/TikTok hằng ngày, không tạo dáng cứng, không cảm giác render hay CGI. Màu sắc thật mắt, độ sâu ảnh và ánh sáng giống camera thật. Ảnh mang cảm giác người thật 100%, giống fashion/lifestyle street photography thực tế, không studio, không cinematic giả, không HDR mạnh, không hiệu ứng AI, không khuôn mặt vô hồn, không tỷ lệ cơ thể bất thường, không sharpen quá đà, giữ tổng thể mềm mại và chân thật như ảnh chụp trực tiếp ngoài đời.
-
-Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính, không làm đẹp quá mức. Ánh sáng: match lighting của ảnh tham chiếu, ánh sáng tự nhiên, không studio lighting. Shot on 35mm lens, f/2.8, slight film grain.
-
-Tránh: da nhựa, CGI, render, mặt búp bê, ngón tay thừa, cơ thể biến dạng, HDR mạnh, studio lighting.`,
+Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính, không làm đẹp quá mức. Ánh sáng: match lighting của ảnh tham chiếu, ánh sáng tự nhiên, không studio lighting.`,
     negative: 'plastic skin, CGI, render, doll face, extra fingers, distorted body, strong HDR, studio lighting, AI artifacts, over-smoothing',
   },
   stage3: {
     vi: `Yêu cầu: nhân vật ảnh 1 chụp ở bối cảnh giống ảnh 2 (cam kết giữ nguyên 100% trang phục ảnh 1, cam kết giữ 100% khuôn mặt nhân vật ảnh 1, giữ nguyên toàn bộ chi tiết cảnh ảnh 2), giữ nguyên toàn bộ ngoại cảnh giống 100% ảnh 2 (không thay chi tiết ngoại cảnh), biểu cảm tươi cười nhẹ nhàng, góc máy chụp giống 100% ảnh 2, nhân vật ảnh 1 chụp tư thế giống tối đa ảnh 2.
 
-Phong cách ảnh chụp đời thực cực kỳ tự nhiên như một KOL/KOC ngoài đời được chụp ngẫu hứng bằng máy ảnh thật. Ảnh tông màu sáng, da người giữ nguyên texture tự nhiên, không làm mịn quá mức, không bóng da nhựa, không nét giả AI. Biểu cảm và dáng pose tự nhiên như ảnh đăng Instagram/TikTok hằng ngày, không tạo dáng cứng, không cảm giác render hay CGI. Màu sắc thật mắt, độ sâu ảnh và ánh sáng giống camera thật. Ảnh mang cảm giác người thật 100%, giống fashion/lifestyle street photography thực tế, không studio, không cinematic giả, không HDR mạnh, không hiệu ứng AI, không khuôn mặt vô hồn, không tỷ lệ cơ thể bất thường, không sharpen quá đà, giữ tổng thể mềm mại và chân thật như ảnh chụp trực tiếp ngoài đời.
-
-Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính. Ánh sáng: match lighting của ảnh cảnh (ảnh 2) chính xác, ánh sáng tự nhiên, không studio lighting. Shot on 35mm lens, f/2.8, slight film grain, giữ nguyên texture da.
-
-Tránh: da nhựa, CGI, render, mặt búp bê, ngón tay thừa, cơ thể biến dạng, HDR mạnh, studio lighting, thay đổi ngoại cảnh.`,
+Yêu cầu giữ nguyên 100% khuôn mặt nhân vật ảnh 1: không thay đổi khuôn mặt, không đổi danh tính. Ánh sáng: match lighting của ảnh cảnh (ảnh 2) chính xác, ánh sáng tự nhiên, không studio lighting.`,
     negative: 'plastic skin, CGI, render, doll face, extra fingers, distorted body, strong HDR, studio lighting, AI artifacts, over-smoothing, changing background details',
   },
 };

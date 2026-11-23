@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.21 - 2026-11-23
+- Bỏ nốt đoạn phong cách chụp 35mm/film grain và danh sách "Tránh: da nhựa, CGI..." khỏi mẫu prompt mặc định của bước 2 và bước 3 (trước đây mới chỉ bỏ ở bước 1); thêm test chặn tái diễn ở mọi bước.
+
+
 ## v1.1.20 - 2026-11-23
 - Bỏ hẳn thông báo timeout khi tải/cài bản cập nhật: cứ hiện tiến độ bình thường, chỉ báo lỗi khi file cài thật sự lỗi hoặc NSIS cài thất bại.
 
