@@ -41,6 +41,14 @@ test('Firefly dùng web component, chờ ổn định và đóng tab khi lỗi/x
   assert.match(src, /finally \{[\s\S]*?await releaseTab\(key\)/, 'Tải xong atau lỗi đều đóng tab Firefly');
 });
 
+test('nhận diện màn hình chọn ảnh Firefly mới: nút "Tải lên", không chỉ "Tải ảnh lên"', () => {
+  assert.match(src, /uploadBtn:[\s\S]{0,260}Tải lên/);
+  assert.match(src, /uploadBtnText:/);
+  assert.match(src, /hasEditorApp:[\s\S]{0,320}Tải lên/);
+  assert.match(src, /\[L\.uploadBtn, L\.uploadBtnText\]/, 'phải bấm được cả nút dạng text trong shadow DOM');
+  assert.match(src, /input file=\$\{!!st\.hasUpload\}/, 'lỗi upload phải kèm trạng thái để dễ tra cứu');
+});
+
 test('banner hết lượt không làm mất ảnh đã tạo: có nút Tải xuống thì tải tiếp', () => {
   assert.match(src, /async function downloadReady\(page\)[\s\S]*?isVisible\([\s\S]*?isEnabled/);
   assert.match(src, /if \(await downloadReady\(page\)\) return true; \/\/ Ảnh đã tạo xong/);

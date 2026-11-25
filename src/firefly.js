@@ -23,7 +23,9 @@ const L = {
   editImageLink: (p) => p.getByRole('link', { name: /Chỉnh sửa hình ảnh|Edit image/i }).first(),
   // Trên giao diện thật đây là <sp-menu-item data-testid="ash-nav-ash-home-image-edit" href="/image-editor">.
   editImageText: (p) => p.locator('sp-menu-item[href="/image-editor"]').first(),
-  uploadBtn: (p) => p.getByRole('button', { name: /Tải ảnh lên|Upload image|Upload|Chọn ảnh|Choose file/i }).first(),
+  // Firefly hiện ghi "Tải lên"; bản cũ là "Tải ảnh lên". Nhận cả hai (kể cả trong shadow DOM).
+  uploadBtn: (p) => p.getByRole('button', { name: /Tải ảnh lên|Tải lên|Upload image|Upload|Chọn ảnh|Choose file/i }).first(),
+  uploadBtnText: (p) => p.getByText(/^Tải lên$|Tải ảnh lên|Upload image|Choose file/i).first(),
   uploadInput: (p) => p.locator('input[type="file"]').first(),
   removeObject: (p) => p.getByRole('button', { name: /Chấm sửa và xóa|Remove object|Generative remove|Xóa đối tượng/i }).first(),
   removeObjectText: (p) => p.getByText(/Chấm sửa và xóa|Generative remove|Xóa đối tượng/i).first(),
@@ -80,7 +82,9 @@ const readPageState = (page) => page.evaluate(() => {
       return r.width > 200 && r.height > 200;
     })()),
     hasUpload: inputOf('file').length > 0,
-    hasEditorApp: /Chấm sửa và xóa|Generative remove|Xóa đối tượng|Tải ảnh lên|Upload image/i.test(deepText),
+    // Giao diện Firefly hiện dùng "Tải lên" (không còn "Tải ảnh lên") ngay màn hình chọn ảnh
+    // của /image-editor. Phải nhận cả các nhãn đó thì mới không báo nhầm "chưa đăng nhập".
+    hasEditorApp: /Chấm sửa và xóa|Generative remove|Xóa đối tượng|Tải ảnh lên|Tải lên|Upload(?: image)?|Chọn ảnh|Choose file|Lưu trữ đám mây Adobe|Tạo khung vẽ mới/i.test(deepText),
     body,
     deepText,
   };
@@ -274,26 +278,34 @@ async function findUploadInput(page) {
 }
 
 async function uploadImage(page, imagePath) {
+  // 1) Input file ẩn: nhanh nhất, không phụ thuộc nhãn nút ("Tải lên" hay "Tải ảnh lên").
   const input = await findUploadInput(page);
   if (input) {
-    // setInputFiles chạy được cả với input ẩn, không cần chờ nút "Tải ảnh lên" render.
-    await input.setInputFiles(imagePath);
-    return { via: 'input' };
+    try { await input.setInputFiles(imagePath); return { via: 'input' }; } catch (_) {}
   }
-  const chooserWait = page.waitForEvent('filechooser', { timeout: 20000 }).catch(() => null);
-  await clickEnabledAny(page, [L.uploadBtn], { timeout: 20000, label: 'nút tải ảnh lên' }).catch(() => null);
-  const chooser = await chooserWait;
+  // 2) Màn hình bắt đầu của /image-editor có nút "Tải lên": bấm để mở đúng file chooser.
+  const chooserWait = page.waitForEvent('filechooser', { timeout: 8000 }).catch(() => null);
+  let clicked = false;
+  try {
+    clicked = await clickEnabledAny(page, [L.uploadBtn, L.uploadBtnText], { timeout: 15000, label: 'nút Tải lên' });
+  } catch (_) {}
+  const chooser = clicked ? await chooserWait : null;
   if (chooser) {
     await chooser.setFiles(imagePath);
     return { via: 'chooser' };
   }
+  // 3) Có thể Firefly chỉ tạo input sau khi bấm nút.
   const end = Date.now() + 15000;
   while (Date.now() < end) {
     const later = await findUploadInput(page);
-    if (later) { await later.setInputFiles(imagePath); return { via: 'input-after-click' }; }
+    if (later) {
+      try { await later.setInputFiles(imagePath); return { via: 'input-after-click' }; } catch (_) {}
+    }
     await sleep(300);
   }
-  throw new Error('Không tìm thấy nơi tải ảnh lên trên Firefly. Hãy mở cửa sổ Firefly kiểm tra.');
+  const st = await readPageState(page);
+  const detail = `url=${st.url || ''}, input file=${!!st.hasUpload}, nút active=${st.activeButtons ?? 0}, nhận diện editor=${!!st.hasEditorApp}`;
+  throw new Error(`Không tìm thấy nơi tải ảnh lên trên Firefly (${detail}). Hãy mở cửa sổ Firefly kiểm tra${clicked ? ', hoặc bấm "Tải lên" rồi thử lại' : ''}.`);
 }
 
 function normalizeMask(mask) {

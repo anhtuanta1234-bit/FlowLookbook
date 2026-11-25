@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.33 - 2026-11-25
+- Sửa lỗi không tải được ảnh 2K lên Firefly: giao diện hiện ghi nút là “Tải lên” thay vì “Tải ảnh lên”, tool giờ nhận diện cả hai ở bước kiểm tra editor lẫn bước bấm upload.
+- Lỗi upload giờ báo kèm trạng thái Firefly (địa chỉ, có input file, số nút active) để dễ tra cứu khi giao diện Adobe đổi tiếp.
+
+
 ## v1.1.32 - 2026-11-25
 - Sửa luồng hết lượt Firefly/tool chỉ chạy tiếp từ ảnh đang bị chặn (ảnh 4), không làm lại các ảnh đã xong (ảnh 1–3) sau khi bạn đăng nhập Gmail khác.
 - Firefly vẫn hiện banner “hết lượt” trên ảnh đã tạo xong: tool giờ ưu tiên tải ảnh đó, không đánh dấu nhầm rồi tốn thêm một lượt free để tạo lại.
