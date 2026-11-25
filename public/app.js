@@ -369,15 +369,18 @@ async function deleteProjects(ids, all = false) {
   const names = targets.map((p) => p.name);
   const label = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} và ${names.length - 3} dự án khác`;
   const skipped = busy.length ? `\n\n${busy.length} dự án đang chạy/tải 2K sẽ được giữ nguyên, các dự án còn lại vẫn xóa ngay.` : '';
+  const detail = 'Dữ liệu dự án VÀ thư mục ảnh trong output sẽ bị xóa vĩnh viễn (không vào thùng rác).';
   const question = all
-    ? `Xóa ${targets.length} dự án đang rảnh khỏi tool? Dữ liệu dự án không thể khôi phục; ảnh 2K đã lưu trong thư mục kết quả vẫn được giữ.${skipped}`
-    : `Xóa ${targets.length === 1 ? 'dự án' : `${targets.length} dự án`} ${targets.length === 1 ? `"${label}"` : `(${label})`} khỏi tool? Dữ liệu dự án không thể khôi phục; ảnh 2K đã lưu trong thư mục kết quả vẫn được giữ.${skipped}`;
+    ? `Xóa ${targets.length} dự án đang rảnh khỏi tool? ${detail}${skipped}`
+    : `Xóa ${targets.length === 1 ? 'dự án' : `${targets.length} dự án`} ${targets.length === 1 ? `"${label}"` : `(${label})`} khỏi tool? ${detail}${skipped}`;
   if (!confirm(question)) return;
 
   let deletedIds = [];
+  let outputDirsRemoved = 0;
   if (S.projectDeleteApi) {
     const result = await api('POST', '/api/projects/bulk-delete', { ids: targets.map((p) => p.id) });
     deletedIds = result.deleted || targets.map((p) => p.id);
+    outputDirsRemoved = (result.outputDirs || []).length;
   } else {
     for (const p of targets) {
       let latest;
@@ -394,7 +397,7 @@ async function deleteProjects(ids, all = false) {
   for (const id of removed) S.selectedProjectIds.delete(id);
   const skippedIds = new Set(busy.map((p) => p.id));
   const skippedText = skippedIds.size ? ` Bỏ qua ${skippedIds.size} dự án đang chạy.` : '';
-  if (removed.size) toast(`Đã xóa ${removed.size} dự án khỏi tool. Ảnh trong thư mục kết quả được giữ nguyên.${skippedText}`, 'ok');
+  if (removed.size) toast(`Đã xóa ${removed.size} dự án khỏi tool${outputDirsRemoved ? ` và ${outputDirsRemoved} thư mục ảnh trong output` : ''}.${skippedText}`, 'ok');
   else if (skippedIds.size) toast(`Không xóa dự án đang chạy.${skippedText}`, 'err');
   if (currentDeleted) {
     if (S.projects.length) await selectProject(sortedProjects()[0].id);
@@ -657,7 +660,7 @@ function sceneHtml(s, i) {
     : lr.status === 'waiting_ok' ? `<span class="badge warn" data-tip="${esc(lr.note || '')}">chờ bấm Ổn</span> <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện cửa sổ Firefly để kiểm tra kết quả">Xem trên Firefly</button> <button class="btn sm primary" data-act="logook" data-sid="${s.id}">Ổn</button> <button class="btn sm" data-act="logoretry" data-sid="${s.id}">Làm lại xóa logo</button> <button class="btn sm ghost" data-act="logoskip" data-sid="${s.id}" data-tip="Bỏ qua cảnh này, giữ nguyên ảnh có logo để tự xử lý">Bỏ qua</button>`
     : lr.status === 'downloading' ? `<span class="badge warn">đang tải ảnh sạch…</span>`
     : lr.status === 'preparing' || lr.status === 'queued' ? `<span class="badge warn" data-tip="${esc(lr.note || '')}">đang xóa logo…</span>`
-    : lr.status === 'quota_blocked' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">hết lượt Firefly</span> <button class="btn sm" data-act="logoresume" data-sid="${s.id}">Đã kết nối Gmail khác</button>`
+    : lr.status === 'quota_blocked' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">hết lượt Firefly</span>${lr.generated ? ' <span class="badge warn" data-tip="Ảnh đã tạo xong trên Firefly, sẽ chỉ tải lại sau khi đổi Gmail">ảnh đã tạo, chờ tải lại</span>' : ''} <button class="btn sm" data-act="logoresume" data-sid="${s.id}">Đã kết nối Gmail khác</button>`
     : lr.status === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi xóa logo</span> ${lr.code === 'FIREFLY_LOGIN' ? '<button class="btn sm" data-act="fireflyopen">Kết nối Firefly</button> ' : ''}<button class="btn sm" data-act="logoretry" data-sid="${s.id}">Làm lại xóa logo</button>`
     : ''
   );
@@ -679,7 +682,7 @@ function sceneHtml(s, i) {
 
 const runSig = (r) => [r.note, r.inputNote, r.id, r.status, r.images.map((i) => i.file).join(), r.chosen, r.error, r.errorCode, r.abuseReopens, !!S.flow.paused, S.dismissed.has(r.id), r.rerunOf, r.upgrading, JSON.stringify(r.upgradeProgress || null), r.upgradeError];
 function resultsSig(p) {
-  if (S.stage === 3) return JSON.stringify([!!S.cfg?.removeLogoEnabled, p.s3.scenes.map((s) => [s.id, s.file, s.label, s.chosen, s.logoRemoval, s.runs.slice(0, 6).map(runSig)])]);
+  if (S.stage === 3) return JSON.stringify([!!S.cfg?.removeLogoEnabled, !!p.cleaned, p.s3.scenes.map((s) => [s.id, s.file, s.label, s.chosen, s.logoRemoval, s.runs.slice(0, 6).map(runSig)])]);
   const st = p[PK[S.stage]];
   return JSON.stringify([st.approved, st.hq, p.s1.approved, st.runs.slice(0, 6).map(runSig)]);
 }
@@ -726,17 +729,15 @@ function renderResults() {
     const allSaved = p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen?.status === 'saved');
     const logoOn = !!S.cfg?.removeLogoEnabled;
     const anyLogo = p.s3.scenes.some((s) => s.logoRemoval);
-    const logoPending = p.s3.scenes.some((s) => ['queued','preparing','waiting_ok','downloading'].includes(s.logoRemoval?.status));
-    const logoDone = anyLogo && !logoPending && p.s3.scenes.every((s) => !s.logoRemoval || s.logoRemoval.status === 'approved' || s.logoRemoval.status === 'skipped');
     const logoArea = logoOn || anyLogo ? `<button class="btn sm ghost" data-act="openlogoout" data-tip="Mở thư mục anhdaxoalogo của dự án">Mở anhdaxoalogo</button>` : '';
+    // Bước 3 xong toàn bộ mới hiện nút tải/dọn. Bước 4 (xóa logo) chỉ được bắt đầu
+    // từ máy chủ SAU KHI nút này được bấm — không phải ngay lúc chọn từng ảnh 2K.
     const finishArea = allSaved ? (p.cleaned
-      ? '<span class="badge ok">Đã dọn dẹp, chỉ còn ảnh cuối</span>'
-      : (logoPending || (logoOn && !logoDone)
-        ? `<span class="badge warn">${logoPending ? 'Đang xử lý xóa logo Bước 4…' : 'Xóa logo chưa hoàn tất'}</span>`
-        : '<button class="btn sm primary" data-act="cleanall" data-tip="Xóa thư mục _tam trong TẤT CẢ dự án, dọn sạch ảnh trung gian bước 1 và 2">🧹 Hoàn thành & Dọn dẹp tất cả</button>')) : '';
+      ? '<span class="badge ok">Đã tải hết ảnh 2K, thư mục chỉ còn ảnh đã chọn</span>'
+      : '<button class="btn sm primary" data-act="cleanall" data-tip="Xóa thư mục _tam của các dự án đã xong Bước 3, chỉ giữ ảnh 2K đã chọn, rồi mới bắt đầu Bước 4 nếu đã bật">📥 Tải hết ảnh về & Dọn dẹp</button>') : '';
     h += `<div class="rhead"><h3>Các cảnh người thật (${p.s3.scenes.length})</h3><button class="btn sm" data-act="addimg" data-group="scene" data-tip="Thêm ảnh cảnh người thật (chọn được nhiều ảnh một lúc)">${I.plus} Thêm cảnh</button><span class="hint">Kéo thả nhiều ảnh vào đây hoặc dán Ctrl+V</span>${logoArea}${finishArea}</div>`;
     const quotaScene = p.s3.scenes.find((s) => s.logoRemoval?.status === 'quota_blocked');
-    if (quotaScene) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Firefly đã hết lượt free. Tool đã dừng xóa logo để giữ ảnh gốc. Hãy đăng nhập Gmail khác trong cửa sổ Firefly rồi bấm “Đã kết nối Gmail khác” để tiếp tục.</div>`;
+    if (quotaScene) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Firefly đã hết lượt free. Tool dừng đúng ảnh đang làm, giữ nguyên các ảnh đã xong. Hãy đăng nhập Gmail khác trong cửa sổ Firefly rồi bấm “Đã kết nối Gmail khác”: tool sẽ làm tiếp từ ảnh bị chặn, không làm lại ảnh cũ. <button class="btn sm" data-act="fireflyopen">Mở Firefly để đổi Gmail</button></div>`;
     h += p.s3.scenes.map(sceneHtml).join('') || `<div class="drop" data-act="addimg" data-group="scene" data-tip="Bấm để chọn ảnh, hoặc kéo thả / dán Ctrl+V" role="button" tabindex="0">Chưa có cảnh nào. Bấm hoặc kéo ảnh cảnh người thật vào đây (chọn được nhiều ảnh một lúc).</div>`;
   }
   // Cùng sản phẩm + cùng bước: chỉ cập nhật phần thay đổi (ảnh không tải lại, không nhấp nháy, giữ nguyên vị trí cuộn).
@@ -786,8 +787,13 @@ async function act(b) {
     await api('POST', `/api/projects/${p.id}/manual-hq?stage=${S.stage}`, undefined, await normalizedBlob(f));
     toast('Đã nhận ảnh 2K của bạn. Dùng ảnh này cho bước sau.', 'ok');
   });
-  if (a === 'finish') { if (!confirm('Xóa VĨNH VIỄN ảnh trung gian của bước 1 và bước 2 trong thư mục dự án (không vào thùng rác)? Các ảnh cuối của bước 3 được giữ lại.')) return; await api('POST', `/api/projects/${p.id}/finish`); return toast('Đã dọn dẹp. Thư mục chỉ còn các ảnh cuối của bước 3.', 'ok'); }
-  if (a === 'cleanall') { if (!confirm('Xóa VĨNH VIỄN thư mục _tam trong TẤT CẢ dự án (không vào thùng rác)?')) return; const r = await api('POST', '/api/projects/clean-all'); return toast(`Đã dọn dẹp ${r.cleaned} dự án.${r.skipped?.length ? ` Bỏ qua ${r.skipped.length} dự án đang chạy: ${r.skipped.join(', ')}.` : ''}`, 'ok'); }
+  if (a === 'finish') { if (!confirm('Tải hết ảnh Bước 3 về xong rồi? Tool sẽ xóa VĨNH VIỄN thư mục _tam, chỉ giữ ảnh 2K đã chọn, rồi mới bắt đầu xóa logo Bước 4 nếu đã bật.')) return; const r = await api('POST', `/api/projects/${p.id}/finish`); return toast(`Đã tải/dọn xong.${r.startedLogo ? ' Đã bắt đầu xóa logo Bước 4.' : ''}`, 'ok'); }
+  if (a === 'cleanall') {
+    if (!confirm('Tải hết ảnh Bước 3 về xong rồi? Tool sẽ xóa VĨNH VIỄN thư mục _tam của các dự án đã xong Bước 3 (chỉ giữ ảnh 2K đã chọn), rồi mới bắt đầu xóa logo Bước 4 nếu đã bật.')) return;
+    const r = await api('POST', '/api/projects/clean-all');
+    const logoText = r.startLogo?.length ? ` Đã bắt đầu xóa logo Bước 4 cho ${r.startLogo.length} dự án.` : '';
+    return toast(`Đã tải/dọn xong ${r.cleaned} dự án.${logoText}${r.skipped?.length ? ` Bỏ qua ${r.skipped.length} dự án đang chạy: ${r.skipped.join(', ')}.` : ''}`, 'ok');
+  }
   if (a === 'dismisspause') { S.hidePause = S.flow.paused?.at; return refreshFlow(); }
   if (a === 'dismisserr') { S.dismissed.add(b.dataset.run); refresh(); return void api('DELETE', `/api/projects/${p.id}/runs/${b.dataset.run}`).catch(() => {}); }
   if (a === 'revealflow') { const st = +b.dataset.stage || null; return void await api('POST', '/api/flow/reveal', p && st ? { projectId: p.id, stage: st, sceneId: b.dataset.sid } : {}); }
@@ -1116,7 +1122,7 @@ $('#btnSettings').onclick = async () => {
         <label class="lbl" for="cMaskW" style="margin:0">Rộng (%)<input id="cMaskW" type="number" min="0.1" max="100" step="0.001" value="${c.logoRemoveMask?.wPct ?? 6.12}"></label>
         <label class="lbl" for="cMaskH" style="margin:0">Cao (%)<input id="cMaskH" type="number" min="0.1" max="100" step="0.001" value="${c.logoRemoveMask?.hPct ?? 3.343}"></label>
       </div>
-      <div class="hint" style="margin-top:8px">Quy trình: sau khi Bước 3 lưu xong toàn bộ ảnh đã chọn, app mở Firefly → Hình ảnh → Chỉnh sửa hình ảnh → tải ảnh 2K lên → Chấm sửa và xóa → tô vùng logo cố định → bấm Xóa. Khi bạn bấm <b>Ổn</b>, app mới tải xuống và lưu vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>. Sau khi toàn bộ ảnh sạch đã lưu, app mới xóa ảnh gốc có logo trong thư mục output.</div>
+      <div class="hint" style="margin-top:8px">Quy trình: sau khi Bước 3 lưu xong toàn bộ ảnh đã chọn, bạn bấm <b>Tải hết ảnh về &amp; Dọn dẹp</b> (xóa <code>_tam</code>, chỉ giữ ảnh 2K đã chọn). Tool mới mở Firefly → Hình ảnh → Chỉnh sửa hình ảnh → tải ảnh 2K lên → Chấm sửa và xóa → tô vùng logo cố định → bấm Xóa. Khi bạn bấm <b>Ổn</b>, app mới tải xuống và lưu vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>. Sau khi toàn bộ ảnh sạch đã lưu, app mới xóa ảnh gốc có logo trong thư mục output.</div>
     </details>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn ghost sm" id="cBackup" type="button" data-tip="Sao lưu toàn bộ dữ liệu (dự án + ảnh) vào thư mục backups trong data/">Sao lưu dữ liệu</button>
@@ -1223,33 +1229,37 @@ async function fetchUpdateJson(url, opt = {}) {
   return r.json();
 }
 async function readUpdateInfo() {
+  // GitHub API là nguồn CHÍNH: raw.githubusercontent.com có CDN cache theo Accept-Encoding,
+  // thêm ?_t= vẫn có thể trúng đúng biến thể nén cũ (đã reproduce trên máy này).
+  let fromApi = null;
+  let apiError = null;
+  const apiUrl = latestReleaseApiUrl(UPDATE_MANIFEST_URL);
+  if (apiUrl) {
+    try { fromApi = parseLatestRelease(await fetchUpdateJson(apiUrl, { headers: { Accept: 'application/vnd.github+json' } })); }
+    catch (er) { apiError = er; }
+  }
+  // Raw vẫn đọc để dự phòng khi API lỗi/rate-limit; nhưng không được lấn át API.
   let manifest = null;
   let manifestError = null;
   try { manifest = parseManifestInfo(await fetchUpdateJson(UPDATE_MANIFEST_URL)); }
   catch (er) { manifestError = er; }
-  const newer = (info) => !!info && compareVer(info.version, CURRENT_VERSION || '0') > 0;
-  if (newer(manifest)) return manifest;
 
-  const apiUrl = latestReleaseApiUrl(UPDATE_MANIFEST_URL);
-  if (apiUrl) {
-    try {
-      const fromApi = parseLatestRelease(await fetchUpdateJson(apiUrl, { headers: { Accept: 'application/vnd.github+json' } }));
-      // API là nguồn cuối: nếu có bản mới thì dùng ngay, kể cả khi raw vẫn trả bản cũ.
-      if (newer(fromApi)) return fromApi;
-      if (manifest) return manifest;
-      return fromApi;
-    } catch (_) {
-      // API lỗi/tắc (rate limit, mạng): vẫn dùng manifest nếu manifest đọc được.
-    }
+  const candidates = [fromApi, manifest].filter(Boolean);
+  if (candidates.length) {
+    const best = candidates.reduce((a, b) => (compareVer(b.version, a.version) > 0 ? b : a));
+    // API là nguồn quyết định. Nếu API lỗi mà raw cũng không có bản mới, KHÔNG được
+    // tự tin báo "đang dùng bản mới nhất" — raw có thể đang trả biến thể cache cũ.
+    if (apiError && compareVer(best.version, CURRENT_VERSION || '0') <= 0) return { ...best, uncertain: true };
+    return best;
   }
-  if (manifest) return manifest;
-  throw manifestError || new Error('Thông tin cập nhật từ máy chủ không đúng định dạng.');
+  throw apiError || manifestError || new Error('Thông tin cập nhật từ máy chủ không đúng định dạng.');
 }
 async function checkUpdate(manual) {
   try {
     const info = await readUpdateInfo();
     if (compareVer(info.version, CURRENT_VERSION || '0') <= 0) {
-      if (manual) toast('Bạn đang dùng phiên bản mới nhất (v' + (CURRENT_VERSION || '?') + ').', 'ok');
+      if (info.uncertain) toast('Chưa xác nhận được bản mới nhất (GitHub API tạm không truy cập). Vui lòng bấm kiểm tra lại.', 'warn', { duration: 12000 });
+      else if (manual) toast('Bạn đang dùng phiên bản mới nhất (v' + (CURRENT_VERSION || '?') + ').', 'ok');
       return;
     }
     showUpdateDialog(info);

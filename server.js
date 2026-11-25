@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, allLogoRemovalDone, logoCleanupTargets, normalizeLogoRemoval } = require('./src/workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, allLogoRemovalDone, logoCleanupTargets, normalizeLogoRemoval, step3ReadyForLogo, logoResumeStatus } = require('./src/workflow');
 const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
@@ -420,29 +420,51 @@ app.post('/api/projects', async (req, res) => {
     res.json(p);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
+// Thư mục kết quả của dự án nằm trong outputRoot. Chỉ xóa khi đường dẫn vẫn nằm trọn trong
+// outputRoot (store.safeName đã chặn ../ nhưng vẫn kiểm tra lại trước khi rm -rf).
+function projectOutputDir(p) {
+  const root = path.resolve(cfg.get().outputRoot || '');
+  const dir = path.resolve(root, store.outputFolderFor(p));
+  const rel = path.relative(root, dir);
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? dir : null;
+}
+function removeProjectOutput(p) {
+  const dir = projectOutputDir(p);
+  if (!dir) return null;
+  try { fs.rmSync(dir, { recursive: true, force: true }); return dir; }
+  catch (e) { appendLog(`Không xóa được thư mục kết quả "${dir}": ${e.message}`); return null; }
+}
+
 // Dọn dẹp _tam của TẤT CẢ dự án — PHẢI đứng trước /:id để không bị Express khớp nhầm
 app.post('/api/projects/clean-all', async (req, res) => {
   try {
     const result = await writeLock.run(() => {
       const removed = [];
+      const startLogo = [];
       const skipped = [];
       for (const meta of store.list()) {
         const p = store.load(meta.id); if (!p) continue;
         // Không dọn khi dự án còn chạy / đang tải 2K: _tam có thể đang được ghi.
         if (projectHasActiveWork(p)) { skipped.push(p.name); continue; }
-        const outDir = store.outputDirFor(p);
+        // Chưa lưu xong toàn bộ ảnh Bước 3 thì không tải/dọn và KHÔNG sang Bước 4.
+        if (!allStep3Saved(p)) continue;
+        const outDir = projectOutputDir(p);
+        if (!outDir) { skipped.push(p.name); continue; }
         const tam = path.join(outDir, '_tam');
-        if (fs.existsSync(tam)) {
-          fs.rmSync(tam, { recursive: true, force: true });
-          removeStaleTemp(outDir);
-          p.cleaned = Date.now();
-          store.save(p);
-          broadcast('project', p);
-          removed.push(meta.id);
-        }
+        const hadTam = fs.existsSync(tam);
+        if (hadTam) fs.rmSync(tam, { recursive: true, force: true });
+        removeStaleTemp(outDir);
+        removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
+        // Mốc "đã tải hết ảnh về": Bước 4 chỉ được phép bắt đầu từ đây.
+        p.cleaned = Date.now();
+        if (ensureLogoRemovalState(p)) startLogo.push(p.id);
+        store.save(p);
+        broadcast('project', p);
+        if (hadTam) removed.push(meta.id);
       }
-      return { ok: true, cleaned: removed.length, skipped };
+      return { ok: true, cleaned: removed.length, skipped, startLogo };
     });
+    for (const id of result.startLogo || []) queueLogoRemoval(id).catch((e) => appendLog('logo remove queue err: ' + (e?.message || e)));
     res.json(result);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -476,8 +498,11 @@ app.post('/api/projects/bulk-delete', async (req, res) => {
           error: `Không thể xóa khi dự án còn đang chạy hoặc xử lý ảnh 2K: ${busy.map((p) => p.name).join(', ')}. Hãy đợi hoàn tất rồi thử lại.`,
         };
       }
+      // Phải xóa thư mục kết quả TRƯỚC store.remove(): outputFolderFor() cần danh sách
+      // dự án cũ để phân biệt các dự án trùng tên (thư mục legacy có đuôi id).
+      const outputDirs = projects.map((p) => removeProjectOutput(p)).filter(Boolean);
       for (const p of projects) store.remove(p.id);
-      return { deleted: ids };
+      return { deleted: ids, outputDirs };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
     // Dự án đã rời khỏi tool: hủy mọi việc còn chờ / đang chạy của nó để Flow không chạy tiếp việc đã bị bỏ.
@@ -499,12 +524,13 @@ app.delete('/api/projects/:id', async (req, res) => {
       if (projectHasActiveWork(p)) {
         return { code: 409, error: `Dự án "${p.name}" đang chạy hoặc xử lý ảnh 2K. Hãy đợi hoàn tất rồi thử xóa.` };
       }
+      const outputDir = removeProjectOutput(p);
       store.remove(p.id);
-      return { ok: true };
+      return { ok: true, outputDir };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
     cancelProjectWork(req.params.id);
-    res.json({ ok: true });
+    res.json({ ok: true, outputRemoved: !!out.outputDir });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -850,6 +876,7 @@ function cancelProjectWork(projectId) {
   const timer = setTimeout(() => canceledProjects.delete(projectId), 60 * 60 * 1000);
   timer.unref?.();
   for (let i = queue.length - 1; i >= 0; i--) if (queue[i].projectId === projectId) queue.splice(i, 1);
+  for (let i = logoRemoveQueue.length - 1; i >= 0; i--) if (logoRemoveQueue[i].projectId === projectId) logoRemoveQueue.splice(i, 1);
   flow.closeProjectTabs(projectId).catch(() => {});
   firefly.closeProjectTabs(projectId).catch(() => {});
 }
@@ -1235,7 +1262,8 @@ function allStep3Saved(p) {
   return p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen?.status === 'saved');
 }
 function shouldStartLogoRemoval(p) {
-  return logoRemovalEnabled() && allStep3Saved(p);
+  // p.cleaned: người dùng đã bấm “Tải hết ảnh về & Dọn dẹp” → Bước 3 thật sự xong.
+  return logoRemovalEnabled() && step3ReadyForLogo(p);
 }
 function cleanupLogoOriginalsIfComplete(p) {
   const approved = logoCleanupTargets(p);
@@ -1261,7 +1289,7 @@ function ensureLogoRemovalState(p) {
         status: 'queued',
         code: '',
         error: '',
-        note: 'Chờ xóa logo sau Bước 3',
+        note: 'Chờ xóa logo sau khi đã tải hết ảnh Bước 3',
         sourceTarget: sc.chosen.target,
         cleanFile: '',
         createdAt: Date.now(),
@@ -1308,6 +1336,8 @@ app.post('/api/projects/:id/approve', async (req, res) => {
         const prev = st.chosen;
         st.chosen = { runId, imageId, status: autoOn ? 'saving' : 'manual' };
         st.chosen.target = sceneTargetPath(p, sceneId);
+        // Đổi ảnh Bước 3 → mốc "đã tải hết" không còn đúng, phải tải/dọn lại trước Bước 4.
+        delete p.cleaned;
         if (prev && (prev.runId !== runId || prev.imageId !== imageId)) {
           // Chọn ảnh khác thì kết quả xóa logo cũ không còn đại diện cho cảnh này.
           if (st.logoRemoval) firefly.discardScene({ projectId: p.id, sceneId }).catch(() => {});
@@ -1342,6 +1372,7 @@ app.post('/api/projects/:id/unapprove', async (req, res) => {
       if (stage === 1 || stage === 2) { st.approved = null; st.hq = null; }
       else {
         st.chosen = null;
+        delete p.cleaned; // bỏ chọn ảnh Bước 3 → khóa lại Bước 4 cho đến khi tải/dọn lại
         // Bỏ chọn ảnh thì mọi kết quả xóa logo của ảnh cũ cũng không còn đại diện cho cảnh này.
         if (st.logoRemoval) firefly.discardScene({ projectId: p.id, sceneId }).catch(() => {});
         st.logoRemoval = null;
@@ -1461,25 +1492,26 @@ function discardOldCleanFile(p, oldFile, newFile) {
   if (isInside(dir, oldFile)) fs.rmSync(oldFile, { force: true });
 }
 
-// Hoàn tất: xóa vĩnh viễn ảnh trung gian bước 1, 2 (thư mục _tam), chỉ giữ ảnh cuối của bước 3
+// Hoàn tất Bước 3: xóa _tam, chỉ giữ ảnh 2K đã chọn — rồi MỚI bắt đầu Bước 4 (nếu bật).
 app.post('/api/projects/:id/finish', async (req, res) => {
   try {
     const out = await writeLock.run(() => {
       const p = store.load(req.params.id); if (!p) return { code: 404 };
-      const ok = p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen?.status === 'saved');
-      if (!ok) return { code: 400, error: 'Cần chọn và lưu xong ảnh 2K cho tất cả các cảnh ở bước 3 trước.' };
+      if (!allStep3Saved(p)) return { code: 400, error: 'Cần chọn và lưu xong ảnh 2K cho tất cả các cảnh ở bước 3 trước.' };
       if (projectHasActiveWork(p)) return { code: 409, error: 'Dự án còn đang chạy hoặc đang tải ảnh 2K. Hãy đợi xong rồi dọn dẹp.' };
-      const pendingLogo = p.s3.scenes.some((s) => LOGO_PENDING_STATUSES.includes(s.logoRemoval?.status));
-      if (pendingLogo) return { code: 409, error: 'Còn cảnh đang xóa logo/chờ xác nhận. Hãy xử lý xong Bước 4 rồi dọn dẹp.' };
-      const tam = path.join(store.outputDirFor(p), '_tam');
-      fs.rmSync(tam, { recursive: true, force: true });
-      removeStaleTemp(store.outputDirFor(p));
-      removeStaleTemp(path.join(store.outputDirFor(p), 'anhdaxoalogo'));
-      p.cleaned = Date.now(); pushProject(p);
-      return { ok: true };
+      const outDir = projectOutputDir(p);
+      if (!outDir) return { code: 400, error: 'Đường dẫn thư mục kết quả không hợp lệ.' };
+      fs.rmSync(path.join(outDir, '_tam'), { recursive: true, force: true });
+      removeStaleTemp(outDir);
+      removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
+      p.cleaned = Date.now();
+      const startedLogo = ensureLogoRemovalState(p);
+      pushProject(p);
+      return { ok: true, startedLogo };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
-    res.json({ ok: true });
+    if (out.startedLogo) queueLogoRemoval(req.params.id).catch((e) => appendLog('logo remove queue err: ' + (e?.message || e)));
+    res.json({ ok: true, startedLogo: !!out.startedLogo });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // xem ảnh 2K đã lưu của một cảnh ngay trong tool
@@ -1526,7 +1558,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
   if (logoRemovePausedQuota) return;
   const prep = await writeLock.run(() => {
     const p = store.load(projectId);
-    if (!p || !logoRemovalEnabled() || !allStep3Saved(p)) return null;
+    if (!p || !shouldStartLogoRemoval(p)) return null;
     const sc = p.s3.scenes.find((s) => s.id === sceneId);
     if (!sc?.chosen?.target || !fs.existsSync(sc.chosen.target)) {
       if (sc?.logoRemoval) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Không tìm thấy ảnh 2K Bước 3 để xóa logo.'; sc.logoRemoval.updatedAt = Date.now(); pushProject(p); }
@@ -1535,6 +1567,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
     if (!sc.logoRemoval) sc.logoRemoval = normalizeLogoRemoval({ status: 'queued', sourceTarget: sc.chosen.target, createdAt: Date.now() });
     if (['waiting_ok', 'downloading', 'approved', 'skipped', 'error', 'quota_blocked'].includes(sc.logoRemoval.status)) return null;
     sc.logoRemoval.status = 'preparing';
+    sc.logoRemoval.generated = false; // mỗi lần tạo mới là một lượt Firefly mới
     sc.logoRemoval.code = '';
     sc.logoRemoval.error = '';
     sc.logoRemoval.note = 'Đang chuẩn bị xóa logo trên Firefly…';
@@ -1558,6 +1591,8 @@ async function prepareLogoRemoval(projectId, sceneId) {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
       sc.logoRemoval.status = 'waiting_ok';
+      // Mốc ảnh ĐÃ tạo xong: nếu tải bị hết lượt thì đổi Gmail chỉ tải lại, không tạo lại.
+      sc.logoRemoval.generated = true;
       sc.logoRemoval.note = 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
@@ -1603,6 +1638,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
   try {
     const result = await firefly.downloadPrepared({
       projectId, sceneId, targetPath: prep.target,
+      keepTabOnQuota: true, // ảnh đã tạo xong: giữ tab để đổi Gmail rồi tải lại, không tạo lại
       isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled(),
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
@@ -1643,9 +1679,12 @@ async function downloadLogoRemoval(projectId, sceneId) {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval) return;
       sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
+      if (quota) sc.logoRemoval.generated = true; // ảnh đã có trên Firefly, chỉ chờ tải lại
       sc.logoRemoval.code = e?.code || '';
       sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi tải ảnh sạch.');
-      sc.logoRemoval.note = sc.logoRemoval.error;
+      sc.logoRemoval.note = quota
+        ? 'Ảnh đã tạo xong trên Firefly. Đăng nhập Gmail khác rồi bấm “Đã kết nối Gmail khác”; tool sẽ chỉ tải lại ảnh này, không tạo lại.'
+        : sc.logoRemoval.error;
       sc.logoRemoval.updatedAt = Date.now();
       pushProject(p);
     });
@@ -1691,7 +1730,6 @@ async function save2k(projectId, sceneId, img) {
     const tmpFinal = `${finalTarget}.part-${store.uid(3)}`;
     fs.copyFileSync(downloaded, tmpFinal);
     fs.renameSync(tmpFinal, finalTarget);
-    let shouldQueueLogo = false;
     await writeLock.run(() => {
       const latest = isCurrent();
       if (!latest) { fs.rmSync(finalTarget, { force: true }); return; }
@@ -1699,10 +1737,9 @@ async function save2k(projectId, sceneId, img) {
       current.status = 'saved';
       current.target = finalTarget;
       delete current.error;
-      if (ensureLogoRemovalState(latest)) shouldQueueLogo = true;
+      // Không tự sang Bước 4 tại đây: chỉ bắt đầu sau khi bấm “Tải hết ảnh về & Dọn dẹp”.
       pushProject(latest);
     });
-    if (shouldQueueLogo) queueLogoRemoval(projectId).catch((e) => appendLog('logo remove queue err: ' + (e?.message || e)));
   } catch (e) {
     await writeLock.run(() => {
       const latest = isCurrent(true);
@@ -1726,6 +1763,7 @@ app.post('/api/projects/:id/retry-save', async (req, res) => {
       if (!img) return { code: 400, error: 'Không tìm thấy ảnh đã chọn để lưu lại.' };
       if (!s.chosen.target) s.chosen.target = sceneTargetPath(p, s.id);
       s.chosen.status = 'saving'; delete s.chosen.error;
+      delete p.cleaned; // ảnh 2K sắp đổi → phải tải/dọn lại mới sang Bước 4
       // Reset logo removal for this scene because source 2K will change.
       if (s.logoRemoval && s.logoRemoval.status !== 'approved') s.logoRemoval = null;
       pushProject(p);
@@ -1751,6 +1789,7 @@ app.post('/api/projects/:id/logo-remove/retry', async (req, res) => {
     const { sceneId } = req.body || {};
     const out = await writeLock.run(() => {
       const p = store.load(req.params.id); if (!p) return { code: 404 };
+      if (!shouldStartLogoRemoval(p)) return { code: 400, error: 'Hãy hoàn tất Bước 3: bấm “Tải hết ảnh về & Dọn dẹp” rồi mới xóa logo.' };
       const sc = findLogoRemovalScene(p, sceneId); if (!sc) return { code: 404, error: 'Không tìm thấy cảnh.' };
       if (!sc.chosen?.target || !fs.existsSync(sc.chosen.target)) return { code: 400, error: 'Không tìm thấy ảnh 2K Bước 3 để xóa logo.' };
       if (sc.logoRemoval?.status === 'approved') return { code: 400, error: 'Cảnh này đã có ảnh sạch được xác nhận.' };
@@ -1790,21 +1829,31 @@ app.post('/api/projects/:id/logo-remove/skip', async (req, res) => {
 app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
   try {
     logoRemovePausedQuota = null;
-    await writeLock.run(() => {
-      const p = store.load(req.params.id); if (!p) return;
+    const allowed = await writeLock.run(() => {
+      const p = store.load(req.params.id); if (!p) return false;
+      if (!shouldStartLogoRemoval(p)) return false;
       let changed = false;
       for (const sc of p.s3.scenes) {
-        if (sc.logoRemoval?.status === 'quota_blocked') {
-          sc.logoRemoval.status = 'queued';
-          sc.logoRemoval.code = '';
-          sc.logoRemoval.error = '';
-          sc.logoRemoval.note = 'Chờ xóa logo sau Bước 3';
-          sc.logoRemoval.updatedAt = Date.now();
-          changed = true;
-        }
+        const lr = sc.logoRemoval;
+        // Chỉ xử lý cảnh bị hết lượt. Ảnh đã xóa xong / đang chờ Ổn giữ nguyên,
+        // không đưa lại vào hàng đợi (không làm lại ảnh đã làm).
+        if (lr?.status !== 'quota_blocked') continue;
+        // Ảnh đã tạo xong mà chỉ tải bị chặn → về waiting_ok để bấm Ổn tải lại.
+        // Ảnh chưa tạo được → về queued để tạo tiếp (ảnh kế tiếp, không làm lại ảnh cũ).
+        const next = logoResumeStatus(lr, firefly.hasSceneTab(req.params.id, sc.id));
+        lr.status = next;
+        lr.code = '';
+        lr.error = '';
+        lr.note = next === 'waiting_ok'
+          ? 'Ảnh đã tạo trên Firefly. Bấm “Ổn” để tải lại; tool không tạo lại ảnh.'
+          : 'Chờ xóa logo sau khi đã tải hết ảnh Bước 3';
+        lr.updatedAt = Date.now();
+        changed = true;
       }
       if (changed) pushProject(p);
+      return true;
     });
+    if (!allowed) return res.status(400).json({ error: 'Hãy hoàn tất Bước 3: bấm “Tải hết ảnh về & Dọn dẹp” rồi mới xóa logo.' });
     await queueLogoRemoval(req.params.id);
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }

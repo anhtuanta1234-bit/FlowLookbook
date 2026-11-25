@@ -2,11 +2,26 @@
 
 ## Unreleased
 
+## v1.1.32 - 2026-11-25
+- Sửa luồng hết lượt Firefly/tool chỉ chạy tiếp từ ảnh đang bị chặn (ảnh 4), không làm lại các ảnh đã xong (ảnh 1–3) sau khi bạn đăng nhập Gmail khác.
+- Firefly vẫn hiện banner “hết lượt” trên ảnh đã tạo xong: tool giờ ưu tiên tải ảnh đó, không đánh dấu nhầm rồi tốn thêm một lượt free để tạo lại.
+- Ảnh đã tạo nhưng tải bị chặn thì tool giữ phiên Firefly; đổi Gmail xong bạn chỉ cần bấm “Ổn” để tải lại, không tạo lại ảnh.
+- Khi hết lượt tool mở sẵn cửa sổ Firefly và thêm nút “Mở Firefly để đổi Gmail” để bạn đăng nhập mail khác ngay.
+- Xóa dự án trong tool giờ xóa luôn thư mục ảnh tương ứng trong `output`, có hộp thoại cảnh báo rõ ràng trước khi xóa.
+- Bước 3 có nút mới “Tải hết ảnh về & Dọn dẹp”: xóa thư mục `_tam` của các dự án đã xong Bước 3, chỉ giữ lại ảnh 2K đã chọn.
+- Bước 4 không còn tự chạy ngay lúc bạn chọn từng ảnh 2K; chỉ bắt đầu sau khi bấm “Tải hết ảnh về & Dọn dẹp” và đã bật tính năng xóa logo.
+- Đổi ảnh, bỏ chọn ảnh hoặc lưu lại ảnh 2K ở Bước 3 sẽ khóa lại Bước 4 cho đến khi tải/dọn lại.
+- Sửa Bước 4: hàm kiểm tra Firefly giờ đọc cả shadow DOM, nhận diện đúng các nút web component thay vì báo sai “Firefly chưa sẵn sàng”.
+- Khi chưa đăng nhập Adobe hoặc editor Firefly chỉ render khung vỏ, app báo rõ “Chưa đăng nhập Firefly” để bạn tự đăng nhập, không báo lỗi chung chung.
+- Sửa dứt điểm nút “Kiểm tra phiên bản mới”: app lấy bản mới từ GitHub Releases API trước, file `version.json` trên raw GitHub chỉ làm nguồn dự phòng. Đây là cách duy nhất chặn triệt để trường hợp CDN trả biến thể nén cũ dù đã thêm tham số chống cache.
+- Nếu GitHub API tạm lỗi/rate-limit và raw cũng không có bản mới, app hiện “Chưa xác nhận được bản mới nhất” thay vì báo sai “Bạn đang dùng bản mới nhất”.
+
+
 ## v1.1.31 - 2026-11-25
 - Sửa Bước 4 trên giao diện Firefly hiện tại: nhận diện đúng menu “Chỉnh sửa hình ảnh” dạng web component, tự tải ảnh vào input ẩn và chỉ bấm các nút đang active.
 - Firefly giờ được chờ 5–10 giây sau khi mở để xác nhận tài khoản/giao diện; vào trình chỉnh sửa cũng chờ sẵn sàng trước khi thao tác, hết lượt vẫn dừng và báo đúng.
 - Tô vùng logo quy đổi theo đúng khung ảnh 9:16 thay vì toàn bộ canvas; tab Firefly luôn được đóng sau khi tải xong hoặc khi lỗi.
-- Sửa dứt điểm nút “Kiểm tra phiên bản mới”: nếu file `version.json` trên raw GitHub còn bị CDN trả bản cũ, app hỏi thêm GitHub Releases API cùng repo để luôn thấy bản vừa phát hành.
+- Thêm dự phòng GitHub Releases API khi file `version.json` trên raw GitHub bị CDN cache cũ.
 
 
 ## v1.1.30 - 2026-11-25

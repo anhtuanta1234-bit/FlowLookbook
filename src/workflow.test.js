@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
 
 test('automatic HQ completion persists the next stage and event together', () => {
   const project = { stage: 2, maxStage: 2 };
@@ -66,6 +66,24 @@ test('failed 2K references are retried and capped after two retries', () => {
   assert.equal(finishHqBatch(exhausted, { failedRefs: ['a'], retryRound: 2 }), null);
   assert.equal(exhausted.upgrading, false);
   assert.match(exhausted.upgradeError, /sau 3 đợt tự thử/);
+});
+
+test('Bước 4 chỉ sẵn sàng sau khi đã tải hết ảnh Bước 3, không phải vừa chọn ảnh', () => {
+  const saved = { s3: { scenes: [{ chosen: { status: 'saved', target: '01.png' } }] } };
+
+  assert.equal(step3ReadyForLogo(saved), false, 'chưa bấm tải hết thì chưa được xóa logo');
+  assert.equal(step3ReadyForLogo({ ...saved, cleaned: Date.now() }), true);
+  assert.equal(step3ReadyForLogo({ cleaned: Date.now(), s3: { scenes: [] } }), false);
+  assert.equal(step3ReadyForLogo({ cleaned: Date.now(), s3: { scenes: [{ chosen: { status: 'saving', target: '01.png' } }] } }), false);
+  assert.equal(step3ReadyForLogo({ cleaned: Date.now(), s3: { scenes: [{ chosen: { status: 'saved' } }] } }), false);
+});
+
+test('đổi Gmail xong chỉ tiếp tục ảnh bị chặn, không làm lại ảnh đã xong', () => {
+  assert.equal(logoResumeStatus({ status: 'approved', generated: true }, true), null, 'ảnh đã xong không bao giờ vào lại hàng đợi');
+  assert.equal(logoResumeStatus({ status: 'queued' }, true), null, 'ảnh đang chạy không bị đẩy lại');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked' }, true), 'queued', 'chưa tạo được thì tạo tiếp');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, false), 'queued', 'mất tab thì phải tạo lại');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, true), 'waiting_ok', 'đã tạo xong thì chỉ tải lại');
 });
 
 test('disconnect drops empty queued runs and keeps finished, failed, and in-flight runs', () => {

@@ -35,25 +35,54 @@ const L = {
   downloadBtn: (p) => p.getByRole('button', { name: /Tải xuống|Download/i }).first(),
 };
 
+// Firefly vẫn giữ banner "hết lượt" trên trang kết quả dù ảnh hiện tại ĐÃ tạo xong.
+// Nếu nút Tải xuống dùng được thì ảnh này là ảnh đã làm xong → ưu tiên tải,
+// không được đánh dấu hết lượt rồi tạo lại từ đầu khi đổi Gmail.
+async function downloadReady(page) {
+  const btn = L.downloadBtn(page);
+  return (await btn.isVisible().catch(() => false)) && (await btn.isEnabled().catch(() => true));
+}
+
+// Toàn bộ giao diện Firefly nằm trong shadow DOM của <firefly-home-app>/<firefly-ash-shell>.
+// document.querySelector() thường KHÔNG thấy các nút đó → phải đi qua shadowRoot.
 const readPageState = (page) => page.evaluate(() => {
-  const btns = [...document.querySelectorAll('button,[role="button"]')];
-  const active = btns.filter((b) => {
-    const visible = !!(b.offsetWidth || b.offsetHeight || b.getClientRects().length);
-    const disabled = b.disabled === true || b.getAttribute('aria-disabled') === 'true';
-    return visible && !disabled;
-  });
+  const visited = new Set();
+  const all = [];
+  const walk = (root, depth) => {
+    if (!root || depth > 10) return;
+    for (const el of root.querySelectorAll('*')) {
+      if (el.shadowRoot && !visited.has(el.shadowRoot)) {
+        visited.add(el.shadowRoot);
+        walk(el.shadowRoot, depth + 1);
+      }
+      all.push(el);
+    }
+  };
+  walk(document, 0);
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const enabled = (el) => el.disabled !== true && el.getAttribute('aria-disabled') !== 'true';
+  const active = all.filter((el) => (
+    /^(?:BUTTON|A|SP-ACTION-BUTTON|SP-BUTTON)$/.test(el.tagName) || /button|menuitem/i.test(el.getAttribute('role') || '')
+  )).filter((el) => visible(el) && enabled(el));
+  const deepText = all.filter((el) => !/^(?:SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName))
+    .map((el) => el.innerText || el.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
   const body = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+  const inputOf = (type) => all.filter((el) => el.tagName === 'INPUT' && (!type || el.type === type));
   return {
     url: location.href,
-    hasApp: !!document.querySelector('firefly-home-app, sp-menu-item, input[type="file"], canvas'),
+    hasApp: all.some((el) => /^(?:FIREFLY-HOME-APP|FIREFLY-ASH-|SP-MENU-ITEM)$/.test(el.tagName)),
     activeButtons: active.length,
-    login: /^(?:Đăng nhập|Sign in)$/im.test(body) || !!document.querySelector('input[type="password"]'),
-    hasCanvas: [...document.querySelectorAll('canvas')].some((c) => {
-      const r = c.getBoundingClientRect();
+    // Không tin cookie _pin_unauth: Adobe có thể giữ lại sau khi đã đăng nhập.
+    // Dấu hiệu chắc chắn là nút Sign in hoặc editor không render được công cụ xóa.
+    login: /^(?:Đăng nhập|Sign in)$/im.test(deepText) || inputOf('password').length > 0,
+    hasCanvas: all.some((el) => el.tagName === 'CANVAS' && (() => {
+      const r = el.getBoundingClientRect();
       return r.width > 200 && r.height > 200;
-    }),
-    hasUpload: document.querySelectorAll('input[type="file"]').length > 0,
+    })()),
+    hasUpload: inputOf('file').length > 0,
+    hasEditorApp: /Chấm sửa và xóa|Generative remove|Xóa đối tượng|Tải ảnh lên|Upload image/i.test(deepText),
     body,
+    deepText,
   };
 }).catch(() => ({}));
 
@@ -86,7 +115,9 @@ async function waitForEditorReady(page, timeoutMs = 30000) {
   while (Date.now() < end) {
     const state = await readPageState(page);
     if (state.login) return false;
-    if (/image-editor/i.test(state.url || '') && state.activeButtons > 0 && (state.hasCanvas || state.hasUpload)) {
+    // Chỉ có khung điều hướng thì chưa phải editor; phải thấy công cụ "Chấm sửa và xóa"
+    // hoặc canvas thật. Khi chưa đăng nhập Adobe, Firefly chỉ render khung vỏ.
+    if (/image-editor/i.test(state.url || '') && state.activeButtons > 0 && (state.hasEditorApp || state.hasCanvas)) {
       const remain = 5000 - (Date.now() - start);
       if (remain > 0) await sleep(remain);
       await sleep(600);
@@ -94,7 +125,7 @@ async function waitForEditorReady(page, timeoutMs = 30000) {
     }
     await sleep(500);
   }
-  throw new Error('Trình chỉnh sửa Firefly chưa sẵn sàng. Hãy thử lại sau vài giây.');
+  throw loginError();
 }
 
 async function isClickable(locator) {
@@ -136,10 +167,9 @@ function editorUrl() {
 async function isLoggedIn(page) {
   const url = page.url();
   if (!isFireflyUrl(url) || isLoginUrl(url)) return false;
-  // Firefly thường có nút Sign in khi chưa đăng nhập; profile/avatar khi đã đăng nhập.
-  const signIn = page.getByRole('button', { name: /Đăng nhập|Sign in/i }).first();
-  if (await signIn.isVisible().catch(() => false)) return false;
-  return true;
+  // Nút Sign in nằm trong shadow DOM; cookie _pin_unauth cũng báo phiên chưa xác thực.
+  const state = await readPageState(page);
+  return !state.login;
 }
 
 async function status() {
@@ -278,7 +308,8 @@ function normalizeMask(mask) {
 }
 
 async function findCanvas(page) {
-  const candidates = page.locator('canvas:visible');
+  // Không dùng :visible vì canvas nằm trong shadow DOM; lọc bằng boundingBox bên dưới.
+  const candidates = page.locator('canvas');
   const count = await candidates.count();
   let best = null;
   let bestArea = 0;
@@ -303,9 +334,8 @@ async function waitForCanvas(page, timeoutMs = 30000) {
 async function waitForDownloadReady(page, timeoutMs = 120000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
-    if (await detectQuotaBlock(page)) throw Object.assign(new Error('Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.'), { code: 'FIREFLY_QUOTA' });
-    const btn = L.downloadBtn(page);
-    if (await btn.isVisible().catch(() => false) && await btn.isEnabled().catch(() => true)) return true;
+    if (await downloadReady(page)) return true; // Ảnh đã tạo xong: bỏ qua banner quota còn sót lại.
+    if (await detectQuotaBlock(page)) throw quotaError();
     await sleep(1000);
   }
   throw new Error('Firefly chưa tạo xong ảnh để tải xuống.');
@@ -367,7 +397,7 @@ function isQuotaText(text) {
 
 async function detectQuotaBlock(page) {
   const state = await readPageState(page);
-  if (isQuotaText(state.body)) return true;
+  if (isQuotaText(state.body) || isQuotaText(state.deepText)) return true;
   for (const re of [/đã hết lượt|hết lượt/i, /đã đạt giới hạn/i, /out of generative credits|no generative credits|insufficient credits/i, /generation limit reached|daily limit reached|quota exceeded/i]) {
     const loc = page.getByText(re).first();
     if (await loc.isVisible().catch(() => false)) return true;
@@ -384,7 +414,8 @@ async function waitForDownloadClick(page, timeoutMs = 180000) {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
       if (download) return download;
-      if (await detectQuotaBlock(page)) throw quotaError();
+      // Chỉ coi là hết lượt khi KHÔNG có nút tải: ảnh đã tạo thì vẫn cho tải tiếp.
+      if (await detectQuotaBlock(page) && !(await downloadReady(page))) throw quotaError();
       await sleep(1000);
     }
     throw new Error('Firefly chưa tạo xong ảnh để tải xuống.');
@@ -418,7 +449,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       assertNotCanceled(isCanceled);
       if (!(await isLoggedIn(p))) throw loginError();
       // 5–10 giây đầu Firefly còn đang xác nhận tài khoản, bấm ngay sẽ trượt nút.
-      await waitForFireflyReady(p);
+      if (!(await waitForFireflyReady(p))) throw loginError();
 
       onPhase?.('Đang mở mục Hình ảnh…');
       await clickEnabledAny(p, [L.imagesNav, L.imagesNavLegacy, L.imagesNavLink, L.imagesNavText], { label: 'mục Hình ảnh' });
@@ -455,14 +486,16 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       onPhase?.('Đã xóa logo trên Firefly. Chờ bạn bấm “Ổn” để tải xuống.');
       return { ok: true, key };
     } catch (e) {
-      // Lỗi/quota/hủy: đóng tab Firefly ngay, không để nặng máy hay tồn session cũ.
+      // Lỗi/quota/hủy: đóng tab nền Firefly, không để nặng máy hay tồn session cũ.
       await releaseTab(key);
+      // Hết lượt: mở lại 1 cửa sổ Firefly nhìn thấy được để bạn tự đăng nhập Gmail khác.
+      if (e?.code === 'FIREFLY_QUOTA') await open().catch(() => {});
       throw e;
     }
   });
 }
 
-async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCanceled }) {
+async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCanceled, keepTabOnQuota = false }) {
   return lock.run(async () => {
     const key = `${projectId}:${sceneId}`;
     const pr = tabs.get(key);
@@ -470,11 +503,13 @@ async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCan
     const t = await pr;
     const p = t.page;
     const tmp = targetPath + '.part';
+    let quotaBlocked = false;
     try {
       assertNotCanceled(isCanceled);
       await chrome.showWindow().catch(() => {});
       await p.bringToFront().catch(() => {});
-      if (await detectQuotaBlock(p)) throw quotaError();
+      // Banner hết lượt có thể còn hiện dù ảnh đã tạo xong: có nút Tải xuống thì vẫn tải.
+      if (!(await downloadReady(p)) && await detectQuotaBlock(p)) throw quotaError();
 
       onPhase?.('Đang tải ảnh sạch từ Firefly…');
       const download = await waitForDownloadClick(p);
@@ -491,12 +526,19 @@ async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCan
       return { ok: true, file: final, width: size.width, height: size.height };
     } catch (e) {
       fs.rmSync(tmp, { force: true });
+      // Ảnh đã tạo nhưng Firefly chặn tải: giữ tab lại để đổi Gmail xong chỉ bấm Ổn,
+      // không phải tạo lại ảnh (tốn thêm lượt free của Gmail mới).
+      if (keepTabOnQuota && e?.code === 'FIREFLY_QUOTA') quotaBlocked = true;
       throw e;
     } finally {
-      // Dù tải xong hay lỗi thì cũng đóng tab Firefly của cảnh này.
-      await releaseTab(key);
+      if (!quotaBlocked) await releaseTab(key);
     }
   });
+}
+
+// Cảnh đã tạo xong trên Firefly còn giữ tab không? Dùng để quyết định tải lại hay tạo lại.
+function hasSceneTab(projectId, sceneId) {
+  return tabs.has(`${projectId}:${sceneId}`);
 }
 
 async function discardScene({ projectId, sceneId }) {
@@ -505,7 +547,7 @@ async function discardScene({ projectId, sceneId }) {
 
 module.exports = {
   status, open, reveal,
-  prepareScene, downloadPrepared, discardScene,
+  prepareScene, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, waitForFireflyReady, clickEnabledAny },
 };

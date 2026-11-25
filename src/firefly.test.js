@@ -38,5 +38,31 @@ test('Firefly dùng web component, chờ ổn định và đóng tab khi lỗi/x
   assert.match(src, /await input\.setInputFiles\(imagePath\)/, 'Upload thẳng vào input file ẩn');
   assert.match(src, /applyBrush\(p, cfg\.get\(\)\.logoRemoveMask, imagePath\)/, 'Tô mask theo đúng khung ảnh nguồn');
   assert.match(src, /catch \(e\) \{[\s\S]*?await releaseTab\(key\)/, 'Lỗi prepare phải đóng tab Firefly');
-  assert.match(src, /finally \{[\s\S]*?await releaseTab\(key\)/, 'Tải xong hoặc lỗi đều đóng tab Firefly');
+  assert.match(src, /finally \{[\s\S]*?await releaseTab\(key\)/, 'Tải xong atau lỗi đều đóng tab Firefly');
+});
+
+test('banner hết lượt không làm mất ảnh đã tạo: có nút Tải xuống thì tải tiếp', () => {
+  assert.match(src, /async function downloadReady\(page\)[\s\S]*?isVisible\([\s\S]*?isEnabled/);
+  assert.match(src, /if \(await downloadReady\(page\)\) return true; \/\/ Ảnh đã tạo xong/);
+  assert.match(src, /detectQuotaBlock\(page\) && !\(await downloadReady\(page\)\)/, 'đợi tải: chỉ báo hết lượt khi không có nút tải');
+  assert.match(src, /!\(await downloadReady\(p\)\) && await detectQuotaBlock\(p\)/, 'bấm tải: ảnh đã tạo thì không chặn');
+});
+
+test('hết lượt lúc tải thì giữ tab Firefly để đổi Gmail rồi tải lại, không tạo lại ảnh', () => {
+  assert.match(src, /keepTabOnQuota = false/);
+  assert.match(src, /keepTabOnQuota && e\?\.code === 'FIREFLY_QUOTA'\) quotaBlocked = true/);
+  assert.match(src, /if \(!quotaBlocked\) await releaseTab\(key\)/, 'lỗi hết lượt lúc tải thì không đóng tab');
+  assert.match(src, /function hasSceneTab\(projectId, sceneId\)[\s\S]*?tabs\.has/);
+  assert.match(src, /e\?\.code === 'FIREFLY_QUOTA'\) await open\(\)/, 'hết lượt lúc tạo thì mở cửa sổ để đổi Gmail');
+  assert.match(src, /prepareScene, downloadPrepared, discardScene, hasSceneTab/);
+});
+
+test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {
+  assert.match(src, /el\.shadowRoot/, 'Phải đi qua shadowRoot của web component');
+  assert.match(src, /const deepText =/, 'Phải gom text từ trong shadow DOM');
+  assert.match(src, /hasEditorApp:/, 'Phải nhận diện editor thật, không phải khung điều hướng');
+  assert.match(src, /Không tin cookie _pin_unauth/, 'Không được chặn nhầm sau khi đã đăng nhập');
+  assert.match(src, /if \(!\(await waitForFireflyReady\(p\)\)\) throw loginError\(\)/, 'Chưa đăng nhập thì báo lỗi đăng nhập ngay');
+  assert.match(src, /if \(state\.login\) return false;[\s\S]*hasEditorApp/, 'Editor chỉ sẵn sàng khi có công cụ xóa');
+  assert.match(src, /throw loginError\(\);\n\}/, 'Editor không tải được thì báo đăng nhập rõ ràng');
 });

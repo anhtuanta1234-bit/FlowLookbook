@@ -93,4 +93,21 @@ function logoCleanupTargets(project) {
   return scenes.filter((s) => s.logoRemoval?.status === 'approved' && s.logoRemoval?.cleanFile);
 }
 
-module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, normalizeLogoRemoval, logoRemovalPending, allLogoRemovalDone, logoCleanupTargets };
+// Bước 4 chỉ được bắt đầu sau khi Bước 3 hoàn tất HÀNH ĐỘNG CUỐI:
+// toàn bộ ảnh đã chọn phải lưu xong 2K VÀ người dùng đã bấm “Tải hết ảnh về & Dọn dẹp”
+// (p.cleaned là mốc đánh dấu đã tải/dọn xong; mỗi lần đổi ảnh Bước 3 đều xóa mốc này).
+function step3ReadyForLogo(project) {
+  const scenes = project?.s3?.scenes || [];
+  return scenes.length > 0 && !!project?.cleaned
+    && scenes.every((s) => s.chosen?.status === 'saved' && s.chosen?.target);
+}
+
+// Sau khi hết lượt Firefly và đổi Gmail: ảnh ĐÃ tạo xong (generated + còn tab) chỉ cần bấm Ổn
+// để tải lại — không được tạo lại. Ảnh chưa tạo thì xếp hàng tạo tiếp. Cảnh đã xong
+// (approved/skipped) trả null để không bao giờ đưa lại vào hàng đợi.
+function logoResumeStatus(lr, hasSceneTab = false) {
+  if (lr?.status !== 'quota_blocked') return null;
+  return lr.generated && hasSceneTab ? 'waiting_ok' : 'queued';
+}
+
+module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, normalizeLogoRemoval, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets };

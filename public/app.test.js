@@ -73,6 +73,26 @@ test('Bước 4 chỉ chạy sau khi bật toggle và có nút duyệt Ổn, ch�
   assert.match(src, /esc\(lr\.error \|\| ''\)/, 'Thông báo lỗi/quota phải hiển thị từ máy chủ gửi sang');
 });
 
+test('xóa dự án báo rõ thư mục output bị xóa, không còn nói giữ ảnh', () => {
+  assert.match(src, /thư mục ảnh trong output sẽ bị xóa vĩnh viễn/, 'phải cảnh báo xóa ảnh trong output');
+  assert.ok(!/ảnh 2K đã lưu trong thư mục kết quả vẫn được giữ/.test(src), 'không được nói ảnh được giữ nữa');
+  assert.match(src, /outputDirsRemoved \?/, 'toast phải đếm thư mục ảnh đã xóa');
+});
+
+test('Bước 3 có nút tải hết ảnh về & dọn dẹp, xong mới sang Bước 4', () => {
+  assert.match(src, /data-act="cleanall"[\s\S]{0,260}📥 Tải hết ảnh về & Dọn dẹp/, 'phải có nút tải hết ảnh về');
+  assert.match(src, /r\.startLogo\?\.length/, 'toast phải báo Bước 4 vừa bắt đầu');
+  assert.match(src, /JSON\.stringify\(\[!!S\.cfg\?\.removeLogoEnabled, !!p\.cleaned,/, 'phải render lại khi trạng thái đã tải/dọn thay đổi');
+  assert.match(src, /Đã tải hết ảnh 2K, thư mục chỉ còn ảnh đã chọn/, 'trạng thái sau dọn phải rõ ràng');
+});
+
+test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo không làm lại ảnh cũ', () => {
+  assert.match(src, /Tool dừng đúng ảnh đang làm, giữ nguyên các ảnh đã xong/, 'phải báo tiếp tục từ ảnh bị chặn');
+  assert.match(src, /không làm lại ảnh cũ/);
+  assert.match(src, /data-act="fireflyopen">Mở Firefly để đổi Gmail/, 'phải có nút mở Firefly để đăng nhập mail khác');
+  assert.match(src, /lr\.generated \? ' <span class="badge warn"/, 'ảnh đã tạo phải hiện trạng thái chờ tải lại');
+});
+
 test('manifest raw bị cache cũ vẫn lấy bản mới từ GitHub Releases API', async () => {
   const calls = [];
   const h = updateHelpers(
@@ -99,19 +119,30 @@ test('manifest raw bị cache cũ vẫn lấy bản mới từ GitHub Releases A
   assert.equal(calls.length, 2, 'Phải hỏi thêm GitHub API khi manifest không có bản mới');
 });
 
-test('manifest đã có bản mới thì không gọi GitHub API', async () => {
-  let apiCalls = 0;
+test('raw cache trả bản cũ nhưng vẫn cao hơn current thì API vẫn thắng', async () => {
   const h = updateHelpers(
     'https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json',
     '1.1.29',
     async (url) => {
-      if (url.includes('api.github.com')) { apiCalls++; throw new Error('Không được gọi API'); }
+      if (url.includes('api.github.com')) return jsonResponse({ tag_name: 'v1.1.31', assets: [{ name: 'setup.exe', browser_download_url: 'https://github.com/new.exe' }] });
+      return jsonResponse({ version: '1.1.30', url: 'https://github.com/stale.exe', notes: 'cache cũ' });
+    },
+  );
+  const info = await h.readUpdateInfo();
+  assert.equal(info.version, '1.1.31', 'Không được tin manifest cache dù nó cũng "mới hơn" current');
+});
+
+test('API lỗi/rate-limit thì vẫn dùng manifest mới nhất', async () => {
+  const h = updateHelpers(
+    'https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json',
+    '1.1.29',
+    async (url) => {
+      if (url.includes('api.github.com')) throw new Error('rate limit');
       return jsonResponse({ version: '1.1.31', url: 'https://github.com/new.exe', notes: 'mới' });
     },
   );
   const info = await h.readUpdateInfo();
   assert.equal(info.version, '1.1.31');
-  assert.equal(apiCalls, 0);
 });
 
 test('GitHub API lỗi thì vẫn dùng manifest đang có, không báo lỗi giả', async () => {
@@ -125,6 +156,12 @@ test('GitHub API lỗi thì vẫn dùng manifest đang có, không báo lỗi gi
   );
   const info = await h.readUpdateInfo();
   assert.equal(info.version, '1.1.29');
+  assert.equal(info.uncertain, true, 'Không được tự tin báo "đã mới nhất" khi API lỗi và raw có thể bị cache cũ');
+});
+
+test('checkUpdate khi không chắc chắn thì hiện cảnh báo thay vì báo đã mới nhất', () => {
+  assert.match(src, /if \(info\.uncertain\) toast\('Chưa xác nhận được bản mới nhất/, 'Phải báo không xác nhận được khi API lỗi');
+  assert.match(src, /else if \(manual\) toast\('Bạn đang dùng phiên bản mới nhất/, 'Chỉ báo đã mới nhất khi chắc chắn');
 });
 
 test('đổi raw URL thành đúng GitHub Releases API cùng repo', () => {
