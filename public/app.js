@@ -1190,15 +1190,64 @@ function friendlyUpdateError(er) {
   return 'Kiểm tra cập nhật thất bại. Vui lòng thử lại sau.';
 }
 
+const normalizeVersion = (v) => String(v ?? '').trim().replace(/^v(?=\d)/i, '');
+const cacheBusted = (url) => {
+  const sep = String(url).includes('?') ? '&' : '?';
+  return String(url) + sep + '_t=' + Date.now();
+};
+// raw.githubusercontent.com có CDN cache ~5 phút. Khi manifest trả bản cũ, hỏi thẳng
+// GitHub Releases API (không đi qua CDN đó) để không bỏ sót bản vừa phát hành.
+function latestReleaseApiUrl(manifestUrl) {
+  const m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/[^/]+\/version\.json(?:[?#].*)?$/i.exec(String(manifestUrl || ''));
+  return m ? `https://api.github.com/repos/${m[1]}/${m[2]}/releases/latest` : '';
+}
+function parseManifestInfo(data) {
+  const version = normalizeVersion(data?.version);
+  const url = String(data?.url ?? '').trim();
+  if (!version || !/^https:\/\//i.test(url)) throw new Error('File thông tin cập nhật không đúng định dạng.');
+  return { version, url, notes: String(data?.notes ?? '').trim() || 'Bản cập nhật mới.' };
+}
+function parseLatestRelease(release) {
+  const version = normalizeVersion(release?.tag_name);
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  const installer = assets.find((a) => /\.exe$/i.test(a?.name ?? '') && /setup|installer/i.test(a?.name ?? ''))
+    || assets.find((a) => /\.exe$/i.test(a?.name ?? ''))
+    || assets.find((a) => /setup|installer/i.test(a?.name ?? ''));
+  const url = String(installer?.browser_download_url ?? '').trim();
+  if (!version || !/^https:\/\//i.test(url)) throw new Error('File thông tin bản phát hành không đúng định dạng.');
+  return { version, url, notes: String(release?.body ?? '').trim() || 'Bản cập nhật mới.' };
+}
+async function fetchUpdateJson(url, opt = {}) {
+  const r = await fetchWithTimeout(cacheBusted(url), { cache: 'no-store', ...opt });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function readUpdateInfo() {
+  let manifest = null;
+  let manifestError = null;
+  try { manifest = parseManifestInfo(await fetchUpdateJson(UPDATE_MANIFEST_URL)); }
+  catch (er) { manifestError = er; }
+  const newer = (info) => !!info && compareVer(info.version, CURRENT_VERSION || '0') > 0;
+  if (newer(manifest)) return manifest;
+
+  const apiUrl = latestReleaseApiUrl(UPDATE_MANIFEST_URL);
+  if (apiUrl) {
+    try {
+      const fromApi = parseLatestRelease(await fetchUpdateJson(apiUrl, { headers: { Accept: 'application/vnd.github+json' } }));
+      // API là nguồn cuối: nếu có bản mới thì dùng ngay, kể cả khi raw vẫn trả bản cũ.
+      if (newer(fromApi)) return fromApi;
+      if (manifest) return manifest;
+      return fromApi;
+    } catch (_) {
+      // API lỗi/tắc (rate limit, mạng): vẫn dùng manifest nếu manifest đọc được.
+    }
+  }
+  if (manifest) return manifest;
+  throw manifestError || new Error('Thông tin cập nhật từ máy chủ không đúng định dạng.');
+}
 async function checkUpdate(manual) {
-  if (!UPDATE_MANIFEST_URL) { if (manual) toast('Tính năng cập nhật tự động chưa được thiết lập. Vui lòng liên hệ người phát triển.', ''); return; }
   try {
-    // Thêm tham số ngẫu nhiên để GitHub raw/CDN không trả nội dung cũ sau khi publish bản mới.
-    const sep = UPDATE_MANIFEST_URL.includes('?') ? '&' : '?';
-    const r = await fetchWithTimeout(UPDATE_MANIFEST_URL + sep + '_t=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const info = await r.json();
-    if (!info || !info.version || !info.url) throw new Error('File thông tin cập nhật không đúng định dạng.');
+    const info = await readUpdateInfo();
     if (compareVer(info.version, CURRENT_VERSION || '0') <= 0) {
       if (manual) toast('Bạn đang dùng phiên bản mới nhất (v' + (CURRENT_VERSION || '?') + ').', 'ok');
       return;

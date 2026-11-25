@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.1.31 - 2026-11-25
+- Sửa Bước 4 trên giao diện Firefly hiện tại: nhận diện đúng menu “Chỉnh sửa hình ảnh” dạng web component, tự tải ảnh vào input ẩn và chỉ bấm các nút đang active.
+- Firefly giờ được chờ 5–10 giây sau khi mở để xác nhận tài khoản/giao diện; vào trình chỉnh sửa cũng chờ sẵn sàng trước khi thao tác, hết lượt vẫn dừng và báo đúng.
+- Tô vùng logo quy đổi theo đúng khung ảnh 9:16 thay vì toàn bộ canvas; tab Firefly luôn được đóng sau khi tải xong hoặc khi lỗi.
+- Sửa dứt điểm nút “Kiểm tra phiên bản mới”: nếu file `version.json` trên raw GitHub còn bị CDN trả bản cũ, app hỏi thêm GitHub Releases API cùng repo để luôn thấy bản vừa phát hành.
+
+
 ## v1.1.30 - 2026-11-25
 - Thêm Bước 4 (tùy chọn, tắt mặc định): sau khi Bước 3 lưu xong toàn bộ ảnh 2K, app mở Adobe Firefly bằng chung cửa sổ Chrome/hồ sơ với Flow để xóa logo; bạn tự đăng nhập Adobe, app không lưu mật khẩu Gmail/Adobe.
 - Firefly đi theo luồng Hình ảnh → Chỉnh sửa hình ảnh → tải ảnh → Chấm sửa và xóa → tô vùng logo → Xóa. App chỉ tải xuống và lưu ảnh sạch khi bạn bấm “Ổn” (có nút “Xem trên Firefly” để kiểm tra trước).

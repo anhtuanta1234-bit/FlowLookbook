@@ -2,8 +2,35 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const src = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+
+// Chạy thật các hàm đọc thông tin cập nhật (không nạp toàn bộ app.js vì cần DOM).
+function updateHelpers(manifestUrl, currentVersion, fetchImpl) {
+  const start = src.indexOf('const normalizeVersion =');
+  const end = src.indexOf('async function checkUpdate(manual)');
+  assert.ok(start >= 0 && end > start, 'Phải tìm thấy khối hàm cập nhật trong app.js');
+  const code = src.slice(start, end) + '\nglobalThis.__h = { readUpdateInfo, parseManifestInfo, parseLatestRelease, latestReleaseApiUrl };';
+  const context = {
+    UPDATE_MANIFEST_URL: manifestUrl,
+    CURRENT_VERSION: currentVersion,
+    fetchWithTimeout: fetchImpl,
+    compareVer: (a, b) => {
+      const pa = String(a || '').split('.').map(Number);
+      const pb = String(b || '').split('.').map(Number);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x !== y) return x > y ? 1 : -1;
+      }
+      return 0;
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(code, context);
+  return context.__h;
+}
+const jsonResponse = (data) => ({ ok: true, json: async () => data });
 
 test('giao diện không gọi hộp nhập tên của trình duyệt (Electron không hỗ trợ)', () => {
   // Chỉ khớp lời gọi thật có đối số là chuỗi, không khớp chữ "prompt" trong câu tiếng Việt.
@@ -44,4 +71,66 @@ test('Bước 4 chỉ chạy sau khi bật toggle và có nút duyệt Ổn, ch�
   assert.match(src, /fireflyQuotaPaused/, 'Phải hiện trạng thái Firefly hết lượt trên thanh trạng thái');
   assert.match(src, /data-act="logoresume"/, 'Phải có nút tiếp tục sau khi đổi Gmail');
   assert.match(src, /esc\(lr\.error \|\| ''\)/, 'Thông báo lỗi/quota phải hiển thị từ máy chủ gửi sang');
+});
+
+test('manifest raw bị cache cũ vẫn lấy bản mới từ GitHub Releases API', async () => {
+  const calls = [];
+  const h = updateHelpers(
+    'https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json',
+    '1.1.29',
+    async (url) => {
+      calls.push(url);
+      if (url.includes('api.github.com')) {
+        return jsonResponse({
+          tag_name: 'v1.1.30',
+          body: '- Bản mới',
+          assets: [
+            { name: 'Flow.Lookbook.Setup.1.1.30.exe.blockmap', browser_download_url: 'https://x/blockmap' },
+            { name: 'Flow.Lookbook.Setup.1.1.30.exe', browser_download_url: 'https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.30/Flow.Lookbook.Setup.1.1.30.exe' },
+          ],
+        });
+      }
+      return jsonResponse({ version: '1.1.29', url: 'https://github.com/old.exe', notes: 'cũ' });
+    },
+  );
+  const info = await h.readUpdateInfo();
+  assert.equal(info.version, '1.1.30');
+  assert.match(info.url, /Flow\.Lookbook\.Setup\.1\.1\.30\.exe$/);
+  assert.equal(calls.length, 2, 'Phải hỏi thêm GitHub API khi manifest không có bản mới');
+});
+
+test('manifest đã có bản mới thì không gọi GitHub API', async () => {
+  let apiCalls = 0;
+  const h = updateHelpers(
+    'https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json',
+    '1.1.29',
+    async (url) => {
+      if (url.includes('api.github.com')) { apiCalls++; throw new Error('Không được gọi API'); }
+      return jsonResponse({ version: '1.1.31', url: 'https://github.com/new.exe', notes: 'mới' });
+    },
+  );
+  const info = await h.readUpdateInfo();
+  assert.equal(info.version, '1.1.31');
+  assert.equal(apiCalls, 0);
+});
+
+test('GitHub API lỗi thì vẫn dùng manifest đang có, không báo lỗi giả', async () => {
+  const h = updateHelpers(
+    'https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json',
+    '1.1.29',
+    async (url) => {
+      if (url.includes('api.github.com')) throw new Error('rate limit');
+      return jsonResponse({ version: '1.1.29', url: 'https://github.com/old.exe', notes: 'cũ' });
+    },
+  );
+  const info = await h.readUpdateInfo();
+  assert.equal(info.version, '1.1.29');
+});
+
+test('đổi raw URL thành đúng GitHub Releases API cùng repo', () => {
+  const h = updateHelpers('', '1.1.29', async () => jsonResponse({}));
+  assert.equal(
+    h.latestReleaseApiUrl('https://raw.githubusercontent.com/anhtuanta1234-bit/FlowLookbook/main/version.json'),
+    'https://api.github.com/repos/anhtuanta1234-bit/FlowLookbook/releases/latest',
+  );
 });
