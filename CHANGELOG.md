@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v1.1.30 - 2026-11-25
+- Thêm Bước 4 (tùy chọn, tắt mặc định): sau khi Bước 3 lưu xong toàn bộ ảnh 2K, app mở Adobe Firefly bằng chung cửa sổ Chrome/hồ sơ với Flow để xóa logo; bạn tự đăng nhập Adobe, app không lưu mật khẩu Gmail/Adobe.
+- Firefly đi theo luồng Hình ảnh → Chỉnh sửa hình ảnh → tải ảnh → Chấm sửa và xóa → tô vùng logo → Xóa. App chỉ tải xuống và lưu ảnh sạch khi bạn bấm “Ổn” (có nút “Xem trên Firefly” để kiểm tra trước).
+- Ảnh sạch lưu vào `output/<dự án>/anhdaxoalogo/`; ảnh gốc có logo chỉ bị xóa sau khi mọi cảnh đã duyệt xong (có thể “Bỏ qua” từng cảnh để giữ ảnh gốc).
+- Cho phép chỉnh vùng logo bằng 4 ô phần trăm X/Y/Rộng/Cao trong Cài đặt; tự giới hạn để vùng tô luôn nằm trong khung ảnh.
+- Gặp giới hạn free Firefly thì dừng xóa logo, giữ nguyên ảnh gốc, báo “Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.” và chỉ tiếp tục khi bạn bấm “Đã kết nối Gmail khác”; không tự đổi tài khoản.
+- Chọn lại/bỏ chọn ảnh ở Bước 3 thì hủy kết quả xóa logo của ảnh cũ; lỗi/quota là trạng thái cuối do bạn quản lý, không tự chạy lại.
+
+
 ## v1.1.29 - 2026-11-23
 - Sửa lỗi kẹt cờ hộp thoại cập nhật: nếu dialog "Có phiên bản mới" bị modal khác thay thế, nút "Kiểm tra phiên bản mới" có thể im lặng; giờ reset cờ đúng và chỉ chặn khi dialog cập nhật thật sự đang mở.
 - Làm rõ lỗi chọn/làm lại ảnh khi thiếu `runId/imageId` hoặc ảnh không còn trong lượt chạy, thay vì báo chung "Không tìm thấy ảnh".

@@ -38,6 +38,10 @@ const defaults = {
   maxChromeTabs: 12, // giới hạn tổng số tab Chrome đang mở để tránh hết RAM
   autoCleanOldInstallers: true, // sau khi update thành công: xóa installer cũ, giữ bản mới nhất
   lastBackupAt: 0,
+  // Bước 4 (tùy chọn): xóa logo bằng Adobe Firefly. Tắt mặc định, không ảnh hưởng Bước 1-3.
+  removeLogoEnabled: false,
+  fireflyHomeUrl: 'https://firefly.adobe.com/',
+  logoRemoveMask: { xPct: 84.375, yPct: 91.352, wPct: 6.120, hPct: 3.343 },
 };
 
 let cache = null;
@@ -59,6 +63,16 @@ function get() {
 
 function set(patch) {
   const next = { ...get(), ...patch };
+  if (patch.logoRemoveMask) {
+    const n = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+    const x = Math.min(99, Math.max(0, n(patch.logoRemoveMask.xPct, 84.375)));
+    const y = Math.min(99, Math.max(0, n(patch.logoRemoveMask.yPct, 91.352)));
+    next.logoRemoveMask = {
+      xPct: x, yPct: y,
+      wPct: Math.max(0.1, Math.min(100 - x, n(patch.logoRemoveMask.wPct, 6.12))),
+      hPct: Math.max(0.1, Math.min(100 - y, n(patch.logoRemoveMask.hPct, 3.343))),
+    };
+  }
   if (fixedOutputRoot) next.outputRoot = fixedOutputRoot; // khóa cứng, lưu cài đặt cũng không đổi được
   cache = next;
   fs.mkdirSync(dataDir, { recursive: true });

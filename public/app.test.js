@@ -33,3 +33,15 @@ test('dialog cập nhật không bị kẹt cờ khi modal khác thay thế', ()
 test('danh sách dự án có vai trò nút để mở dự án', () => {
   assert.match(src, /role="button" tabindex="0" aria-label="Mở dự án/, 'Mục dự án phải có role button và aria-label mở dự án');
 });
+
+test('Bước 4 chỉ chạy sau khi bật toggle và có nút duyệt Ổn, chỉnh mask', () => {
+  assert.match(src, /id="cRemoveLogo"/, 'Phải có toggle bật/tắt xóa logo');
+  assert.match(src, /removeLogoEnabled: \$\('#cRemoveLogo'\)\.checked/, 'Toggle phải được lưu qua /api/config');
+  for (const id of ['cMaskX', 'cMaskY', 'cMaskW', 'cMaskH']) assert.match(src, new RegExp(`id="${id}"`), `Phải có ô chỉnh ${id}`);
+  assert.match(src, /logoRemoveMask: \{ xPct: \+\$\('#cMaskX'\)\.value/, 'Mask phải được lưu cùng cài đặt');
+  assert.match(src, /data-act="logook"/, 'Phải có nút Ổn trước khi tải ảnh sạch');
+  assert.match(src, /data-act="fireflyreveal"/, 'Phải có nút hiện Firefly để kiểm tra kết quả');
+  assert.match(src, /fireflyQuotaPaused/, 'Phải hiện trạng thái Firefly hết lượt trên thanh trạng thái');
+  assert.match(src, /data-act="logoresume"/, 'Phải có nút tiếp tục sau khi đổi Gmail');
+  assert.match(src, /esc\(lr\.error \|\| ''\)/, 'Thông báo lỗi/quota phải hiển thị từ máy chủ gửi sang');
+});

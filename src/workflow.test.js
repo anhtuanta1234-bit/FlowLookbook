@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
 
 test('automatic HQ completion persists the next stage and event together', () => {
   const project = { stage: 2, maxStage: 2 };
@@ -109,4 +109,27 @@ test('mở lại Flow bị chặn lặp thì giãn nhẹ chờ, lần đầu gi�
   assert.equal(flowReopenDelayMs(3), 4000);
   assert.equal(flowReopenDelayMs(4), 5500);
   assert.equal(flowReopenDelayMs(5), 7000);
+});
+
+test('logo removal normalize giữ trạng thái cũ an toàn', () => {
+  assert.equal(normalizeLogoRemoval(null), null);
+  assert.equal(normalizeLogoRemoval({ status: 'lạ', error: 5 }).status, 'queued');
+  assert.equal(normalizeLogoRemoval({ status: 'approved', error: 5 }).error, '');
+  assert.equal(normalizeLogoRemoval({ status: 'error', error: 'lỗi', note: 3, cleanFile: null, sourceTarget: 4 }).note, '');
+});
+
+test('xóa ảnh gốc chỉ khi mọi cảnh đã xong Bước 4', () => {
+  const project = { s3: { scenes: [{ logoRemoval: { status: 'approved', cleanFile: 'a.png' } }, { logoRemoval: { status: 'waiting_ok' } }] } };
+  assert.equal(allLogoRemovalDone(project), false);
+  assert.deepEqual(logoCleanupTargets(project), []);
+
+  project.s3.scenes[1].logoRemoval = { status: 'error' };
+  assert.deepEqual(logoCleanupTargets(project), [], 'cảnh lỗi/quota thì giữ nguyên ảnh gốc');
+
+  project.s3.scenes[1].logoRemoval = { status: 'skipped' };
+  assert.equal(allLogoRemovalDone(project), true);
+  assert.equal(logoCleanupTargets(project).length, 1);
+
+  project.s3.scenes[1].logoRemoval = { status: 'approved', cleanFile: 'b.png' };
+  assert.equal(logoCleanupTargets(project).length, 2);
 });

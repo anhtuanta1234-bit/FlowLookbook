@@ -65,4 +65,32 @@ function flowBlockedMessage(sceneOrder) {
   return `Cảnh ${sceneOrder} hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại`;
 }
 
-module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage };
+const LOGO_PENDING_STATUSES = ['queued', 'preparing', 'waiting_ok', 'downloading'];
+const LOGO_DONE_STATUSES = ['approved', 'skipped'];
+const LOGO_STATUSES = [...LOGO_PENDING_STATUSES, ...LOGO_DONE_STATUSES, 'error', 'quota_blocked'];
+
+function normalizeLogoRemoval(lr) {
+  if (!lr || typeof lr !== 'object') return null;
+  const known = LOGO_STATUSES.includes(lr.status);
+  const status = known ? lr.status : 'queued';
+  const str = (v) => (typeof v === 'string' ? v : '');
+  const out = { ...lr, status, code: str(lr.code), error: str(lr.error), note: str(lr.note), cleanFile: str(lr.cleanFile), sourceTarget: str(lr.sourceTarget) };
+  // Trạng thái lạ (dữ liệu cũ/sửa tay) không được giữ cleanFile của ảnh khác.
+  if (!known) out.cleanFile = '';
+  return out;
+}
+
+function logoRemovalPending(scene) { return LOGO_PENDING_STATUSES.includes(scene?.logoRemoval?.status); }
+function allLogoRemovalDone(project) {
+  const scenes = project?.s3?.scenes || [];
+  return scenes.some((s) => !!s.logoRemoval)
+    && scenes.every((s) => !s.logoRemoval || LOGO_DONE_STATUSES.includes(s.logoRemoval.status));
+}
+function logoCleanupTargets(project) {
+  const scenes = project?.s3?.scenes || [];
+  if (!scenes.length || !allLogoRemovalDone(project)) return [];
+  if (scenes.some((s) => s.logoRemoval?.status === 'error' || s.logoRemoval?.status === 'quota_blocked')) return [];
+  return scenes.filter((s) => s.logoRemoval?.status === 'approved' && s.logoRemoval?.cleanFile);
+}
+
+module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, normalizeLogoRemoval, logoRemovalPending, allLogoRemovalDone, logoCleanupTargets };

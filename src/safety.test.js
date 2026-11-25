@@ -47,6 +47,10 @@ test('projects with generation or 2K work cannot be treated as idle', () => {
   assert.equal(store.hasActiveWork({ s1: { runs: [{ status: 'done' }] }, s2: {}, s3: { scenes: [] } }), false);
   // Ảnh 2K lỗi vẫn còn trong danh sách chờ nhưng không còn tác vụ nào chạy → không được khóa xóa/dọn.
   assert.equal(store.hasActiveWork({ s1: { runs: [{ status: 'done', preview2kPending: ['ref'] }] }, s2: {}, s3: { scenes: [] } }), false);
+  // Bước 4 đang chờ/chạy cũng là việc_active: không được xóa dự án hay dọn dẹp.
+  assert.equal(store.hasActiveWork({ s1: {}, s2: {}, s3: { scenes: [{ runs: [], logoRemoval: { status: 'waiting_ok' } }] } }), true);
+  assert.equal(store.hasActiveWork({ s1: {}, s2: {}, s3: { scenes: [{ runs: [], logoRemoval: { status: 'approved' } }] } }), false);
+  assert.equal(store.hasActiveWork({ s1: {}, s2: {}, s3: { scenes: [{ runs: [], logoRemoval: { status: 'error' } }] } }), false);
 });
 
 test('safeName avoids Windows reserved names and trailing dots/spaces', () => {

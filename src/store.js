@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const cfg = require('./config');
 const { cleanPrompt, cleanPromptsIn } = require('./prompt-cleanup');
 const { imageDimensions, is2kForReference } = require('./image');
+const { normalizeLogoRemoval, logoRemovalPending } = require('./workflow');
 
 const projectsDir = () => path.join(cfg.dataDir, 'projects');
 const kocDir = () => path.join(cfg.dataDir, 'koc');
@@ -87,7 +88,8 @@ function hasActiveWork(proj) {
       run.status === 'running' ||
       run.upgrading === true
     ) ||
-    state.chosen?.status === 'saving'
+    state.chosen?.status === 'saving' ||
+    logoRemovalPending(state)
   );
 }
 
@@ -165,6 +167,7 @@ function normalizeProject(p) {
   for (const sc of p.s3.scenes) {
     if (!Array.isArray(sc.runs)) sc.runs = [];
     if (!Array.isArray(sc.extras)) sc.extras = [];
+    sc.logoRemoval = normalizeLogoRemoval(sc.logoRemoval);
   }
   const allRuns = [p.s1, p.s2, ...p.s3.scenes].flatMap((st) => st.runs);
   for (const r of allRuns) {

@@ -5,10 +5,11 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage } = require('./src/workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, allLogoRemovalDone, logoCleanupTargets, normalizeLogoRemoval } = require('./src/workflow');
 const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
+const firefly = require('./src/firefly');
 
 const PORT = Number(process.env.PORT) || 4177;
 const APP_ID = 'flow-lookbook';
@@ -152,11 +153,28 @@ app.post('/api/config', (req, res) => {
   if (typeof req.body.hqIntermediate === 'boolean') patch.hqIntermediate = req.body.hqIntermediate;
   if (typeof req.body.fastMode === 'boolean') patch.fastMode = req.body.fastMode;
   if (typeof req.body.autoCleanOldInstallers === 'boolean') patch.autoCleanOldInstallers = req.body.autoCleanOldInstallers;
+  if (typeof req.body.removeLogoEnabled === 'boolean') patch.removeLogoEnabled = req.body.removeLogoEnabled;
+  if (typeof req.body.fireflyHomeUrl === 'string' && req.body.fireflyHomeUrl.trim()) patch.fireflyHomeUrl = req.body.fireflyHomeUrl.trim();
+  if (req.body.logoRemoveMask && typeof req.body.logoRemoveMask === 'object') {
+    const m = req.body.logoRemoveMask;
+    const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    const cur = cfg.get().logoRemoveMask || {};
+    patch.logoRemoveMask = {
+      xPct: Math.min(100, Math.max(0, num(m.xPct, cur.xPct ?? 84.375))),
+      yPct: Math.min(100, Math.max(0, num(m.yPct, cur.yPct ?? 91.352))),
+      wPct: Math.min(100, Math.max(0.1, num(m.wPct, cur.wPct ?? 6.12))),
+      hPct: Math.min(100, Math.max(0.1, num(m.hPct, cur.hPct ?? 3.343))),
+    };
+  }
   if (Number.isInteger(req.body.maxChromeTabs)) patch.maxChromeTabs = Math.min(32, Math.max(4, req.body.maxChromeTabs));
   if (Number.isInteger(req.body.maxParallelRuns)) patch.maxParallelRuns = Math.min(8, Math.max(1, req.body.maxParallelRuns));
   if (Number.isInteger(req.body.concurrent2k)) patch.concurrent2k = Math.min(16, Math.max(1, req.body.concurrent2k));
+  const logoJustEnabled = patch.removeLogoEnabled === true && !cfg.get().removeLogoEnabled;
   cfg.set(patch);
   res.json({ ok: true });
+  if (logoJustEnabled) {
+    for (const meta of store.list()) queueLogoRemoval(meta.id).catch((e) => appendLog('logo remove enable queue err: ' + (e?.message || e)));
+  }
 });
 
 app.get('/api/templates', (req, res) => res.json(store.templates()));
@@ -168,7 +186,7 @@ app.get('/api/flow/status', async (req, res) => {
   const st = await flow.status();
   // vừa đăng nhập xong thì tự thu nhỏ cửa sổ Chrome: từ đây tool chạy ngầm
   if (loginPending && st.loggedIn) { loginPending = false; setTimeout(() => flow.hide(), 3000); }
-  res.json({ ...st, paused, queued: queue.length, auto: autoOn, interrupted: interruptedCount });
+  res.json({ ...st, paused, queued: queue.length, auto: autoOn, interrupted: interruptedCount, fireflyQuotaPaused: !!logoRemovePausedQuota });
 });
 app.post('/api/auto', (req, res) => { setAuto(!!req.body.on); if (autoOn) resumeAuto(); res.json({ auto: autoOn }); });
 app.post('/api/flow/resume', (req, res) => { setPaused(null); pump(); resumePendingSharpUpgrades(); res.json({ ok: true }); });
@@ -205,6 +223,16 @@ app.delete('/api/projects/:id/runs/:rid', async (req, res) => {
 });
 app.post('/api/flow/open', async (req, res) => {
   try { await flow.open(); const st = await flow.status(); loginPending = !st.loggedIn; res.json(st); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/firefly/status', async (req, res) => {
+  try { res.json(await firefly.status()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/firefly/open', async (req, res) => {
+  try { res.json(await firefly.open()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/firefly/reveal', async (req, res) => {
+  try { await firefly.reveal(); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Mở Flow ở đúng dự án đang gặp lỗi (body: { url } hoặc { projectId, stage, sceneId })
@@ -426,7 +454,7 @@ function projectHasActiveWork(p) {
 function removeStaleTemp(dir) {
   try {
     for (const f of fs.readdirSync(dir)) {
-      if (/\.(pending|part)-/i.test(f)) fs.rmSync(path.join(dir, f), { force: true });
+      if (/\.(pending|part)-|\.part$/i.test(f)) fs.rmSync(path.join(dir, f), { force: true });
     }
   } catch (_) {}
 }
@@ -823,6 +851,7 @@ function cancelProjectWork(projectId) {
   timer.unref?.();
   for (let i = queue.length - 1; i >= 0; i--) if (queue[i].projectId === projectId) queue.splice(i, 1);
   flow.closeProjectTabs(projectId).catch(() => {});
+  firefly.closeProjectTabs(projectId).catch(() => {});
 }
 // { at, message } khi Flow cảnh báo hoạt động bất thường. Lưu ra file để khởi động lại tool KHÔNG làm mất lệnh dừng an toàn này.
 const pausedFile = path.join(cfg.dataDir, 'paused.json');
@@ -1185,6 +1214,70 @@ function sceneTargetPath(p, sceneId) {
   }
   return target;
 }
+
+function logoRemovalDirFor(p) {
+  const dir = path.join(store.outputDirFor(p), 'anhdaxoalogo');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function logoCleanTargetPath(p, sceneId) {
+  const dir = logoRemovalDirFor(p);
+  const idx = p.s3.scenes.findIndex((s) => s.id === sceneId);
+  const order = store.sceneOrder(p, sceneId) || (idx + 1);
+  const base = `${String(order).padStart(2, '0')}-${store.safeName(p.name)}`;
+  return path.join(dir, `${base}.png`);
+}
+function logoRemovalEnabled() { return !!cfg.get().removeLogoEnabled; }
+function sceneWantsLogoRemoval(sc) {
+  return !!(sc?.chosen?.status === 'saved' && sc?.chosen?.target);
+}
+function allStep3Saved(p) {
+  return p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen?.status === 'saved');
+}
+function shouldStartLogoRemoval(p) {
+  return logoRemovalEnabled() && allStep3Saved(p);
+}
+function cleanupLogoOriginalsIfComplete(p) {
+  const approved = logoCleanupTargets(p);
+  if (!approved.length) return false;
+  let changed = false;
+  for (const s of approved) {
+    const t = s.chosen?.target;
+    // Chỉ xóa ảnh gốc khi file ảnh sạch tương ứng vẫn còn trên đĩa.
+    if (t && fs.existsSync(t) && fs.existsSync(s.logoRemoval.cleanFile)) {
+      try { fs.rmSync(t, { force: true }); changed = true; } catch (_) {}
+    }
+  }
+  if (changed) p.cleanedLogosAt = Date.now();
+  return changed;
+}
+function ensureLogoRemovalState(p) {
+  if (!shouldStartLogoRemoval(p)) return false;
+  let changed = false;
+  for (const sc of p.s3.scenes) {
+    if (!sceneWantsLogoRemoval(sc)) continue;
+    if (!sc.logoRemoval) {
+      sc.logoRemoval = {
+        status: 'queued',
+        code: '',
+        error: '',
+        note: 'Chờ xóa logo sau Bước 3',
+        sourceTarget: sc.chosen.target,
+        cleanFile: '',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      changed = true;
+    }
+    // error/quota_blocked/approved/skipped là trạng thái cuối do người dùng quản lý:
+    // không tự chạy lại ở đây (chỉ “Làm lại” / “Đã kết nối Gmail khác” mới reset).
+  }
+  return changed;
+}
+
+function findLogoRemovalScene(p, sceneId) {
+  return p?.s3?.scenes?.find((s) => s.id === sceneId) || null;
+}
 app.post('/api/projects/:id/approve', async (req, res) => {
   try {
     const out = await writeLock.run(() => {
@@ -1212,8 +1305,14 @@ app.post('/api/projects/:id/approve', async (req, res) => {
         startUpgrade = st.hq?.status === 'loading';
         completeNow = !startUpgrade && autoOn;
       } else {
+        const prev = st.chosen;
         st.chosen = { runId, imageId, status: autoOn ? 'saving' : 'manual' };
         st.chosen.target = sceneTargetPath(p, sceneId);
+        if (prev && (prev.runId !== runId || prev.imageId !== imageId)) {
+          // Chọn ảnh khác thì kết quả xóa logo cũ không còn đại diện cho cảnh này.
+          if (st.logoRemoval) firefly.discardScene({ projectId: p.id, sceneId }).catch(() => {});
+          st.logoRemoval = null;
+        }
       }
       pushProject(p);
       return { p, img, stage, sceneId, startUpgrade, completeNow };
@@ -1240,7 +1339,13 @@ app.post('/api/projects/:id/unapprove', async (req, res) => {
       if (!st) return { code: 400, error: 'Không tìm thấy.' };
       const keptFile = stage === 3 ? (st.chosen?.target || null) : null;
       for (const r of st.runs) r.chosen = null;
-      if (stage === 1 || stage === 2) { st.approved = null; st.hq = null; } else st.chosen = null;
+      if (stage === 1 || stage === 2) { st.approved = null; st.hq = null; }
+      else {
+        st.chosen = null;
+        // Bỏ chọn ảnh thì mọi kết quả xóa logo của ảnh cũ cũng không còn đại diện cho cảnh này.
+        if (st.logoRemoval) firefly.discardScene({ projectId: p.id, sceneId }).catch(() => {});
+        st.logoRemoval = null;
+      }
       pushProject(p);
       return { keptFile };
     });
@@ -1345,6 +1450,17 @@ app.post('/api/projects/:id/manual-hq', express.raw({ type: () => true, limit: '
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
+function isInside(dir, file) {
+  if (!file) return false;
+  const rel = path.relative(path.resolve(dir), path.resolve(file));
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+function discardOldCleanFile(p, oldFile, newFile) {
+  if (!oldFile || oldFile === newFile) return;
+  const dir = path.join(store.outputDirFor(p), 'anhdaxoalogo');
+  if (isInside(dir, oldFile)) fs.rmSync(oldFile, { force: true });
+}
+
 // Hoàn tất: xóa vĩnh viễn ảnh trung gian bước 1, 2 (thư mục _tam), chỉ giữ ảnh cuối của bước 3
 app.post('/api/projects/:id/finish', async (req, res) => {
   try {
@@ -1353,9 +1469,12 @@ app.post('/api/projects/:id/finish', async (req, res) => {
       const ok = p.s3.scenes.length > 0 && p.s3.scenes.every((s) => s.chosen?.status === 'saved');
       if (!ok) return { code: 400, error: 'Cần chọn và lưu xong ảnh 2K cho tất cả các cảnh ở bước 3 trước.' };
       if (projectHasActiveWork(p)) return { code: 409, error: 'Dự án còn đang chạy hoặc đang tải ảnh 2K. Hãy đợi xong rồi dọn dẹp.' };
+      const pendingLogo = p.s3.scenes.some((s) => LOGO_PENDING_STATUSES.includes(s.logoRemoval?.status));
+      if (pendingLogo) return { code: 409, error: 'Còn cảnh đang xóa logo/chờ xác nhận. Hãy xử lý xong Bước 4 rồi dọn dẹp.' };
       const tam = path.join(store.outputDirFor(p), '_tam');
       fs.rmSync(tam, { recursive: true, force: true });
       removeStaleTemp(store.outputDirFor(p));
+      removeStaleTemp(path.join(store.outputDirFor(p), 'anhdaxoalogo'));
       p.cleaned = Date.now(); pushProject(p);
       return { ok: true };
     });
@@ -1365,10 +1484,175 @@ app.post('/api/projects/:id/finish', async (req, res) => {
 });
 // xem ảnh 2K đã lưu của một cảnh ngay trong tool
 app.get('/files/saved/:id/:sid', (req, res) => {
-  const p = store.load(req.params.id); const t = p?.s3.scenes.find((x) => x.id === req.params.sid)?.chosen?.target;
+  const p = store.load(req.params.id);
+  const sc = p?.s3.scenes.find((x) => x.id === req.params.sid);
+  const clean = req.query.clean === '1';
+  const t = clean ? sc?.logoRemoval?.cleanFile : sc?.chosen?.target;
   if (!t || !fs.existsSync(t)) return res.sendStatus(404);
   res.set('Cache-Control', 'no-store'); res.sendFile(t);
 });
+
+const logoRemoveQueue = [];
+let logoRemoveActive = false;
+let logoRemovePausedQuota = null; // { at, message }
+
+function logoQueuePump() {
+  if (logoRemoveActive || logoRemovePausedQuota) return;
+  const next = logoRemoveQueue.shift();
+  if (!next) return;
+  logoRemoveActive = true;
+  prepareLogoRemoval(next.projectId, next.sceneId)
+    .catch((e) => appendLog('logo remove prepare err: ' + (e?.message || e)))
+    .finally(() => { logoRemoveActive = false; setImmediate(logoQueuePump); });
+}
+function enqueueLogoRemoval(projectId, sceneId) {
+  if (logoRemoveQueue.some((j) => j.projectId === projectId && j.sceneId === sceneId)) return;
+  logoRemoveQueue.push({ projectId, sceneId });
+  logoQueuePump();
+}
+async function queueLogoRemoval(projectId) {
+  await writeLock.run(() => {
+    const p = store.load(projectId);
+    if (!p || !shouldStartLogoRemoval(p)) return;
+    ensureLogoRemovalState(p);
+    for (const sc of p.s3.scenes) {
+      if (sc.logoRemoval?.status === 'queued') enqueueLogoRemoval(projectId, sc.id);
+    }
+    pushProject(p);
+  });
+}
+
+async function prepareLogoRemoval(projectId, sceneId) {
+  if (logoRemovePausedQuota) return;
+  const prep = await writeLock.run(() => {
+    const p = store.load(projectId);
+    if (!p || !logoRemovalEnabled() || !allStep3Saved(p)) return null;
+    const sc = p.s3.scenes.find((s) => s.id === sceneId);
+    if (!sc?.chosen?.target || !fs.existsSync(sc.chosen.target)) {
+      if (sc?.logoRemoval) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Không tìm thấy ảnh 2K Bước 3 để xóa logo.'; sc.logoRemoval.updatedAt = Date.now(); pushProject(p); }
+      return null;
+    }
+    if (!sc.logoRemoval) sc.logoRemoval = normalizeLogoRemoval({ status: 'queued', sourceTarget: sc.chosen.target, createdAt: Date.now() });
+    if (['waiting_ok', 'downloading', 'approved', 'skipped', 'error', 'quota_blocked'].includes(sc.logoRemoval.status)) return null;
+    sc.logoRemoval.status = 'preparing';
+    sc.logoRemoval.code = '';
+    sc.logoRemoval.error = '';
+    sc.logoRemoval.note = 'Đang chuẩn bị xóa logo trên Firefly…';
+    sc.logoRemoval.sourceTarget = sc.chosen.target;
+    sc.logoRemoval.updatedAt = Date.now();
+    pushProject(p);
+    return { imagePath: sc.chosen.target };
+  });
+  if (!prep) return;
+  try {
+    await firefly.prepareScene({
+      projectId, sceneId, imagePath: prep.imagePath,
+      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled(),
+      onPhase: (note) => writeLock.run(() => {
+        const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+        if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
+        sc.logoRemoval.note = note; sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+      }).catch(() => {}),
+    });
+    await writeLock.run(() => {
+      const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+      if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
+      sc.logoRemoval.status = 'waiting_ok';
+      sc.logoRemoval.note = 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
+      sc.logoRemoval.code = '';
+      sc.logoRemoval.error = '';
+      sc.logoRemoval.updatedAt = Date.now();
+      pushProject(p);
+    });
+  } catch (e) {
+    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached/i.test(String(e?.message || ''));
+    await writeLock.run(() => {
+      const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+      if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
+      sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
+      sc.logoRemoval.code = e?.code || '';
+      sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi xóa logo.');
+      sc.logoRemoval.note = sc.logoRemoval.error;
+      sc.logoRemoval.updatedAt = Date.now();
+      pushProject(p);
+    });
+    if (quota) {
+      // Giữ hàng đợi lại, không bỏ cảnh của dự án khác; chỉ tạm dừng cho đến khi user đổi tài khoản.
+      logoRemovePausedQuota = { at: Date.now(), message: 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' };
+    }
+  }
+}
+
+async function downloadLogoRemoval(projectId, sceneId) {
+  const prep = await writeLock.run(() => {
+    const p = store.load(projectId); if (!p) return { code: 404 };
+    const sc = p.s3.scenes.find((s) => s.id === sceneId);
+    if (!sc?.logoRemoval) return { code: 400, error: 'Cảnh này chưa có trạng thái xóa logo.' };
+    if (sc.logoRemoval.status !== 'waiting_ok') return { code: 400, error: 'Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Ổn”.' };
+    const target = logoCleanTargetPath(p, sceneId);
+    const oldClean = sc.logoRemoval.cleanFile;
+    sc.logoRemoval.status = 'downloading';
+    sc.logoRemoval.code = '';
+    sc.logoRemoval.error = '';
+    sc.logoRemoval.note = 'Đang tải ảnh sạch từ Firefly…';
+    sc.logoRemoval.updatedAt = Date.now();
+    pushProject(p);
+    return { target, source: sc.chosen?.target, oldClean };
+  });
+  if (prep.code) return prep;
+  try {
+    const result = await firefly.downloadPrepared({
+      projectId, sceneId, targetPath: prep.target,
+      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled(),
+      onPhase: (note) => writeLock.run(() => {
+        const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+        if (!sc?.logoRemoval || sc.logoRemoval.status !== 'downloading') return;
+        sc.logoRemoval.note = note; sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+      }).catch(() => {}),
+    });
+    await writeLock.run(() => {
+      const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+      if (!sc?.logoRemoval) return;
+      // Validate dimensions roughly match source if available.
+      const srcSize = prep.source && fs.existsSync(prep.source) ? imageDimensions(prep.source) : null;
+      const okSize = !srcSize || (result.width === srcSize.width && result.height === srcSize.height);
+      if (!okSize) {
+        sc.logoRemoval.status = 'error';
+        sc.logoRemoval.error = `Ảnh tải về ${result.width}×${result.height} khác kích thước gốc ${srcSize.width}×${srcSize.height}.`;
+        sc.logoRemoval.note = sc.logoRemoval.error;
+        try { fs.rmSync(result.file, { force: true }); } catch (_) {}
+        sc.logoRemoval.updatedAt = Date.now();
+        pushProject(p);
+        return;
+      }
+      discardOldCleanFile(p, prep.oldClean, result.file);
+      sc.logoRemoval.status = 'approved';
+      sc.logoRemoval.cleanFile = result.file;
+      sc.logoRemoval.code = '';
+      sc.logoRemoval.error = '';
+      sc.logoRemoval.note = 'Đã lưu ảnh sạch vào thư mục anhdaxoalogo.';
+      sc.logoRemoval.updatedAt = Date.now();
+      cleanupLogoOriginalsIfComplete(p);
+      pushProject(p);
+    });
+    await firefly.discardScene({ projectId, sceneId }).catch(() => {});
+    return { ok: true };
+  } catch (e) {
+    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached/i.test(String(e?.message || ''));
+    await writeLock.run(() => {
+      const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+      if (!sc?.logoRemoval) return;
+      sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
+      sc.logoRemoval.code = e?.code || '';
+      sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi tải ảnh sạch.');
+      sc.logoRemoval.note = sc.logoRemoval.error;
+      sc.logoRemoval.updatedAt = Date.now();
+      pushProject(p);
+    });
+    if (quota) logoRemovePausedQuota = { at: Date.now(), message: 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' };
+    return { code: 400, error: e?.message || 'Lỗi tải ảnh sạch.' };
+  }
+}
 
 async function save2k(projectId, sceneId, img) {
   const initial = store.load(projectId);
@@ -1407,6 +1691,7 @@ async function save2k(projectId, sceneId, img) {
     const tmpFinal = `${finalTarget}.part-${store.uid(3)}`;
     fs.copyFileSync(downloaded, tmpFinal);
     fs.renameSync(tmpFinal, finalTarget);
+    let shouldQueueLogo = false;
     await writeLock.run(() => {
       const latest = isCurrent();
       if (!latest) { fs.rmSync(finalTarget, { force: true }); return; }
@@ -1414,8 +1699,10 @@ async function save2k(projectId, sceneId, img) {
       current.status = 'saved';
       current.target = finalTarget;
       delete current.error;
+      if (ensureLogoRemovalState(latest)) shouldQueueLogo = true;
       pushProject(latest);
     });
+    if (shouldQueueLogo) queueLogoRemoval(projectId).catch((e) => appendLog('logo remove queue err: ' + (e?.message || e)));
   } catch (e) {
     await writeLock.run(() => {
       const latest = isCurrent(true);
@@ -1439,6 +1726,8 @@ app.post('/api/projects/:id/retry-save', async (req, res) => {
       if (!img) return { code: 400, error: 'Không tìm thấy ảnh đã chọn để lưu lại.' };
       if (!s.chosen.target) s.chosen.target = sceneTargetPath(p, s.id);
       s.chosen.status = 'saving'; delete s.chosen.error;
+      // Reset logo removal for this scene because source 2K will change.
+      if (s.logoRemoval && s.logoRemoval.status !== 'approved') s.logoRemoval = null;
       pushProject(p);
       return { p, s, img };
     });
@@ -1446,6 +1735,87 @@ app.post('/api/projects/:id/retry-save', async (req, res) => {
     res.json({ ok: true });
     save2k(out.p.id, out.s.id, out.img);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:id/logo-remove/ok', async (req, res) => {
+  try {
+    const { sceneId } = req.body || {};
+    const result = await downloadLogoRemoval(req.params.id, sceneId);
+    if (result?.code) return res.status(result.code).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:id/logo-remove/retry', async (req, res) => {
+  try {
+    const { sceneId } = req.body || {};
+    const out = await writeLock.run(() => {
+      const p = store.load(req.params.id); if (!p) return { code: 404 };
+      const sc = findLogoRemovalScene(p, sceneId); if (!sc) return { code: 404, error: 'Không tìm thấy cảnh.' };
+      if (!sc.chosen?.target || !fs.existsSync(sc.chosen.target)) return { code: 400, error: 'Không tìm thấy ảnh 2K Bước 3 để xóa logo.' };
+      if (sc.logoRemoval?.status === 'approved') return { code: 400, error: 'Cảnh này đã có ảnh sạch được xác nhận.' };
+      sc.logoRemoval = { status: 'queued', code: '', error: '', note: 'Chờ xóa logo sau Bước 3', sourceTarget: sc.chosen.target, cleanFile: '', createdAt: Date.now(), updatedAt: Date.now() };
+      logoRemovePausedQuota = null;
+      pushProject(p);
+      return { ok: true };
+    });
+    if (out.code) return res.status(out.code).json({ error: out.error });
+    enqueueLogoRemoval(req.params.id, sceneId);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:id/logo-remove/skip', async (req, res) => {
+  try {
+    const { sceneId } = req.body || {};
+    const out = await writeLock.run(() => {
+      const p = store.load(req.params.id); if (!p) return { code: 404 };
+      const sc = findLogoRemovalScene(p, sceneId); if (!sc) return { code: 404, error: 'Không tìm thấy cảnh.' };
+      if (!sc.logoRemoval || !LOGO_PENDING_STATUSES.includes(sc.logoRemoval.status)) return { code: 400, error: 'Chỉ có thể bỏ qua cảnh đang chờ xử lý logo.' };
+      firefly.discardScene({ projectId: p.id, sceneId }).catch(() => {});
+      sc.logoRemoval.status = 'skipped';
+      sc.logoRemoval.code = '';
+      sc.logoRemoval.error = '';
+      sc.logoRemoval.note = 'Bạn đã bỏ qua xóa logo; ảnh gốc có logo được giữ lại.';
+      sc.logoRemoval.updatedAt = Date.now();
+      cleanupLogoOriginalsIfComplete(p);
+      pushProject(p);
+      return { ok: true };
+    });
+    if (out.code) return res.status(out.code).json({ error: out.error });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
+  try {
+    logoRemovePausedQuota = null;
+    await writeLock.run(() => {
+      const p = store.load(req.params.id); if (!p) return;
+      let changed = false;
+      for (const sc of p.s3.scenes) {
+        if (sc.logoRemoval?.status === 'quota_blocked') {
+          sc.logoRemoval.status = 'queued';
+          sc.logoRemoval.code = '';
+          sc.logoRemoval.error = '';
+          sc.logoRemoval.note = 'Chờ xóa logo sau Bước 3';
+          sc.logoRemoval.updatedAt = Date.now();
+          changed = true;
+        }
+      }
+      if (changed) pushProject(p);
+    });
+    await queueLogoRemoval(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:id/open-logo-output', (req, res) => {
+  const p = store.load(req.params.id);
+  if (!p) return res.sendStatus(404);
+  const dir = logoRemovalDirFor(p);
+  require('child_process').spawn('explorer.exe', [dir], { detached: true, stdio: 'ignore' }).unref();
+  res.json({ ok: true });
 });
 
 // Lấy lại bản ảnh NÉT (2K) cho 1 lượt cũ (ảnh xem trước đã lưu là bản nhỏ).
@@ -1537,6 +1907,7 @@ function recoverInterruptedRuns() {
       }
     }
     for (const sc of p.s3.scenes) if (sc.chosen?.status === 'saving') { sc.chosen.status = 'error'; sc.chosen.error = 'Bị gián đoạn khi lưu 2K. Bấm “Lưu lại”.'; n++; }
+    for (const sc of p.s3.scenes) if (['queued', 'preparing', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
     if (n) { store.save(p); removeStaleTemp(store.outputDirFor(p)); interruptedCount += n; }
   }
 }
@@ -1569,7 +1940,12 @@ try {
 } catch (_) {}
 // Dọn tab Flow còn sót từ lần chạy trước (dự án có thể đã bị xóa nhưng tab vẫn mở khiến Flow chạy tiếp).
 // Phải xong việc dọn rồi mới bắt đầu lấy lại 2K, tránh đóng nhầm tab vừa mở.
-flow.closeStrayTabs().catch(() => {}).finally(() => { if (!paused) resumePendingSharpUpgrades(true); });
+flow.closeStrayTabs().catch(() => {}).finally(() => {
+  if (!paused) resumePendingSharpUpgrades(true);
+  if (logoRemovalEnabled()) {
+    for (const meta of store.list()) queueLogoRemoval(meta.id).catch((e) => appendLog('logo remove resume startup err: ' + (e?.message || e)));
+  }
+});
 
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Flow Lookbook đang chạy: http://localhost:${PORT}\n`);

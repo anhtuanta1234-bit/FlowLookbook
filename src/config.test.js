@@ -16,6 +16,8 @@ function readConfig(env, action = '') {
       outputRoot: cfg.get().outputRoot,
       fixedOutputRoot: cfg.fixedOutputRoot,
       hasSavedOutputRoot: cfg.hasSavedOutputRoot(),
+      removeLogoEnabled: cfg.get().removeLogoEnabled,
+      logoRemoveMask: cfg.get().logoRemoveMask,
     }));
   `;
   return JSON.parse(execFileSync(process.execPath, ['-e', script], {
@@ -36,6 +38,26 @@ test('máy có đường dẫn cố định: ảnh luôn vào FLOW_OUTPUT_ROOT v
 
     const afterSave = readConfig(env, `cfg.set({ outputRoot: ${JSON.stringify(other)} });`);
     assert.equal(afterSave.outputRoot, out, 'set() phải bỏ qua thư mục khác trên máy này');
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('xóa logo tắt mặc định và vùng mask được giới hạn trong khung ảnh', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-config-logo-'));
+  const env = { FLOW_DATA_DIR: path.join(base, 'data'), FLOW_DISABLE_FIXED_OUTPUT: '1' };
+  try {
+    const fresh = readConfig(env);
+    assert.equal(fresh.removeLogoEnabled, false);
+    assert.deepEqual(fresh.logoRemoveMask, { xPct: 84.375, yPct: 91.352, wPct: 6.12, hPct: 3.343 });
+
+    const action = `cfg.set({ removeLogoEnabled: true, logoRemoveMask: { xPct: 120, yPct: -5, wPct: 50, hPct: 30 } });`;
+    const saved = readConfig(env, action);
+    assert.equal(saved.removeLogoEnabled, true);
+    assert.equal(saved.logoRemoveMask.xPct, 99);
+    assert.equal(saved.logoRemoveMask.yPct, 0);
+    assert.ok(saved.logoRemoveMask.wPct <= 100 - saved.logoRemoveMask.xPct);
+    assert.ok(saved.logoRemoveMask.hPct <= 100 - saved.logoRemoveMask.yPct);
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
