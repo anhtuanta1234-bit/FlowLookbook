@@ -3,16 +3,12 @@
 ## Unreleased
 
 ## v1.1.34 - 2026-11-25
+## v1.1.34 - 2026-11-25
 - Sửa đúng lỗi dừng ở bước tải ảnh lên Firefly: tool chỉ quét 10 lớp shadow root nên tưởng editor chưa tải và báo nhầm “Chưa đăng nhập Adobe Firefly”, giờ quét 26 lớp và vào thẳng trang chỉnh sửa.
 - Thêm chọn khung hình chuẩn 9:16 trong Firefly (Cắt và mở rộng → Thêm → 9:16 → Cắt) ngay sau khi tải ảnh 2K lên, trước khi tô vùng logo, và tự xác nhận hộp “Confirm crop” nếu Adobe hiện ra.
 - Cọ xóa logo giờ tự chỉnh cỡ đủ phủ và quét nhiều lượt kín vùng logo, không sót chữ ở góc ảnh.
 - Thêm Bước 4 “Xóa logo” thành một bước riêng ngay sau Bước 3: dọn xong ảnh 2K là app tự chuyển sang Bước 4, xem được từng thao tác Firefly đang chạy (9:16 → Chấm sửa và xóa → cọ → Xóa → bạn bấm Ổn → tool bấm Tải xuống) theo thời gian thực.
 - Bước 4 hiện trạng thái từng cảnh, nhật ký thao tác, nút Ổn / làm lại / bỏ qua / tiếp tục sau đổi Gmail ngay trong giao diện.
-
-
-## v1.1.33 - 2026-11-25
-- Sửa lỗi không tải được ảnh 2K lên Firefly: giao diện hiện ghi nút là “Tải lên” thay vì “Tải ảnh lên”, tool giờ nhận diện cả hai ở bước kiểm tra editor lẫn bước bấm upload.
-- Lỗi upload giờ báo kèm trạng thái Firefly (địa chỉ, có input file, số nút active) để dễ tra cứu khi giao diện Adobe đổi tiếp.
 
 
 ## v1.1.32 - 2026-11-25
