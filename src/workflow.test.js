@@ -1,6 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, appendLogoPhase, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
+
+test('nhật ký Bước 4 ghi từng thao tác Firefly và bỏ trùng liên tiếp', () => {
+  const lr = { status: 'preparing' };
+  appendLogoPhase(lr, 'Đang bấm công cụ Chấm sửa và xóa…');
+  appendLogoPhase(lr, 'Đang bấm công cụ Chấm sửa và xóa…');
+  appendLogoPhase(lr, 'Đang chỉnh cỡ cọ đủ phủ logo và tô vùng logo…');
+  assert.equal(lr.phases.length, 2);
+  assert.equal(lr.phases[0].note, 'Đang bấm công cụ Chấm sửa và xóa…');
+  assert.ok(lr.phases[0].at > 0);
+  assert.equal(normalizeLogoRemoval(lr).phases.length, 2);
+});
 
 test('automatic HQ completion persists the next stage and event together', () => {
   const project = { stage: 2, maxStage: 2 };

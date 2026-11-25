@@ -171,3 +171,28 @@ test('đổi raw URL thành đúng GitHub Releases API cùng repo', () => {
     'https://api.github.com/repos/anhtuanta1234-bit/FlowLookbook/releases/latest',
   );
 });
+
+test('thanh bước có Bước 4 nối ngay sau Bước 3 và chỉ xong khi ảnh sạch có đủ', () => {
+  assert.match(src, /\{ n: 4, t: 'Xóa logo'/, 'Phải có tab Bước 4');
+  assert.match(src, /if \(!p\.cleaned \|\| !scenes\.length\) return false;/, 'Chưa dọn xong thì Bước 4 chưa xong');
+  assert.match(src, /scenes\.every\(\(s\) => \['approved', 'skipped'\]\.includes\(s\.logoRemoval\?\.status\)\)/, 'Mọi cảnh phải có ảnh sạch hoặc được bỏ qua');
+  assert.match(src, /S\.stage === 4 \? \[\] : p\[PK\[S\.stage\]\]\.runs/, 'Bước 4 không đọc runs của Flow');
+});
+
+test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật ký theo thời gian thực', () => {
+  assert.match(src, /const LOGO_FLOW_STEPS = \[[\s\S]*?Cắt ảnh về khung 9:16[\s\S]*?Chấm sửa và xóa[\s\S]*?Chỉnh cỡ cọ & tô vùng logo[\s\S]*?Bấm “Xóa” trên Firefly[\s\S]*?tool bấm “Tải xuống”/);
+  assert.match(src, /id="logoPhaseList"/, 'Phải có danh sách tiến trình Firefly');
+  assert.match(src, /id="logoNow"/, 'Phải hiện thao tác đang chạy');
+  assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
+  assert.match(src, /\(lr\.phases \|\| \[\]\)\.slice\(-10\)\.map\(\(x\) =>/, 'Mỗi cảnh phải hiện nhật ký thao tác');
+  assert.match(src, /<div class="phaselist">\$\{phases\}<\/div>/);
+  assert.match(src, /data-act="logook"[\s\S]{0,80}Ổn — tải ảnh sạch/, 'Bấm Ổn mới tải ảnh sạch');
+  assert.match(src, /data-act="opensettings"/, 'Bước 4 phải mở được Cài đặt để chỉnh cọ/mask');
+});
+
+test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {
+  assert.match(src, /async function showStep4IfReady\(\)/);
+  assert.match(src, /fresh\.stage === 4\) \{\s*S\.p = fresh; S\.stage = 4;/, 'Phải đổi stage trên giao diện');
+  assert.match(src, /return showStep4IfReady\(\);/, 'finish phải gọi hàm chuyển bước');
+  assert.match(src, /toast\(`Đã tải\/dọn xong \$\{r\.cleaned\} dự án[\s\S]{0,220}showStep4IfReady\(\)/, 'clean-all cũng phải chuyển bước');
+});

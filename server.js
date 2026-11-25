@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cfg = require('./src/config');
 const store = require('./src/store');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, allLogoRemovalDone, logoCleanupTargets, normalizeLogoRemoval, step3ReadyForLogo, logoResumeStatus } = require('./src/workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, allLogoRemovalDone, logoCleanupTargets, normalizeLogoRemoval, appendLogoPhase, step3ReadyForLogo, logoResumeStatus } = require('./src/workflow');
 const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDimensions, is2kForReference } = require('./src/image');
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
@@ -457,6 +457,10 @@ app.post('/api/projects/clean-all', async (req, res) => {
         removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
         // Mốc "đã tải hết ảnh về": Bước 4 chỉ được phép bắt đầu từ đây.
         p.cleaned = Date.now();
+        // Bước 3 vừa xong hành động cuối: mở và tự chuyển giao diện sang Bước 4 nối tiếp.
+        p.maxStage = Math.max(p.maxStage || p.stage || 1, 4);
+        p.stage = 4;
+        p.autoGo = { to: 4, at: Date.now() };
         if (ensureLogoRemovalState(p)) startLogo.push(p.id);
         store.save(p);
         broadcast('project', p);
@@ -559,7 +563,12 @@ app.patch('/api/projects/:id', async (req, res) => {
         if (!p.outputFolder) p.outputFolder = store.outputFolderFor(p);
         p.name = store.safeName(raw);
       }
-      if ([1, 2, 3].includes(b.stage)) {
+      if (b.stage === 4) {
+        // Bước 4 là bước thật, nối ngay sau Bước 3 nhưng chỉ mở sau khi đã tải/dọn xong.
+        if (!step3ReadyForLogo(p)) return { code: 400, error: 'Hoàn tất Bước 3: chọn & lưu hết ảnh 2K rồi bấm “Tải hết ảnh về & Dọn dẹp” xong rồi mới sang Bước 4.' };
+        p.maxStage = Math.max(p.maxStage || p.stage || 1, 4);
+        p.stage = 4;
+      } else if ([1, 2, 3].includes(b.stage)) {
         const max = p.maxStage || p.stage || 1;
         if (b.stage > max && ((b.stage === 2 && !p.s1.approved) || (b.stage === 3 && !p.s2.approved))) {
           return { code: 400, error: `Hoàn tất bước ${b.stage - 1} (chọn 1 ảnh) rồi mới sang bước ${b.stage}.` };
@@ -1505,6 +1514,9 @@ app.post('/api/projects/:id/finish', async (req, res) => {
       removeStaleTemp(outDir);
       removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
       p.cleaned = Date.now();
+      p.maxStage = Math.max(p.maxStage || p.stage || 1, 4);
+      p.stage = 4;
+      p.autoGo = { to: 4, at: Date.now() };
       const startedLogo = ensureLogoRemovalState(p);
       pushProject(p);
       return { ok: true, startedLogo };
@@ -1571,6 +1583,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
     sc.logoRemoval.code = '';
     sc.logoRemoval.error = '';
     sc.logoRemoval.note = 'Đang chuẩn bị xóa logo trên Firefly…';
+    appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
     sc.logoRemoval.sourceTarget = sc.chosen.target;
     sc.logoRemoval.updatedAt = Date.now();
     pushProject(p);
@@ -1584,7 +1597,8 @@ async function prepareLogoRemoval(projectId, sceneId) {
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
-        sc.logoRemoval.note = note; sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+        sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
+        sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
     });
     await writeLock.run(() => {
@@ -1594,6 +1608,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
       // Mốc ảnh ĐÃ tạo xong: nếu tải bị hết lượt thì đổi Gmail chỉ tải lại, không tạo lại.
       sc.logoRemoval.generated = true;
       sc.logoRemoval.note = 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
+      appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
       sc.logoRemoval.updatedAt = Date.now();
@@ -1608,6 +1623,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.code = e?.code || '';
       sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi xóa logo.');
       sc.logoRemoval.note = sc.logoRemoval.error;
+      appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
       pushProject(p);
     });
@@ -1630,6 +1646,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
     sc.logoRemoval.code = '';
     sc.logoRemoval.error = '';
     sc.logoRemoval.note = 'Đang tải ảnh sạch từ Firefly…';
+    appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
     sc.logoRemoval.updatedAt = Date.now();
     pushProject(p);
     return { target, source: sc.chosen?.target, oldClean };
@@ -1643,7 +1660,8 @@ async function downloadLogoRemoval(projectId, sceneId) {
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'downloading') return;
-        sc.logoRemoval.note = note; sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+        sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
+        sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
     });
     await writeLock.run(() => {
@@ -1667,6 +1685,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
       sc.logoRemoval.note = 'Đã lưu ảnh sạch vào thư mục anhdaxoalogo.';
+      appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
       cleanupLogoOriginalsIfComplete(p);
       pushProject(p);
@@ -1685,6 +1704,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.note = quota
         ? 'Ảnh đã tạo xong trên Firefly. Đăng nhập Gmail khác rồi bấm “Đã kết nối Gmail khác”; tool sẽ chỉ tải lại ảnh này, không tạo lại.'
         : sc.logoRemoval.error;
+      appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
       pushProject(p);
     });

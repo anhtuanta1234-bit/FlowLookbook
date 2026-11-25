@@ -69,12 +69,26 @@ const LOGO_PENDING_STATUSES = ['queued', 'preparing', 'waiting_ok', 'downloading
 const LOGO_DONE_STATUSES = ['approved', 'skipped'];
 const LOGO_STATUSES = [...LOGO_PENDING_STATUSES, ...LOGO_DONE_STATUSES, 'error', 'quota_blocked'];
 
+const LOGO_PHASE_LIMIT = 24;
+
+// Nhật ký từng thao tác Firefly để giao diện Bước 4 nhìn thấy công đoạn đang chạy.
+function appendLogoPhase(lr, note) {
+  if (!lr || !note) return;
+  if (!Array.isArray(lr.phases)) lr.phases = [];
+  const text = String(note).replace(/\s+/g, ' ').trim();
+  const last = lr.phases[lr.phases.length - 1];
+  if (last && last.note === text) return;
+  lr.phases.push({ note: text, at: Date.now() });
+  if (lr.phases.length > LOGO_PHASE_LIMIT) lr.phases.splice(0, lr.phases.length - LOGO_PHASE_LIMIT);
+}
+
 function normalizeLogoRemoval(lr) {
   if (!lr || typeof lr !== 'object') return null;
   const known = LOGO_STATUSES.includes(lr.status);
   const status = known ? lr.status : 'queued';
   const str = (v) => (typeof v === 'string' ? v : '');
   const out = { ...lr, status, code: str(lr.code), error: str(lr.error), note: str(lr.note), cleanFile: str(lr.cleanFile), sourceTarget: str(lr.sourceTarget) };
+  out.phases = Array.isArray(lr.phases) ? lr.phases.slice(-LOGO_PHASE_LIMIT) : [];
   // Trạng thái lạ (dữ liệu cũ/sửa tay) không được giữ cleanFile của ảnh khác.
   if (!known) out.cleanFile = '';
   return out;
@@ -110,4 +124,4 @@ function logoResumeStatus(lr, hasSceneTab = false) {
   return lr.generated && hasSceneTab ? 'waiting_ok' : 'queued';
 }
 
-module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, normalizeLogoRemoval, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets };
+module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, LOGO_PHASE_LIMIT, normalizeLogoRemoval, appendLogoPhase, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets };

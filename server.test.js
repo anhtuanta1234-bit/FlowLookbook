@@ -63,3 +63,20 @@ test('đổi hoặc bỏ chọn ảnh Bước 3 thì khóa lại Bước 4', () 
   assert.match(src, /delete p\.cleaned; \/\/ bỏ chọn ảnh Bước 3/);
   assert.match(src, /delete p\.cleaned; \/\/ ảnh 2K sắp đổi/);
 });
+
+test('Bước 4 là bước thật: chỉ mở sau dọn xong, tự chuyển giao diện và ghi nhật ký', () => {
+  const patch = slice("app.patch('/api/projects/:id',", 'const pick =');
+  assert.match(patch, /if \(b\.stage === 4\)/, 'PATCH phải nhận bước 4');
+  assert.match(patch, /if \(!step3ReadyForLogo\(p\)\) return \{ code: 400/, 'chưa dọn xong thì không mở Bước 4');
+  assert.match(patch, /p\.stage = 4/);
+
+  for (const from of ["app.post('/api/projects/clean-all'", "app.post('/api/projects/:id/finish'"]) {
+    const to = from.includes('clean-all') ? 'function projectHasActiveWork' : '// xem ảnh 2K đã lưu';
+    const block = slice(from, to);
+    assert.match(block, /p\.stage = 4/, 'dọn xong phải chuyển hẳn sang Bước 4');
+    assert.match(block, /p\.autoGo = \{ to: 4/, 'phát tín hiệu để giao diện tự sang Bước 4');
+  }
+
+  assert.match(src, /appendLogoPhase\(sc\.logoRemoval, note\)/, 'mỗi phase Firefly phải lưu lại cho giao diện Bước 4');
+  assert.match(src, /appendLogoPhase\(sc\.logoRemoval, sc\.logoRemoval\.note\)/, 'mốc chuyển trạng thái cũng phải hiện trong nhật ký');
+});

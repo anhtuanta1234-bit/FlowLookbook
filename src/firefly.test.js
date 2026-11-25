@@ -73,4 +73,31 @@ test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị �
   assert.match(src, /if \(!\(await waitForFireflyReady\(p\)\)\) throw loginError\(\)/, 'Chưa đăng nhập thì báo lỗi đăng nhập ngay');
   assert.match(src, /if \(state\.login\) return false;[\s\S]*hasEditorApp/, 'Editor chỉ sẵn sàng khi có công cụ xóa');
   assert.match(src, /throw loginError\(\);\n\}/, 'Editor không tải được thì báo đăng nhập rõ ràng');
+  assert.ok(src.includes('depth > 26'), 'Editor nằm sâu hơn 10 lớp shadow root: không được dừng sớm');
+  assert.ok(src.includes("await p.goto(editorUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 })"), 'Vào thẳng editor, không lệ thuộc role của menu');
+});
+
+test('chọn khung hình chuẩn 9:16 trước khi tô vùng logo', () => {
+  assert.ok(src.includes('async function selectAspect916(page)'));
+  assert.ok(src.includes('sp-menu-item[value="9:16"]'), 'Preset 9:16 nằm trong picker "Thêm" của Firefly');
+  assert.ok(src.includes("getByRole('combobox', { name: /^Thêm$|More/i })"), 'Phải mở picker "Thêm" trước khi chọn 9:16');
+  assert.ok(src.includes("getByRole('button', { name: /^Cắt$/i })"), 'Chọn xong phải bấm "Cắt" để áp dụng khung');
+  assert.ok(src.includes('const ratio916 = await selectAspect916(p)'), 'Phải chọn khung ngay sau khi upload, trước khi tô mask');
+  assert.match(src, /const ratio916 = await selectAspect916\(p\)[\s\S]*?applyBrush\(p, cfg\.get\(\)\.logoRemoveMask, imagePath\)/);
+});
+
+test('xác nhận hộp Confirm crop và báo rõ từng thao tác Firefly trên Bước 4', () => {
+  assert.ok(src.includes("getByRole('button', { name: /^Confirm crop$|^Xác nhận cắt$|^Xác nhận$|^Confirm$/i })"), 'Adobe có thể hỏi Confirm crop sau khi bấm Cắt');
+  assert.match(src, /if \(await isClickable\(L\.cropConfirm\(page\)\)\)/, 'Phải xác nhận thì khung 9:16 mới áp dụng');
+  assert.ok(src.includes('Đang bấm công cụ Chấm sửa và xóa…'));
+  assert.ok(src.includes('Đang chỉnh cỡ cọ đủ phủ logo và tô vùng logo…'));
+  assert.ok(src.includes('Đang bấm Xóa để Firefly xóa logo…'));
+  assert.ok(src.includes('Chờ bạn bấm “Ổn” để tải xuống'));
+  assert.ok(src.includes('Đang bấm nút Tải xuống trên Firefly…'), 'Sau khi bấm Ổn thì tool bấm Tải xuống');
+});
+
+test('cọ quét nhiều lượt phủ kín vùng logo, không chỉ một nét giữa', () => {
+  assert.ok(src.includes('const cover = Math.max(6, Math.round(targetBrush * 0.55));'));
+  assert.ok(src.includes('Math.ceil((y2 - y1) / cover) + 1'), 'Số lượt quét phải theo chiều cao vùng logo');
+  assert.match(src, /for \(let i = 0; i < rows; i\+\+\)[\s\S]*?strokes\.push/);
 });
