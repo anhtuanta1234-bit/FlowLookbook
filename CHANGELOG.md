@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.36 - 2026-11-26
+- Gọn giao diện Bước 4: chỉ còn một nút Firefly trên thanh điều khiển; hướng dẫn dài được gập lại.
+- Nút “Đã đổi Gmail khác, tiếp tục” chỉ hiện trên đúng ảnh bị chặn; mỗi ảnh giờ có một nút chính (Ổn / làm lại / tiếp tục), các thao tác phụ gấp vào menu “Thêm”; bỏ nút trùng và rút ngắn tiến trình, hàng chờ, nhật ký.
+
+
 ## v1.1.35 - 2026-11-26
 - Sửa lại thao tác xóa logo Firefly theo đúng cách bạn vừa hướng dẫn: cắt 9:16 xong bấm “Chấm sửa và xóa”, mở “Cài đặt cọ vẽ”, chỉnh cỡ 14, chấm đúng 1 lần vào logo rồi mới bấm “Xóa”.
 - Chọn đúng canvas ảnh 9:16 thay vì canvas nền, nên cọ không còn chấm ngoài ảnh (canvas mask chỉ rộng ~199px nên trước đây bị ngưỡng 200px loại).

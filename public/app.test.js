@@ -88,7 +88,7 @@ test('Bước 3 có nút tải hết ảnh về & dọn dẹp, xong mới sang B
 
 test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo không làm lại ảnh cũ', () => {
   assert.match(src, /Firefly hết lượt free ở <b>/, 'phải báo tên ảnh đang bị chặn');
-  assert.match(src, /đang dùng lượt free hàng ngày\)\. Vui lòng đổi mail khác/, 'phải nói rõ đang dùng lượt free hàng ngày và đổi mail khác');
+  assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'phải nói rõ giới hạn free hàng ngày');
   assert.match(src, /không làm lại ảnh cũ/);
   assert.match(src, /data-act="fireflyopen">Mở Firefly để đổi Gmail/, 'phải có nút mở Firefly để đăng nhập mail khác');
   assert.match(src, /lr\.generated \? ' <span class="badge warn"/, 'ảnh đã tạo phải hiện trạng thái chờ tải lại');
@@ -187,7 +187,7 @@ test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật k
   assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
   assert.match(src, /\(lr\.phases \|\| \[\]\)\.slice\(-10\)\.map\(\(x\) =>/, 'Mỗi cảnh phải hiện nhật ký thao tác');
   assert.match(src, /<div class="phaselist">\$\{phases\}<\/div>/);
-  assert.match(src, /data-act="logook"[\s\S]{0,80}Ổn — tải ảnh sạch/, 'Bấm Ổn mới tải ảnh sạch');
+  assert.match(src, /data-act="logook"[\s\S]{0,80}>Ổn<\/button>/, 'Bấm Ổn mới tải ảnh sạch');
   assert.match(src, /data-act="opensettings"/, 'Bước 4 phải mở được Cài đặt để chỉnh cọ/mask');
 });
 
@@ -213,6 +213,23 @@ test('hàng chờ Bước 4 hiện đúng số ảnh 01, 02, 03 đã đặt từ
   assert.match(src, /Mở anhdaxoalogo/, 'nút mở đúng thư mục anhdaxoalogo');
   assert.match(src, /output\/&lt;project&gt;\/anhdaxoalogo\//, 'hướng dẫn đúng đường dẫn output/<dự án>/anhdaxoalogo');
   assert.match(src, /ảnh số <b>\$\{String\(quotaNo\)\.padStart\(2, '0'\)\}<\/b>/, 'banner hết lượt nói rõ đang chặn ảnh số mấy');
+});
+
+test('Bước 4 gọn hơn: mỗi ảnh 1 nút chính, thao tác phụ gấp vào menu Thêm', () => {
+  const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
+  const scene = src.slice(src.indexOf('function sceneMoreMenu('), src.indexOf('function logoResultsHtml('));
+  const results = src.slice(src.indexOf('function logoResultsHtml('), src.indexOf('const runSig'));
+  assert.ok(!/data-act="fireflyopen"/.test(ctl), 'thanh điều khiển không còn nút Firefly trùng');
+  assert.ok(!/data-act="logoresume"/.test(ctl), 'thanh điều khiển không còn nút tiếp tục trùng');
+  assert.match(ctl, /<details class="lite-details">/, 'hướng dẫn dài được gập lại');
+  assert.match(ctl, /data-act="fireflyreveal"[\s\S]{0,120}>Firefly<\/button>/, 'chỉ còn một nút Firefly');
+  assert.match(scene, /function sceneMoreMenu\(items\)/, 'có menu gấp thao tác phụ');
+  assert.match(scene, /<details class="scene-more">/, 'mỗi ảnh dùng menu Thêm');
+  assert.match(scene, /data-act="logook"[\s\S]{0,120}>Ổn<\/button>/, 'nút chính là Ổn');
+  assert.match(scene, /data-act="logoresume"[\s\S]{0,140}>Đã đổi Gmail khác, tiếp tục<\/button>/, 'nút tiếp tục chỉ nằm trên thẻ ảnh bị chặn');
+  assert.ok(!/Ổn — tải ảnh sạch/.test(scene), 'không còn chuỗi nút dài');
+  assert.ok(!/data-act="fireflyopen"/.test(results), 'kết quả Bước 4 không còn nút mở Firefly trùng');
+  assert.ok(!/data-act="fireflyreveal"/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {
