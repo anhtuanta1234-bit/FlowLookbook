@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.43 - 2026-11-26
+- Bước 4: ô Firefly giờ rộng ngang gần tới mép phải, chiều cao cố ~373px bằng ô gốc nên không còn kéo dài xuống; ảnh giữ tỉ lệ, không giãn méo hay mờ.
+- Ảnh chiếu trực tiếp Firefly căn theo đáy để vùng logo luôn nằm trong tầm mắt; chiều cao cố định nên khung không bị nhảy/giật khi ảnh tải về.
+
+
 ## v1.1.42 - 2026-11-26
 - Bước 4: ô ảnh gốc giữ gọn ~210px, ô Firefly kéo dài sang phải để nhìn rõ vùng đã xóa; cả 2 vẫn khung 9:16 nên căn tọa độ 1:1.
 - Tiến trình Firefly chuyển từ dưới 2 ô vào ngay dưới ô Firefly, chỉ hiện từng bước một theo thời gian thực.
