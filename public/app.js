@@ -14,7 +14,7 @@ const compareVer = (a, b) => {
   }
   return 0;
 };
-const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map() };
+const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 const sortedProjects = () => [...S.projects].sort((a, b) => projectNameOrder.compare(a.name || '', b.name || ''));
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -197,13 +197,15 @@ async function init() {
       if (S.id !== id) return;
       const previousStage = S.stage;
       S.p = data;
-      if (data.stage > previousStage) {
-        S.stage = data.stage;
+      // Tắt Bước 4 thì dù server đã mở Bước 4, giao diện vẫn chỉ dừng ở Bước 3.
+      const nextStage = !S.cfg?.removeLogoEnabled && data.stage >= 4 ? 3 : data.stage;
+      if (nextStage > previousStage) {
+        S.stage = nextStage;
         renderMain();
         const g = data.autoGo;
-        if (g && g.to === data.stage && g.at !== S.lastGo) {
+        if (g && g.to === nextStage && g.at !== S.lastGo) {
           S.lastGo = g.at;
-          toast(`${data.name}: đã tự động chuyển sang Bước ${g.to}.`, 'ok');
+          toast(`${data.name}: đã tự động chuyển sang Bước ${nextStage}.`, 'ok');
         }
       } else refresh();
     } catch (_) {}
@@ -221,10 +223,11 @@ async function init() {
       const g = data.autoGo;
       if (g && g.at !== S.lastGo && Date.now() - g.at < 30000) {
         S.lastGo = g.at;
-        if (S.stage === g.to - 1 && data.stage >= g.to) {
-          S.stage = g.to;
+        const to = !S.cfg?.removeLogoEnabled && g.to >= 4 ? 3 : g.to;
+        if (data.stage >= g.to && S.stage === to - 1) {
+          S.stage = to;
           renderMain();
-          toast(`${data.name}: đã tự động chuyển sang Bước ${g.to}.`, 'ok');
+          toast(`${data.name}: đã tự động chuyển sang Bước ${to}.`, 'ok');
         }
       }
     }
@@ -451,7 +454,10 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault(); el.click();
 });
 async function selectProject(id) {
-  S.id = id; S.p = await api('GET', `/api/projects/${id}`); S.stage = S.p.stage || 1; S.lastGo = S.p.autoGo?.at;
+  S.id = id; S.p = await api('GET', `/api/projects/${id}`);
+  const st = S.p.stage || 1;
+  S.stage = (!S.cfg?.removeLogoEnabled && st >= 4) ? 3 : st; // tắt Bước 4 thì mở dự án vẫn dừng ở Bước 3
+  S.lastGo = S.p.autoGo?.at;
   localStorage.setItem('lastProject', id); renderSidebar(); renderMain();
 }
 
@@ -462,6 +468,8 @@ const STEPS = [
   { n: 3, t: 'Ghép cảnh thật', tip: 'Bước 3: ghép KOC vào nhiều cảnh người thật cùng lúc' },
   { n: 4, t: 'Xóa logo', tip: 'Bước 4: cắt khung 9:16, dùng Firefly Chấm sửa và xóa, bạn bấm Ổn rồi tool tải ảnh sạch' },
 ];
+// Tắt “Xóa logo” thì Bước 4 biến mất hoàn toàn khỏi thanh các bước, chỉ còn 1-2-3.
+const visibleSteps = () => (S.cfg?.removeLogoEnabled ? STEPS : STEPS.filter((s) => s.n !== 4));
 function stageDone(n) {
   const p = S.p;
   if (n === 1) return !!p.s1.approved;
@@ -472,6 +480,11 @@ function stageDone(n) {
   if (!p.cleaned || !scenes.length) return false;
   if (!S.cfg?.removeLogoEnabled) return true; // không bật tính năng thì không có việc phải làm
   return scenes.every((s) => ['approved', 'skipped'].includes(s.logoRemoval?.status));
+}
+// Chưa dọn xong Bước 3 thì nút “Xóa logo” không được bật — tránh hiện Bước 4 khi chưa có ảnh để xóa.
+function step3ReadyForLogo() {
+  const scenes = S.p?.s3?.scenes || [];
+  return !!S.p?.cleaned && scenes.length > 0 && scenes.every((s) => s.chosen);
 }
 
 function renderMain() {
@@ -500,7 +513,7 @@ function refresh() {
   if (!S.p) return;
   hideTip();
   const maxStage = S.p.maxStage || S.p.stage || 1;
-  morph($('#steps'), STEPS.map((s) => {
+  morph($('#steps'), visibleSteps().map((s) => {
     const locked = s.n > maxStage, done = stageDone(s.n);
     const tip = locked ? `Chưa mở: hoàn tất bước ${s.n - 1} rồi bấm “Sang bước ${s.n}” để mở bước này` : s.tip;
     const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : ''].join(' ');
@@ -647,10 +660,14 @@ function syncLogoToggle() {
   b.setAttribute('aria-pressed', String(on));
   b.dataset.tip = on
     ? 'Bước 4 đang BẬT: tool xóa logo sau khi Bước 3 dọn xong. Bấm để tắt.'
-    : 'Bước 4 đang TẮT (mặc định). Bấm để bật xóa logo bằng Firefly.';
+    : 'Bước 4 đang TẮT (mặc định). Xong Bước 3 mới bật được xóa logo bằng Firefly.';
 }
 async function toggleLogo() {
   const on = !S.cfg?.removeLogoEnabled;
+  if (on && !step3ReadyForLogo()) {
+    toast('Hoàn tất Bước 3 (chọn ảnh rồi bấm “Tải hết ảnh về & Dọn dẹp”) xong mới được bật Bước 4.', 'warn');
+    return;
+  }
   if (on && !confirm('Bật Bước 4 — xóa logo bằng Firefly?\n\nTool chỉ chạy sau khi bạn bấm “Tải hết ảnh về & Dọn dẹp” ở Bước 3. Firefly free 3 ảnh/ngày; hết lượt tool nhắc đổi Gmail. Bạn tự đăng nhập, app không lưu mật khẩu.')) return;
   if (!on && (S.p?.s3?.scenes || []).some((s) => ['preparing', 'downloading', 'waiting_ok', 'queued', 'quota_blocked'].includes(s.logoRemoval?.status))) {
     toast('Đang có ảnh Bước 4 chưa xong. Hãy xử lý xong ảnh đó rồi mới tắt.', 'warn');
@@ -660,8 +677,13 @@ async function toggleLogo() {
     await api('POST', '/api/config', { removeLogoEnabled: on });
     S.cfg = { ...(S.cfg || {}), removeLogoEnabled: on };
     syncLogoToggle();
-    toast(on ? 'Đã bật Bước 4. Sau khi dọn xong Bước 3, tool sẽ bắt đầu xóa logo.' : 'Đã tắt Bước 4. Các bước 1–3 không đổi.', 'ok');
-    if (S.p) { buildCtl(); refresh(); }
+    toast(on ? 'Đã bật Bước 4. Bước “Xóa logo” hiện ngay sau Bước 3.' : 'Đã tắt Bước 4. Bước “Xóa logo” đã ẩn, các bước 1–3 không đổi.', 'ok');
+    if (S.p) {
+      // Tắt thì lui về Bước 3; bật lại mà dự án đã ở Bước 4 từ trước thì hiện lại đúng chỗ đó.
+      if (!on && S.stage === 4) S.stage = 3;
+      if (on && S.p.stage === 4) S.stage = 4;
+      renderMain();
+    }
   } catch (er) { fail(er); }
 }
 
@@ -910,7 +932,7 @@ function logoSceneHtml(s, i) {
         <img src="${src}" data-zoom="${src}" alt="Ảnh gốc ${esc(s.label || i + 1)} ở Bước 4">
       </div>
       <div class="logocell firefly">
-        <div class="logocell-lab">Firefly <span class="chip">chiếu trực tiếp</span></div>
+        <div class="logocell-lab">Firefly <span class="chip">chiếu trực tiếp</span><span class="grow"></span><span class="livedot${S.liveDot?.has(s.id) ? ' on' : ''}" data-live-dot="${s.id}" title="Đang chiếu trực tiếp từ Firefly" aria-label="Đang chiếu trực tiếp từ Firefly"></span></div>
         <img class="firefly-shot" data-preview-sid="${s.id}"${previewSrc ? ` src="${previewSrc}"` : ''} alt="Firefly của ảnh ${esc(s.label || i + 1)}">
         <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span></div>
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
@@ -923,21 +945,31 @@ function logoSceneHtml(s, i) {
 // Chụp tab Firefly đang chạy (không bật cửa sổ, không đụng lượt Flow) rồi chiếu vào ô phải.
 // Ảnh được cache trong S.preview nên morph() của SSE không làm mất khung hình.
 let fireflyPreviewTimer = null;
+// Chấm tròn nhỏ trên ô Firefly: xanh nhấp nháy đúng lúc đang chiếu, xám khi dừng/chờ.
+function setLiveDot(id, on) {
+  if (on) S.liveDot.add(id); else S.liveDot.delete(id);
+  const el = document.querySelector(`[data-live-dot="${id}"]`);
+  if (el) el.classList.toggle('on', on);
+}
 async function patchFireflyPreviews() {
   if (S.stage !== 4 || !S.p) return;
   const scenes = (S.p.s3?.scenes || []).filter((s) => ['preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
+  const active = new Set();
   for (const s of scenes) {
     // Firefly đã báo xong mà người dùng CHƯA bấm Ổn: đóng băng khung hình cuối,
     // không chụp lại nữa để ô chiếu không bật lên tắt xuống / nháy liên tục.
-    if (s.logoRemoval?.status === 'waiting_ok' && S.preview.has(s.id)) continue;
+    if (s.logoRemoval?.status === 'waiting_ok' && S.preview.has(s.id)) { setLiveDot(s.id, false); continue; }
     let out;
-    try { out = await api('GET', `/api/firefly/preview?projectId=${encodeURIComponent(S.p.id)}&sceneId=${encodeURIComponent(s.id)}`); } catch (_) { continue; }
-    if (!out?.ok || !out.data) continue;
+    try { out = await api('GET', `/api/firefly/preview?projectId=${encodeURIComponent(S.p.id)}&sceneId=${encodeURIComponent(s.id)}`); } catch (_) { setLiveDot(s.id, false); continue; }
+    if (!out?.ok || !out.data) { setLiveDot(s.id, false); continue; }
     const el = document.querySelector(`[data-preview-sid="${s.id}"]`);
-    if (!el) continue;
+    if (!el) { setLiveDot(s.id, false); continue; }
+    active.add(s.id);
     S.preview.set(s.id, out.data);
     if (el.getAttribute('src') !== out.data) el.setAttribute('src', out.data);
+    setLiveDot(s.id, true);
   }
+  for (const id of [...S.liveDot]) if (!active.has(id)) setLiveDot(id, false);
 }
 function startFireflyPreview() {
   if (fireflyPreviewTimer) return;
@@ -1066,6 +1098,7 @@ document.addEventListener('click', async (e) => {
 
 // Sau khi dọn xong Bước 3, server đã mở/mở lại Bước 4: chuyển giao diện theo.
 async function showStep4IfReady() {
+  if (!S.cfg?.removeLogoEnabled) return false; // đang TẮT thì không hiện Bước 4 dù server đã mở
   try {
     const fresh = await api('GET', `/api/projects/${S.p.id}`);
     if (fresh?.id === S.id && fresh.stage === 4) {
@@ -1108,7 +1141,11 @@ async function act(b) {
   }
   const p0 = S.p; if (!p0 && a !== 'goto') return;
   if (a === 'retryhq') return api('POST', `/api/projects/${p.id}/retry-hq`, { stage: S.stage });
-  if (a === 'goto') { clearSaveTimer(true); const to = +b.dataset.stage; S.p = await api('PATCH', `/api/projects/${p.id}`, { stage: to }); S.stage = to; return renderMain(); }
+  if (a === 'goto') {
+    const to = +b.dataset.stage;
+    if (to === 4 && !S.cfg?.removeLogoEnabled) return; // tab Bước 4 đang ẩn
+    clearSaveTimer(true); S.p = await api('PATCH', `/api/projects/${p.id}`, { stage: to }); S.stage = to; return renderMain();
+  }
   if (a === 'openout') return api('POST', `/api/projects/${p.id}/open-output`);
   if (S.stage === 4 && ['retranslate', 'run', 'retryhq'].includes(a)) return; // Bước 4 không gửi lượt lên Flow
   if (a === 'retranslate') { tr[PK[S.stage]].manual = false; return doTranslate(PK[S.stage]); }

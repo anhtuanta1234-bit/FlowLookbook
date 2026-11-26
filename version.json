@@ -1,5 +1,5 @@
 {
-  "version": "1.1.46",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.46/Flow.Lookbook.Setup.1.1.46.exe",
-  "notes": "- Bỏ ô “Ảnh Bước 4” thừa trong khung điều khiển bên trái (ngay dưới mục Hướng dẫn); khung phải — tải ảnh lên và chiếu trực tiếp Firefly — giữ nguyên."
+  "version": "1.1.47",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.47/Flow.Lookbook.Setup.1.1.47.exe",
+  "notes": "- Tắt “Xóa logo” thì tab **Bước 4** biến mất hẳn, chỉ còn 1-2-3; bật lại thì Bước 4 hiện ngay sau Bước 3. Chưa xong Bước 3 thì bấm bật cũng không chuyển nút sang trạng thái BẬT.\n- Ô chiếu trực tiếp Firefly có chấm tròn: đang chiếu thì **xanh lá nhấp nháy**, dừng/chờ Ổn thì tắt."
 }

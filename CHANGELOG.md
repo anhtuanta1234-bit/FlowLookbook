@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.47 - 2026-11-26
+- Tắt “Xóa logo” thì tab **Bước 4** biến mất hẳn, chỉ còn 1-2-3; bật lại thì Bước 4 hiện ngay sau Bước 3. Chưa xong Bước 3 thì bấm bật cũng không chuyển nút sang trạng thái BẬT.
+- Ô chiếu trực tiếp Firefly có chấm tròn: đang chiếu thì **xanh lá nhấp nháy**, dừng/chờ Ổn thì tắt.
+
+
 ## v1.1.46 - 2026-11-26
 - Bỏ ô “Ảnh Bước 4” thừa trong khung điều khiển bên trái (ngay dưới mục Hướng dẫn); khung phải — tải ảnh lên và chiếu trực tiếp Firefly — giữ nguyên.
 
