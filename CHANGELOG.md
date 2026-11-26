@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## v1.1.35 - 2026-11-26
+- Sửa lại thao tác xóa logo Firefly theo đúng cách bạn vừa hướng dẫn: cắt 9:16 xong bấm “Chấm sửa và xóa”, mở “Cài đặt cọ vẽ”, chỉnh cỡ 14, chấm đúng 1 lần vào logo rồi mới bấm “Xóa”.
+- Chọn đúng canvas ảnh 9:16 thay vì canvas nền, nên cọ không còn chấm ngoài ảnh (canvas mask chỉ rộng ~199px nên trước đây bị ngưỡng 200px loại).
+- Thêm ô “Cỡ cọ Firefly” trong Cài đặt (mặc định 14) và hiện rõ cỡ cọ đang dùng trên Bước 4.
+- Bước 4 giờ xử lý tuần tự từng ảnh một: ảnh trước chưa bấm “Ổn” / chưa tải xong thì tool không mở ảnh kế, hết lượt báo rõ tên ảnh bị chặn.
+- Thêm hàng chờ xóa logo trên giao diện: thấy ảnh đang xóa, ảnh còn chờ và ảnh hết lượt free Firefly.
+- Không để ảnh chờ “Ổn” làm kẹt hàng chờ sau khi tool khởi động lại.
+- Sửa bước cắt 9:16 theo giao diện Firefly hiện tại: dùng đúng picker “Thêm” và bấm “Xác nhận cắt”, nên ảnh đầu ra đúng chuẩn 9:16 thay vì giữ nguyên tỷ lệ gốc.
+- Đóng thông báo “Không đủ dung lượng lưu trữ” nếu Firefly hiện ra làm chắn thao tác.
+- Đợi đúng câu “Đã hoàn tất thao tác tạo sinh” trên ảnh mới cho phép tải; không còn bấm “Tải xuống” quá sớm như nút cũ còn sót lại.
+- Chỉnh tâm vùng chấm logo về (93%, 96%) trên ảnh 2K theo tọa độ đã chốt trên máy thật.
+- Sửa lỗi Bước 4 báo sai “khác kích thước gốc”: ảnh đã cắt 9:16 thấp hơn vài px giờ được chấp nhận.
+- Tăng tốc Bước 4: vào thẳng trình sửa ảnh, chờ theo trạng thái nút thật thay vì ngủ cố định và chỉ đợi 5 giây một lần; vẫn chờ Firefly báo hoàn tất và bấm Ổn mới tải.
+- Nhận diện cả màn hình Firefly mời “nâng cấp gói trả phí / mua thêm lượt”: báo đang dùng lượt free hàng ngày và nhắc đổi mail khác, không hiểu nhầm là lỗi hệ thống.
+- Firefly free chỉ cho 3 ảnh/ngày: tool tự đếm, chạy đúng 3 ảnh thì dừng và báo đổi mail thay vì mở ảnh thứ 4; giao diện hiện “Lượt free hôm nay: x/3”.
+- Bấm “Đã đổi Gmail khác, tiếp tục” thì reset bộ đếm cho tài khoản mới, làm tiếp đúng ảnh bị chặn, không làm lại ảnh cũ; qua nửa đêm bộ đếm tự reset.
+- Chốt cứng thứ tự ảnh 01, 02, 03,… từ Bước 3: ảnh sạch trong <code>anhdaxoalogo</code> giữ cùng số. Đổi Gmail giữa chừng thì tool căn cứ vào số ảnh đã có ảnh sạch để lấy đúng ảnh kế tiếp (xong 1-2-3 thì chỉ làm ảnh 4), không chạy lại 3 ảnh đầu. Hàng chờ và banner hết lượt cũng hiện đúng số ảnh.
+
+
 ## v1.1.34 - 2026-11-25
 - Sửa đúng lỗi dừng ở bước tải ảnh lên Firefly: tool chỉ quét 10 lớp shadow root nên tưởng editor chưa tải và báo nhầm “Chưa đăng nhập Adobe Firefly”, giờ quét 26 lớp và vào thẳng trang chỉnh sửa.
 - Thêm chọn khung hình chuẩn 9:16 trong Firefly (Cắt và mở rộng → Thêm → 9:16 → Cắt) ngay sau khi tải ảnh 2K lên, trước khi tô vùng logo, và tự xác nhận hộp “Confirm crop” nếu Adobe hiện ra.

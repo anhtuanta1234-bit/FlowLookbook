@@ -41,7 +41,12 @@ const defaults = {
   // Bước 4 (tùy chọn): xóa logo bằng Adobe Firefly. Tắt mặc định, không ảnh hưởng Bước 1-3.
   removeLogoEnabled: false,
   fireflyHomeUrl: 'https://firefly.adobe.com/',
-  logoRemoveMask: { xPct: 84.375, yPct: 91.352, wPct: 6.120, hPct: 3.343 },
+  // Tâm vùng chấm = (93%, 96%) trên ảnh tham chiếu 2K (trái 2%, xuống 4% so với điểm cũ 95%,92%).
+  logoRemoveMask: { xPct: 89.940, yPct: 94.329, wPct: 6.120, hPct: 3.343 },
+  logoBrushSize: 14, // cỡ cọ Firefly: mức 14 như thao tác thật trên ảnh mẫu
+  // Firefly free hiện chỉ cho 3 ảnh/ngày cho mỗi tài khoản; vượt quá thì nhắc đổi mail.
+  fireflyDailyFreeLimit: 3,
+  fireflyDailyUsed: { date: '', count: 0 },
 };
 
 let cache = null;
@@ -65,13 +70,17 @@ function set(patch) {
   const next = { ...get(), ...patch };
   if (patch.logoRemoveMask) {
     const n = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
-    const x = Math.min(99, Math.max(0, n(patch.logoRemoveMask.xPct, 84.375)));
-    const y = Math.min(99, Math.max(0, n(patch.logoRemoveMask.yPct, 91.352)));
+    const x = Math.min(99, Math.max(0, n(patch.logoRemoveMask.xPct, 89.940)));
+    const y = Math.min(99, Math.max(0, n(patch.logoRemoveMask.yPct, 94.329)));
     next.logoRemoveMask = {
       xPct: x, yPct: y,
       wPct: Math.max(0.1, Math.min(100 - x, n(patch.logoRemoveMask.wPct, 6.12))),
       hPct: Math.max(0.1, Math.min(100 - y, n(patch.logoRemoveMask.hPct, 3.343))),
     };
+  }
+  if (patch.logoBrushSize !== undefined) {
+    const b = Number(patch.logoBrushSize);
+    next.logoBrushSize = Number.isFinite(b) ? Math.min(128, Math.max(5, Math.round(b))) : 14;
   }
   if (fixedOutputRoot) next.outputRoot = fixedOutputRoot; // khóa cứng, lưu cài đặt cũng không đổi được
   cache = next;
@@ -90,4 +99,27 @@ function hasSavedOutputRoot() {
   } catch (_) { return false; }
 }
 
-module.exports = { get, set, dataDir, root, fixedOutputRoot, defaultOutputRoot: outputRoot, hasSavedOutputRoot };
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Bộ đếm lượt free Firefly theo ngày. Tự reset sang ngày mới; đổi Gmail thì gọi resetFireflyDailyFree().
+function fireflyDailyFree() {
+  const c = get();
+  const date = todayKey();
+  const saved = c.fireflyDailyUsed || {};
+  const count = saved.date === date ? Math.max(0, Number(saved.count) || 0) : 0;
+  return { date, count, limit: Math.max(1, Number(c.fireflyDailyFreeLimit) || 3) };
+}
+function consumeFireflyDailyFree() {
+  const u = fireflyDailyFree();
+  set({ fireflyDailyUsed: { date: u.date, count: u.count + 1 } });
+  return fireflyDailyFree();
+}
+function resetFireflyDailyFree() {
+  set({ fireflyDailyUsed: { date: todayKey(), count: 0 } });
+  return fireflyDailyFree();
+}
+
+module.exports = { get, set, dataDir, root, fixedOutputRoot, defaultOutputRoot: outputRoot, hasSavedOutputRoot, todayKey, fireflyDailyFree, consumeFireflyDailyFree, resetFireflyDailyFree };

@@ -10,9 +10,12 @@ const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer, is2kDime
 const { viToEn } = require('./src/translate');
 const flow = require('./src/flow');
 const firefly = require('./src/firefly');
+const { sceneNo, sceneFileBase, logoSceneDone, nextLogoScene } = require('./src/logo-order');
 
 const PORT = Number(process.env.PORT) || 4177;
 const APP_ID = 'flow-lookbook';
+// Ảnh sạch sau khi xóa logo Firefly: output/<dự án>/anhdaxoalogo/
+const LOGO_OUTPUT_DIRNAME = 'anhdaxoalogo';
 // Link file version.json dùng để báo cập nhật cho người dùng. Sửa 1 dòng này khi đổi repo,
 // rồi build installer mới — mọi app đã cài sẽ tự nhận diện bản mới (không cần cấu hình trong UI).
 const UPDATE_MANIFEST_URL = process.env.FLOW_UPDATE_URL
@@ -154,6 +157,7 @@ app.post('/api/config', (req, res) => {
   if (typeof req.body.fastMode === 'boolean') patch.fastMode = req.body.fastMode;
   if (typeof req.body.autoCleanOldInstallers === 'boolean') patch.autoCleanOldInstallers = req.body.autoCleanOldInstallers;
   if (typeof req.body.removeLogoEnabled === 'boolean') patch.removeLogoEnabled = req.body.removeLogoEnabled;
+  if (req.body.logoBrushSize !== undefined) patch.logoBrushSize = Math.min(128, Math.max(5, Math.round(Number(req.body.logoBrushSize) || 14)));
   if (typeof req.body.fireflyHomeUrl === 'string' && req.body.fireflyHomeUrl.trim()) patch.fireflyHomeUrl = req.body.fireflyHomeUrl.trim();
   if (req.body.logoRemoveMask && typeof req.body.logoRemoveMask === 'object') {
     const m = req.body.logoRemoveMask;
@@ -186,7 +190,9 @@ app.get('/api/flow/status', async (req, res) => {
   const st = await flow.status();
   // vừa đăng nhập xong thì tự thu nhỏ cửa sổ Chrome: từ đây tool chạy ngầm
   if (loginPending && st.loggedIn) { loginPending = false; setTimeout(() => flow.hide(), 3000); }
-  res.json({ ...st, paused, queued: queue.length, auto: autoOn, interrupted: interruptedCount, fireflyQuotaPaused: !!logoRemovePausedQuota });
+  res.json({ ...st, paused, queued: queue.length, auto: autoOn, interrupted: interruptedCount, fireflyQuotaPaused: !!logoRemovePausedQuota,
+    fireflyDaily: cfg.fireflyDailyFree(),
+    logoQueue: { active: logoRemoveActiveKey, waiting: logoRemoveQueue.length, pausedQuota: !!logoRemovePausedQuota } });
 });
 app.post('/api/auto', (req, res) => { setAuto(!!req.body.on); if (autoOn) resumeAuto(); res.json({ auto: autoOn }); });
 app.post('/api/flow/resume', (req, res) => { setPaused(null); pump(); resumePendingSharpUpgrades(); res.json({ ok: true }); });
@@ -454,7 +460,7 @@ app.post('/api/projects/clean-all', async (req, res) => {
         const hadTam = fs.existsSync(tam);
         if (hadTam) fs.rmSync(tam, { recursive: true, force: true });
         removeStaleTemp(outDir);
-        removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
+        removeStaleTemp(path.join(outDir, LOGO_OUTPUT_DIRNAME));
         // Mốc "đã tải hết ảnh về": Bước 4 chỉ được phép bắt đầu từ đây.
         p.cleaned = Date.now();
         // Bước 3 vừa xong hành động cuối: mở và tự chuyển giao diện sang Bước 4 nối tiếp.
@@ -888,6 +894,7 @@ function cancelProjectWork(projectId) {
   for (let i = logoRemoveQueue.length - 1; i >= 0; i--) if (logoRemoveQueue[i].projectId === projectId) logoRemoveQueue.splice(i, 1);
   flow.closeProjectTabs(projectId).catch(() => {});
   firefly.closeProjectTabs(projectId).catch(() => {});
+  releaseLogoJobForProject(projectId); // dự án bị xóa: nhả khóa hàng đợi để ảnh khác vẫn chạy tiếp
 }
 // { at, message } khi Flow cảnh báo hoạt động bất thường. Lưu ra file để khởi động lại tool KHÔNG làm mất lệnh dừng an toàn này.
 const pausedFile = path.join(cfg.dataDir, 'paused.json');
@@ -1238,11 +1245,11 @@ function resumePendingSharpUpgrades(includeLegacy = false) {
 
 // ---------- duyệt ảnh ----------
 // body: { stage, runId, imageId, sceneId? }
+// sceneNo / sceneFileBase / logoSceneDone / nextLogoScene ở src/logo-order.js:
+// Bước 3 và Bước 4 dùng chung số thứ tự ảnh (01, 02, 03, …).
 function sceneTargetPath(p, sceneId) {
   const outDir = store.outputDirFor(p);
-  const idx = p.s3.scenes.findIndex((s) => s.id === sceneId);
-  const order = store.sceneOrder(p, sceneId) || (idx + 1);
-  const base = `${String(order).padStart(2, '0')}-${store.safeName(p.name)}`;
+  const base = sceneFileBase(p, sceneId);
   let target = path.join(outDir, `${base}.png`);
   const lower = target.toLowerCase();
   if (p.s3.scenes.some((s) => s.id !== sceneId && s.chosen?.target && path.resolve(s.chosen.target).toLowerCase() === lower)) {
@@ -1252,16 +1259,12 @@ function sceneTargetPath(p, sceneId) {
 }
 
 function logoRemovalDirFor(p) {
-  const dir = path.join(store.outputDirFor(p), 'anhdaxoalogo');
+  const dir = path.join(store.outputDirFor(p), LOGO_OUTPUT_DIRNAME);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 function logoCleanTargetPath(p, sceneId) {
-  const dir = logoRemovalDirFor(p);
-  const idx = p.s3.scenes.findIndex((s) => s.id === sceneId);
-  const order = store.sceneOrder(p, sceneId) || (idx + 1);
-  const base = `${String(order).padStart(2, '0')}-${store.safeName(p.name)}`;
-  return path.join(dir, `${base}.png`);
+  return path.join(logoRemovalDirFor(p), `${sceneFileBase(p, sceneId)}.png`);
 }
 function logoRemovalEnabled() { return !!cfg.get().removeLogoEnabled; }
 function sceneWantsLogoRemoval(sc) {
@@ -1314,6 +1317,12 @@ function ensureLogoRemovalState(p) {
 
 function findLogoRemovalScene(p, sceneId) {
   return p?.s3?.scenes?.find((s) => s.id === sceneId) || null;
+}
+// Thứ tự xử lý (1 ảnh một lần): dùng trong nhật ký để biết ảnh nào đang làm / còn chờ.
+function logoQueuePosition(p, sceneId) {
+  const pending = (p?.s3?.scenes || []).filter((s) => !['approved', 'skipped'].includes(s.logoRemoval?.status));
+  const at = pending.findIndex((s) => s.id === sceneId) + 1;
+  return at ? `${at}/${pending.length}` : '';
 }
 app.post('/api/projects/:id/approve', async (req, res) => {
   try {
@@ -1497,7 +1506,7 @@ function isInside(dir, file) {
 }
 function discardOldCleanFile(p, oldFile, newFile) {
   if (!oldFile || oldFile === newFile) return;
-  const dir = path.join(store.outputDirFor(p), 'anhdaxoalogo');
+  const dir = path.join(store.outputDirFor(p), LOGO_OUTPUT_DIRNAME);
   if (isInside(dir, oldFile)) fs.rmSync(oldFile, { force: true });
 }
 
@@ -1512,7 +1521,7 @@ app.post('/api/projects/:id/finish', async (req, res) => {
       if (!outDir) return { code: 400, error: 'Đường dẫn thư mục kết quả không hợp lệ.' };
       fs.rmSync(path.join(outDir, '_tam'), { recursive: true, force: true });
       removeStaleTemp(outDir);
-      removeStaleTemp(path.join(outDir, 'anhdaxoalogo'));
+      removeStaleTemp(path.join(outDir, LOGO_OUTPUT_DIRNAME));
       p.cleaned = Date.now();
       p.maxStage = Math.max(p.maxStage || p.stage || 1, 4);
       p.stage = 4;
@@ -1538,16 +1547,78 @@ app.get('/files/saved/:id/:sid', (req, res) => {
 
 const logoRemoveQueue = [];
 let logoRemoveActive = false;
+let logoRemoveActiveKey = '';
 let logoRemovePausedQuota = null; // { at, message }
+const logoJobKey = (projectId, sceneId) => `${projectId}:${sceneId}`;
 
+// Firefly free hiện chỉ 3 ảnh/ngày cho mỗi mail. Đạt giới hạn thì dừng hàng chờ,
+// không mở ảnh kế và báo đúng lý do để người dùng đổi Gmail.
+const fireflyDailyMessage = () => `Firefly đang dùng lượt free hàng ngày (tối đa ${cfg.fireflyDailyFree().limit} ảnh). Vui lòng đổi mail khác để tiếp tục.`;
+function pauseForDailyFreeLimit() {
+  logoRemovePausedQuota = { at: Date.now(), message: fireflyDailyMessage(), kind: 'daily' };
+}
+function setDailyQuotaOn(lr) {
+  if (!lr) return false;
+  lr.status = 'quota_blocked';
+  lr.code = '';
+  lr.error = fireflyDailyMessage();
+  lr.note = lr.error;
+  lr.updatedAt = Date.now();
+  appendLogoPhase(lr, lr.note);
+  return true;
+}
+function markSceneDailyQuota(projectId, sceneId) {
+  return writeLock.run(() => {
+    const p = store.load(projectId); const sc = p?.s3?.scenes?.find((s) => s.id === sceneId);
+    if (!sc?.logoRemoval || !setDailyQuotaOn(sc.logoRemoval)) return;
+    pushProject(p);
+  });
+}
+// Đạt 3 ảnh thì đánh dấu ảnh kế tiếp (nếu có) để banner đổi mail hiện ngay trên giao diện.
+function blockNextQueuedForDaily(p, doneSceneId) {
+  const next = (p?.s3?.scenes || [])
+    .filter((s) => s.id !== doneSceneId && s.logoRemoval?.status === 'queued')
+    .sort((a, b) => sceneNo(p, a.id) - sceneNo(p, b.id))[0];
+  return setDailyQuotaOn(next?.logoRemoval);
+}
+
+// Một thời điểm chỉ có ĐÚNG 1 cảnh được mở trên Firefly. Ảnh đang chờ bấm Ổn / đang tải
+// vẫn giữ khóa: không được mở ảnh kế tiếp làm cùng lúc 3 tab Firefly.
+function anyLogoJobWaiting() {
+  for (const meta of store.list()) {
+    const p = store.load(meta.id);
+    if (p?.s3?.scenes?.some((s) => ['preparing', 'downloading', 'waiting_ok'].includes(s.logoRemoval?.status))) return true;
+  }
+  return false;
+}
+function releaseLogoJob(projectId, sceneId, pump = true) {
+  const key = logoJobKey(projectId, sceneId);
+  if (logoRemoveActiveKey === key || (!logoRemoveActiveKey && logoRemoveActive)) {
+    logoRemoveActiveKey = '';
+    logoRemoveActive = false;
+  }
+  if (pump) setImmediate(logoQueuePump);
+}
+function releaseLogoJobForProject(projectId) {
+  if (!logoRemoveActiveKey.startsWith(projectId + ':')) return;
+  releaseLogoJob(projectId, logoRemoveActiveKey.slice(projectId.length + 1));
+}
 function logoQueuePump() {
-  if (logoRemoveActive || logoRemovePausedQuota) return;
-  const next = logoRemoveQueue.shift();
-  if (!next) return;
-  logoRemoveActive = true;
-  prepareLogoRemoval(next.projectId, next.sceneId)
-    .catch((e) => appendLog('logo remove prepare err: ' + (e?.message || e)))
-    .finally(() => { logoRemoveActive = false; setImmediate(logoQueuePump); });
+  if (logoRemoveActive || logoRemovePausedQuota || anyLogoJobWaiting()) return;
+  while (logoRemoveQueue.length) {
+    const next = logoRemoveQueue.shift();
+    const p = store.load(next.projectId);
+    const sc = p?.s3?.scenes?.find((s) => s.id === next.sceneId);
+    // Bỏ job cũ nếu người dùng đã duyệt/bỏ qua/lỗi cảnh này từ trước.
+    if (!p || sc?.logoRemoval?.status !== 'queued') continue;
+    logoRemoveActive = true;
+    logoRemoveActiveKey = logoJobKey(next.projectId, next.sceneId);
+    // prepareLogoRemoval() chỉ nhả khóa khi lỗi / hết lượt. Khi ảnh đã tạo xong nó đứng ở
+    // waiting_ok và GIỮ khóa cho đến khi người dùng bấm Ổn (hoặc Bỏ qua / Làm lại).
+    prepareLogoRemoval(next.projectId, next.sceneId)
+      .catch((e) => appendLog('logo remove prepare err: ' + (e?.message || e)));
+    return;
+  }
 }
 function enqueueLogoRemoval(projectId, sceneId) {
   if (logoRemoveQueue.some((j) => j.projectId === projectId && j.sceneId === sceneId)) return;
@@ -1559,7 +1630,8 @@ async function queueLogoRemoval(projectId) {
     const p = store.load(projectId);
     if (!p || !shouldStartLogoRemoval(p)) return;
     ensureLogoRemovalState(p);
-    for (const sc of p.s3.scenes) {
+    // Xếp hàng theo đúng thứ tự ảnh 1, 2, 3, … chứ không theo thứ tự mảng (có thể bị xóa/chèn).
+    for (const sc of p.s3.scenes.slice().sort((a, b) => sceneNo(p, a.id) - sceneNo(p, b.id))) {
       if (sc.logoRemoval?.status === 'queued') enqueueLogoRemoval(projectId, sc.id);
     }
     pushProject(p);
@@ -1567,7 +1639,16 @@ async function queueLogoRemoval(projectId) {
 }
 
 async function prepareLogoRemoval(projectId, sceneId) {
+  const dailyBefore = cfg.fireflyDailyFree();
+  // Qua nửa đêm bộ đếm tự reset: không giữ cờ tạm dừng của ngày hôm trước.
+  if (logoRemovePausedQuota?.kind === 'daily' && dailyBefore.count < dailyBefore.limit) logoRemovePausedQuota = null;
   if (logoRemovePausedQuota) return;
+  if (dailyBefore.count >= dailyBefore.limit) {
+    pauseForDailyFreeLimit();
+    await markSceneDailyQuota(projectId, sceneId);
+    releaseLogoJob(projectId, sceneId);
+    return;
+  }
   const prep = await writeLock.run(() => {
     const p = store.load(projectId);
     if (!p || !shouldStartLogoRemoval(p)) return null;
@@ -1582,14 +1663,15 @@ async function prepareLogoRemoval(projectId, sceneId) {
     sc.logoRemoval.generated = false; // mỗi lần tạo mới là một lượt Firefly mới
     sc.logoRemoval.code = '';
     sc.logoRemoval.error = '';
-    sc.logoRemoval.note = 'Đang chuẩn bị xóa logo trên Firefly…';
+    const pos = logoQueuePosition(p, sceneId);
+    sc.logoRemoval.note = `Đang chuẩn bị xóa logo trên Firefly${pos ? ` (ảnh ${pos})` : ''}…`;
     appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
     sc.logoRemoval.sourceTarget = sc.chosen.target;
     sc.logoRemoval.updatedAt = Date.now();
     pushProject(p);
     return { imagePath: sc.chosen.target };
   });
-  if (!prep) return;
+  if (!prep) { releaseLogoJob(projectId, sceneId); return; }
   try {
     await firefly.prepareScene({
       projectId, sceneId, imagePath: prep.imagePath,
@@ -1612,16 +1694,27 @@ async function prepareLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
       sc.logoRemoval.updatedAt = Date.now();
+      // Mỗi ảnh tạo thành công tiêu 1 lượt free của ngày hôm nay; làm lại cùng ảnh không tính thêm.
+      const today = cfg.todayKey();
+      if (sc.logoRemoval.fireflyCountedOn !== today) {
+        cfg.consumeFireflyDailyFree();
+        sc.logoRemoval.fireflyCountedOn = today;
+      }
+      const usedNow = cfg.fireflyDailyFree();
+      if (usedNow.count >= usedNow.limit) {
+        pauseForDailyFreeLimit();
+        blockNextQueuedForDaily(p, sceneId);
+      }
       pushProject(p);
     });
   } catch (e) {
-    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached/i.test(String(e?.message || ''));
+    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached|nâng cấp.*(?:trả phí|premium|paid)|upgrade.*paid plan/i.test(String(e?.message || ''));
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
       sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
       sc.logoRemoval.code = e?.code || '';
-      sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi xóa logo.');
+      sc.logoRemoval.error = quota ? 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' : (e?.message || 'Lỗi xóa logo.');
       sc.logoRemoval.note = sc.logoRemoval.error;
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
@@ -1629,8 +1722,10 @@ async function prepareLogoRemoval(projectId, sceneId) {
     });
     if (quota) {
       // Giữ hàng đợi lại, không bỏ cảnh của dự án khác; chỉ tạm dừng cho đến khi user đổi tài khoản.
-      logoRemovePausedQuota = { at: Date.now(), message: 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' };
+      logoRemovePausedQuota = { at: Date.now(), message: 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' };
     }
+    // Lỗi/hết lượt là trạng thái cuối của ảnh này: nhả khóa để không chặn vĩnh viễn hàng đợi.
+    releaseLogoJob(projectId, sceneId);
   }
 }
 
@@ -1669,7 +1764,12 @@ async function downloadLogoRemoval(projectId, sceneId) {
       if (!sc?.logoRemoval) return;
       // Validate dimensions roughly match source if available.
       const srcSize = prep.source && fs.existsSync(prep.source) ? imageDimensions(prep.source) : null;
-      const okSize = !srcSize || (result.width === srcSize.width && result.height === srcSize.height);
+      // Firefly cắt 9:16 nên chiều cao ảnh sạch có thể nhỏ hơn ảnh 2K gốc vài px.
+      // Chỉ chấp nhận cùng chiều rộng và đúng tỷ lệ 9:16, không báo lỗi sai như so sánh bằng nhau cũ.
+      const is916 = Math.abs(result.width / result.height - 9 / 16) < 0.01;
+      const okSize = !srcSize
+        || (result.width === srcSize.width && result.height === srcSize.height)
+        || (result.width <= srcSize.width && result.height <= srcSize.height && is916);
       if (!okSize) {
         sc.logoRemoval.status = 'error';
         sc.logoRemoval.error = `Ảnh tải về ${result.width}×${result.height} khác kích thước gốc ${srcSize.width}×${srcSize.height}.`;
@@ -1691,24 +1791,27 @@ async function downloadLogoRemoval(projectId, sceneId) {
       pushProject(p);
     });
     await firefly.discardScene({ projectId, sceneId }).catch(() => {});
+    // Ảnh này đã xong: mới được mở ảnh kế tiếp trong hàng đợi.
+    releaseLogoJob(projectId, sceneId);
     return { ok: true };
   } catch (e) {
-    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached/i.test(String(e?.message || ''));
+    const quota = e?.code === 'FIREFLY_QUOTA' || /hết lượt|quota|generative credits|limit reached|nâng cấp.*(?:trả phí|premium|paid)|upgrade.*paid plan/i.test(String(e?.message || ''));
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval) return;
       sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
       if (quota) sc.logoRemoval.generated = true; // ảnh đã có trên Firefly, chỉ chờ tải lại
       sc.logoRemoval.code = e?.code || '';
-      sc.logoRemoval.error = quota ? 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' : (e?.message || 'Lỗi tải ảnh sạch.');
+      sc.logoRemoval.error = quota ? 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' : (e?.message || 'Lỗi tải ảnh sạch.');
       sc.logoRemoval.note = quota
-        ? 'Ảnh đã tạo xong trên Firefly. Đăng nhập Gmail khác rồi bấm “Đã kết nối Gmail khác”; tool sẽ chỉ tải lại ảnh này, không tạo lại.'
+        ? 'Ảnh đã tạo xong trên Firefly. Đăng nhập Gmail khác rồi bấm “Đã đổi Gmail khác, tiếp tục”; tool sẽ chỉ tải lại ảnh này, không tạo lại.'
         : sc.logoRemoval.error;
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
       pushProject(p);
     });
-    if (quota) logoRemovePausedQuota = { at: Date.now(), message: 'Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.' };
+    if (quota) logoRemovePausedQuota = { at: Date.now(), message: 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' };
+    releaseLogoJob(projectId, sceneId);
     return { code: 400, error: e?.message || 'Lỗi tải ảnh sạch.' };
   }
 }
@@ -1819,6 +1922,9 @@ app.post('/api/projects/:id/logo-remove/retry', async (req, res) => {
       return { ok: true };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
+    // Làm lại từ waiting_ok: nhả khóa cũ trước khi xếp lại hàng đợi.
+    releaseLogoJob(req.params.id, sceneId, false);
+    firefly.discardScene({ projectId: req.params.id, sceneId }).catch(() => {});
     enqueueLogoRemoval(req.params.id, sceneId);
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -1842,19 +1948,30 @@ app.post('/api/projects/:id/logo-remove/skip', async (req, res) => {
       return { ok: true };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
+    // Bỏ qua ảnh đang chờ Ổn thì mới được mở ảnh kế tiếp.
+    releaseLogoJob(req.params.id, sceneId);
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
   try {
+    // Người dùng xác nhận đã đổi Gmail: mở một lượt free mới (3 ảnh) cho tài khoản mới.
+    cfg.resetFireflyDailyFree();
     logoRemovePausedQuota = null;
     const allowed = await writeLock.run(() => {
       const p = store.load(req.params.id); if (!p) return false;
       if (!shouldStartLogoRemoval(p)) return false;
+      // Đổi Gmail chỉ mở lại ĐÚNG ảnh số kế tiếp chưa có ảnh sạch (01 → 02 → 03 → 04…).
+      // Ảnh đã xong / đang chờ Ổn bị bỏ qua, nên 3 ảnh đầu không bao giờ bị làm lại.
+      const resumeScene = nextLogoScene(p, true);
       let changed = false;
       for (const sc of p.s3.scenes) {
         const lr = sc.logoRemoval;
+        // Có file ảnh sạch theo số thứ tự thì coi như đã xong, dù trạng thái cũ còn sót lại.
+        if (logoSceneDone(p, sc)) continue;
+        // Không đụng ảnh đang chạy / chờ bấm Ổn; chỉ xét đúng ảnh kế tiếp.
+        if (sc.id !== resumeScene?.id) continue;
         // Chỉ xử lý cảnh bị hết lượt. Ảnh đã xóa xong / đang chờ Ổn giữ nguyên,
         // không đưa lại vào hàng đợi (không làm lại ảnh đã làm).
         if (lr?.status !== 'quota_blocked') continue;
@@ -1862,6 +1979,8 @@ app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
         // Ảnh chưa tạo được → về queued để tạo tiếp (ảnh kế tiếp, không làm lại ảnh cũ).
         const next = logoResumeStatus(lr, firefly.hasSceneTab(req.params.id, sc.id));
         lr.status = next;
+        // Ảnh này sẽ tạo lại bằng Gmail mới → phải được tính vào lượt free mới.
+        lr.fireflyCountedOn = '';
         lr.code = '';
         lr.error = '';
         lr.note = next === 'waiting_ok'
@@ -1976,7 +2095,9 @@ function recoverInterruptedRuns() {
       }
     }
     for (const sc of p.s3.scenes) if (sc.chosen?.status === 'saving') { sc.chosen.status = 'error'; sc.chosen.error = 'Bị gián đoạn khi lưu 2K. Bấm “Lưu lại”.'; n++; }
-    for (const sc of p.s3.scenes) if (['queued', 'preparing', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
+    // waiting_ok cũng phải đưa về error: tool mất bộ nhớ tab Firefly sau khi khởi động lại,
+    // nếu cứ giữ trạng thái chờ Ổn thì hàng đợi Bước 4 bị kẹt vĩnh viễn (kể cả dự án khác).
+    for (const sc of p.s3.scenes) if (['queued', 'preparing', 'waiting_ok', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
     if (n) { store.save(p); removeStaleTemp(store.outputDirFor(p)); interruptedCount += n; }
   }
 }

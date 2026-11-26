@@ -230,6 +230,9 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .flowstep .dot{width:17px;height:17px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:10px;flex:none}
 .flowstep.done{color:var(--ok)}.flowstep.done .dot{background:var(--ok);color:#fff;border-color:var(--ok)}
 .flowstep.active{color:var(--accent)}.flowstep.active .dot{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.logoqueue{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.logoqueue-row{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.logoqueue-row .qno{width:18px;height:18px;border-radius:50%;background:var(--bg2);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;flex:none}
 
 /* ===== hộp thoại / thông báo ===== */
 .modal{position:fixed;inset:0;background:rgba(8,13,24,.62);z-index:40;display:grid;place-items:center;padding:20px}

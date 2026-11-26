@@ -87,7 +87,8 @@ test('Bước 3 có nút tải hết ảnh về & dọn dẹp, xong mới sang B
 });
 
 test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo không làm lại ảnh cũ', () => {
-  assert.match(src, /Tool dừng đúng ảnh đang làm, giữ nguyên các ảnh đã xong/, 'phải báo tiếp tục từ ảnh bị chặn');
+  assert.match(src, /Firefly hết lượt free ở <b>/, 'phải báo tên ảnh đang bị chặn');
+  assert.match(src, /đang dùng lượt free hàng ngày\)\. Vui lòng đổi mail khác/, 'phải nói rõ đang dùng lượt free hàng ngày và đổi mail khác');
   assert.match(src, /không làm lại ảnh cũ/);
   assert.match(src, /data-act="fireflyopen">Mở Firefly để đổi Gmail/, 'phải có nút mở Firefly để đăng nhập mail khác');
   assert.match(src, /lr\.generated \? ' <span class="badge warn"/, 'ảnh đã tạo phải hiện trạng thái chờ tải lại');
@@ -180,7 +181,7 @@ test('thanh bước có Bước 4 nối ngay sau Bước 3 và chỉ xong khi �
 });
 
 test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật ký theo thời gian thực', () => {
-  assert.match(src, /const LOGO_FLOW_STEPS = \[[\s\S]*?Cắt ảnh về khung 9:16[\s\S]*?Chấm sửa và xóa[\s\S]*?Chỉnh cỡ cọ & tô vùng logo[\s\S]*?Bấm “Xóa” trên Firefly[\s\S]*?tool bấm “Tải xuống”/);
+  assert.match(src, /const LOGO_FLOW_STEPS = \[[\s\S]*?Cắt ảnh về khung 9:16[\s\S]*?Chấm sửa và xóa[\s\S]*?Mở “Cài đặt cọ”, chọn cỡ 14[\s\S]*?Chấm đúng 1 lần vào vùng logo[\s\S]*?Bấm “Xóa” trên Firefly[\s\S]*?tool bấm “Tải xuống”/);
   assert.match(src, /id="logoPhaseList"/, 'Phải có danh sách tiến trình Firefly');
   assert.match(src, /id="logoNow"/, 'Phải hiện thao tác đang chạy');
   assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
@@ -188,6 +189,30 @@ test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật k
   assert.match(src, /<div class="phaselist">\$\{phases\}<\/div>/);
   assert.match(src, /data-act="logook"[\s\S]{0,80}Ổn — tải ảnh sạch/, 'Bấm Ổn mới tải ảnh sạch');
   assert.match(src, /data-act="opensettings"/, 'Bước 4 phải mở được Cài đặt để chỉnh cọ/mask');
+});
+
+test('Bước 4 hiện hàng chờ từng ảnh và đặt cỡ cọ 14 trong Cài đặt', () => {
+  assert.match(src, /function logoQueueRows\(p\)/, 'Phải tính thứ tự ảnh chưa xong');
+  assert.match(src, /function logoQueueHtml\(p\)/, 'Phải hiện hàng chờ trên giao diện');
+  assert.match(src, /hàng chờ \$\{q\.no\}/, 'Mỗi cảnh phải hiện số thứ tự trong hàng chời');
+  assert.match(src, /trong hàng chờ/, 'Ảnh chưa tới lượt phải hiện rõ là đang chờ');
+  assert.match(src, /Firefly hết lượt free ở <b>\$\{esc\(quotaScene\.label \|\| `Cảnh \$\{quotaIndex \+ 1\}`\)\}<\/b>/, 'Banner phải nói tên ảnh hết lượt');
+  assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'Banner phải nói rõ giới hạn 3 ảnh/ngày');
+  assert.match(src, /Đã đổi Gmail khác, tiếp tục/, 'Banner phải hướng dẫn bấm nút đổi Gmail');
+  assert.match(src, /Lượt free hôm nay: <b>\$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}\/\$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\}<\/b>/, 'Bước 4 phải hiện số lượt đã dùng');
+  assert.match(src, /Firefly hết \$\{S\.flow\.fireflyDaily\?\.limit \|\| 3\} lượt free\/ngày — đổi mail/, 'Thanh trạng thái phải nhắc đổi mail');
+  assert.match(src, /id="cBrush"[^>]*min="5"[^>]*max="128"/, 'Cài đặt phải có ô cỡ cọ');
+  assert.match(src, /logoBrushSize: \+\$\('#cBrush'\)\.value/, 'Cỡ cọ phải được lưu qua /api/config');
+});
+
+test('hàng chờ Bước 4 hiện đúng số ảnh 01, 02, 03 đã đặt từ Bước 3', () => {
+  assert.match(src, /no: \+\(s\.order \|\| i \+ 1\)/, 'dùng số thứ tự thật của ảnh, không đánh số lại từ 1');
+  assert.match(src, /sort\(\(a, b\) => a\.no - b\.no\)/, 'hàng chờ đi theo thứ tự ảnh');
+  assert.ok(src.includes('Ảnh ${+(s.order || i + 1)}'), 'thẻ ảnh hiện đúng số ảnh');
+  assert.ok(src.includes('01, 02, 03'), 'giải thích rõ cách đánh số ảnh');
+  assert.match(src, /Mở anhdaxoalogo/, 'nút mở đúng thư mục anhdaxoalogo');
+  assert.match(src, /output\/&lt;project&gt;\/anhdaxoalogo\//, 'hướng dẫn đúng đường dẫn output/<dự án>/anhdaxoalogo');
+  assert.match(src, /ảnh số <b>\$\{String\(quotaNo\)\.padStart\(2, '0'\)\}<\/b>/, 'banner hết lượt nói rõ đang chặn ảnh số mấy');
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {

@@ -8,6 +8,19 @@ const { imageDimensions } = require('./image');
 
 const DEFAULT_HOME = 'https://firefly.adobe.com/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const UI_TICK_MS = 150;
+// Chờ theo điều kiện thật thay vì ngủ cố định: nhanh hơn nhưng vẫn bấm đúng lúc nút đã active.
+async function waitUntil(check, timeoutMs, label, tickMs = UI_TICK_MS) {
+  const end = Date.now() + timeoutMs;
+  let last;
+  while (Date.now() < end) {
+    last = await check();
+    if (last) return last;
+    await sleep(tickMs);
+  }
+  if (label) throw new Error(label);
+  return last;
+}
 const isFireflyUrl = (url) => /^https:\/\/firefly\.adobe\.com(?:\/|$)/i.test(String(url || ''));
 const isLoginUrl = (url) => /adobeid|auth\.services\.adobe|ims\.na1\.adobelogin/i.test(String(url || ''));
 
@@ -29,8 +42,11 @@ const L = {
   uploadInput: (p) => p.locator('input[type="file"]').first(),
   removeObject: (p) => p.getByRole('button', { name: /Chấm sửa và xóa|Remove object|Generative remove|Xóa đối tượng/i }).first(),
   removeObjectText: (p) => p.getByText(/Chấm sửa và xóa|Generative remove|Xóa đối tượng/i).first(),
-  brushSize: (p) => p.getByRole('slider', { name: /Kích thước cọ|Brush size|Size/i }).first(),
-  brushSizeInput: (p) => p.locator('input[type="range"]').first(),
+  // Cỡ cọ thật nằm trong hộp “Cài đặt cọ vẽ”, không phải slider để lộ ngay trên thanh công cụ.
+  brushSettings: (p) => p.locator('#gen-remove-brush-settings-trigger').first(),
+  brushSizeSlider: (p) => p.locator('sp-slider[label="Kích thước cọ"]').first(),
+  brushSizeRange: (p) => L.brushSizeSlider(p).locator('input[type="range"]').first(),
+  brushSizeRole: (p) => p.getByRole('slider', { name: /Kích thước cọ|Brush size/i }).first(),
   // Nút xác nhận trên bản hiện tại là "Áp dụng", bản cũ là "Xóa"/"Remove".
   removeBtn: (p) => p.getByRole('button', { name: /^(?:Xóa|Remove|Áp dụng|Apply)$/i }).first(),
   removeBtnText: (p) => p.getByText(/^(?:Xóa|Remove|Áp dụng|Apply)$/i).first(),
@@ -38,10 +54,16 @@ const L = {
   // Khung 9:16 nằm trong công cụ Cắt: preset "Thêm" -> option 9:16 -> nút "Cắt".
   cropTool: (p) => p.getByRole('button', { name: /Cắt và mở rộng|Crop and expand/i }).first(),
   moreRatio: (p) => p.getByRole('combobox', { name: /^Thêm$|More/i }).first(),
+  // getByRole('combobox') đôi khi không thấy picker trong shadow DOM; selector thật là sp-picker[label="Thêm"].
+  ratioPicker: (p) => p.locator('sp-picker[label="Thêm"]').first(),
   ratio916: (p) => p.locator('sp-menu-item[value="9:16"]').first(),
   ratio916Role: (p) => p.getByRole('option', { name: '9:16' }).first(),
   cropApply: (p) => p.getByRole('button', { name: /^Cắt$/i }).first(),
-  cropConfirm: (p) => p.getByRole('button', { name: /^Confirm crop$|^Xác nhận cắt$|^Xác nhận$|^Confirm$/i }).first(),
+  // Firefly đôi khi hiện hộp "Xác nhận cắt" sau khi bấm Cắt, hoặc thông báo hết dung lượng
+  // lưu trữ chắn toàn bộ thao tác. Phải đóng trước khi chấm cọ, nếu không nút Xóa không chạy.
+  cropAck: (p) => p.getByRole('button', { name: /^Xác nhận cắt$/i }).first(),
+  storageContinue: (p) => p.getByRole('button', { name: /^Tiếp tục$/i }).first(),
+  removalDone: (p) => p.getByText(/hoàn tất thao tác tạo sinh|hoàn tất thao tác/i).first(),
 };
 
 // Firefly vẫn giữ banner "hết lượt" trên trang kết quả dù ảnh hiện tại ĐÃ tạo xong.
@@ -50,6 +72,27 @@ const L = {
 async function downloadReady(page) {
   const btn = L.downloadBtn(page);
   return (await btn.isVisible().catch(() => false)) && (await btn.isEnabled().catch(() => true));
+}
+
+// Sau khi bấm Xóa, Firefly chạy vài giây rồi hiện ĐÚNG câu này trên ảnh.
+// Nút Tải xuống có thể đã tồn tại từ trước → không được dùng nó làm tín hiệu xong.
+const isRemovalDone = (text) => /đã hoàn tất thao tác tạo sinh|hoàn tất thao tác tạo sinh|generative remove (?:complete|done)|removal complete/i.test(String(text || ''));
+
+async function removalComplete(page, state) {
+  const s = state || await readPageState(page);
+  if (isRemovalDone(s.uiText) || isRemovalDone(s.deepText)) return true;
+  return await L.removalDone(page).isVisible().catch(() => false);
+}
+
+async function waitForRemovalComplete(page, timeoutMs = 180000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    const state = await readPageState(page);
+    if (await removalComplete(page, state)) return true; // Firefly đã báo xong mới được phép tải.
+    if (await detectQuotaBlock(page, state)) throw quotaError();
+    await sleep(400);
+  }
+  throw new Error('Firefly chưa báo “Đã hoàn tất thao tác tạo sinh”.');
 }
 
 // Toàn bộ giao diện Firefly nằm trong shadow DOM của <firefly-home-app>/<firefly-ash-shell>.
@@ -76,8 +119,10 @@ const readPageState = (page) => page.evaluate(() => {
   const active = all.filter((el) => (
     /^(?:BUTTON|A|SP-ACTION-BUTTON|SP-BUTTON)$/.test(el.tagName) || /button|menuitem/i.test(el.getAttribute('role') || '')
   )).filter((el) => visible(el) && enabled(el));
-  const deepText = all.filter((el) => !/^(?:SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName))
-    .map((el) => el.innerText || el.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
+  const uiNodes = all.filter((el) => !/^(?:SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName));
+  const deepText = uiNodes.map((el) => el.innerText || el.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
+  // Text node thật trên giao diện (không lẫn JS) để nhận câu báo “hoàn tất tạo sinh” trên ảnh.
+  const uiText = uiNodes.map((el) => el.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
   const body = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
   const inputOf = (type) => all.filter((el) => el.tagName === 'INPUT' && (!type || el.type === type));
   return {
@@ -97,11 +142,12 @@ const readPageState = (page) => page.evaluate(() => {
     hasEditorApp: /Chấm sửa và xóa|Generative remove|Xóa đối tượng|Tải ảnh lên|Tải lên|Upload(?: image)?|Chọn ảnh|Choose file|Lưu trữ đám mây Adobe|Tạo khung vẽ mới/i.test(deepText),
     body,
     deepText,
+    uiText,
   };
 }).catch(() => ({}));
 
 // Firefly mất ~5-10s đầu để xác nhận tài khoản; trong lúc đó mọi nút đều disabled.
-// Bấm ngay sẽ trúng nút chưa active hoặc trang chưa render xong → các lỗi "không tìm thấy nút".
+// Chỉ chờ đủ 5s MỘT LẦN cho toàn bộ tab, không cộng thêm ở bước editor.
 async function waitForFireflyReady(page, timeoutMs = 30000, minWaitMs = 5000) {
   const start = Date.now();
   const end = start + timeoutMs;
@@ -109,57 +155,62 @@ async function waitForFireflyReady(page, timeoutMs = 30000, minWaitMs = 5000) {
   while (Date.now() < end) {
     const state = await readPageState(page);
     if (state.login) return false; // để prepareScene báo lỗi đăng nhập thay vì lỗi "chưa sẵn sàng"
-    if (state.hasApp && state.activeButtons > 0 && /firefly\.adobe\.com/i.test(state.url || '')) {
+    if ((state.hasApp || state.hasEditorApp) && state.activeButtons > 0 && /firefly\.adobe\.com/i.test(state.url || '')) {
       ready = true;
       break;
     }
-    await sleep(500);
+    await sleep(UI_TICK_MS);
   }
   if (!ready) throw new Error('Firefly chưa sẵn sàng sau khi đăng nhập. Hãy đợi vài giây rồi thử lại.');
-  // Kể cả khi đã thấy nút active vẫn đợi đủ 5s để Adobe kịp xác nhận tài khoản/gắn handler.
   const remain = minWaitMs - (Date.now() - start);
   if (remain > 0) await sleep(remain);
-  await sleep(600);
   return true;
 }
 
-async function waitForEditorReady(page, timeoutMs = 30000) {
+async function waitForEditorReady(page, timeoutMs = 30000, minWaitMs = 5000) {
   const start = Date.now();
   const end = start + timeoutMs;
+  let ready = false;
   while (Date.now() < end) {
     const state = await readPageState(page);
     if (state.login) return false;
     // Chỉ có khung điều hướng thì chưa phải editor; phải thấy công cụ "Chấm sửa và xóa"
     // hoặc canvas thật. Khi chưa đăng nhập Adobe, Firefly chỉ render khung vỏ.
     if (/image-editor/i.test(state.url || '') && state.activeButtons > 0 && (state.hasEditorApp || state.hasCanvas)) {
-      const remain = 5000 - (Date.now() - start);
-      if (remain > 0) await sleep(remain);
-      await sleep(600);
-      return true;
+      ready = true;
+      break;
     }
-    await sleep(500);
+    await sleep(UI_TICK_MS);
   }
-  throw loginError();
+  if (!ready) throw loginError();
+  // 5 giây đã được tiêu ở waitForFireflyReady; chỉ bù phần còn thiếu, không chờ lại từ đầu.
+  const remain = minWaitMs - (Date.now() - start);
+  if (remain > 0) await sleep(remain);
+  return true;
 }
 
 async function isClickable(locator) {
   return (await locator.isVisible().catch(() => false)) && (await locator.isEnabled().catch(() => true));
 }
 
+// Chờ locator đầu tiên thật sự active; thử lại mọi phương án dự phòng mỗi 150ms.
+async function waitClickable(page, locators, { timeout = 8000, label = 'nút trên Firefly' } = {}) {
+  const list = locators.map((loc) => (typeof loc === 'function' ? loc(page) : loc));
+  return waitUntil(async () => {
+    for (const l of list) if (await isClickable(l)) return l;
+    return null;
+  }, timeout, `Không thấy ${label} đang hoạt động trên Firefly.`);
+}
+
 // Chờ nút thật sự active rồi mới bấm. Firefly disable nút trong vài giây đầu nên click thường bị trượt.
-async function clickEnabledAny(page, locators, { timeout = 15000, label = 'nút trên Firefly' } = {}) {
-  const end = Date.now() + timeout;
-  while (Date.now() < end) {
-    for (const loc of locators) {
-      const l = typeof loc === 'function' ? loc(page) : loc;
-      if (await isClickable(l)) {
-        await l.click({ force: true, timeout: 5000 });
-        return true;
-      }
-    }
-    await sleep(300);
-  }
-  throw new Error(`Không tìm thấy ${label} đang hoạt động trên Firefly. Hãy kiểm tra cửa sổ Firefly.`);
+async function clickEnabledAny(page, locators, opts = {}) {
+  const target = await waitClickable(page, locators, opts);
+  await target.click({ force: true, timeout: 5000 });
+  return true;
+}
+
+async function tryClick(page, locators, opts = {}) {
+  try { return await clickEnabledAny(page, locators, opts); } catch (_) { return false; }
 }
 
 class Lock {
@@ -230,7 +281,8 @@ async function getTab(key) {
     const page = await chrome.newBackgroundPage();
     const t = { key, page, users: 1 };
     try {
-      await page.goto(fireflyHome(), { waitUntil: 'domcontentloaded' });
+      // Vào thẳng editor: đi qua trang chủ rồi mới goto lại tốn thêm một lần tải trang.
+      await page.goto(editorUrl(), { waitUntil: 'domcontentloaded' });
     } catch (e) { await page.close().catch(() => {}); tabs.delete(key); throw e; }
     return t;
   })();
@@ -318,41 +370,39 @@ async function uploadImage(page, imagePath) {
   throw new Error(`Không tìm thấy nơi tải ảnh lên trên Firefly (${detail}). Hãy mở cửa sổ Firefly kiểm tra${clicked ? ', hoặc bấm "Tải lên" rồi thử lại' : ''}.`);
 }
 
+// Thông báo hết dung lượng lưu trữ / hộp xác nhận cắt có thể chắn toàn bộ thao tác.
+// Chỉ chờ trong một cửa sổ ngắn rồi bấm ngay khi nút hiện ra, không sleep cố định.
+async function dismissFireflyDialogs(page, graceMs = 400) {
+  const locs = [L.storageContinue(page), L.cropAck(page)];
+  const clicked = new Set();
+  const end = Date.now() + graceMs;
+  while (Date.now() < end) {
+    for (let i = 0; i < locs.length; i++) {
+      if (clicked.has(i) || !(await isClickable(locs[i]))) continue;
+      await locs[i].click({ force: true, timeout: 5000 }).catch(() => {});
+      clicked.add(i);
+    }
+    if (clicked.size && !(await Promise.all(locs.map((l) => isClickable(l)))).some(Boolean)) break;
+    await sleep(100);
+  }
+}
+
 // Firefly không có preset 9:16 trên thanh tỷ lệ thường mà nằm trong picker "Thêm" của công cụ Cắt.
-// Chọn xong phải bấm "Cắt" thì khung 9:16 mới áp dụng cho ảnh trước khi tô vùng logo.
+// Chọn xong phải bấm "Cắt" rồi xác nhận thì khung 9:16 mới áp dụng cho ảnh trước khi tô vùng logo.
 async function selectAspect916(page) {
   try {
-    if (!(await isClickable(L.cropTool(page)))) return false;
-    await L.cropTool(page).click({ force: true, timeout: 8000 });
-    await sleep(1200);
-    if (!(await isClickable(L.moreRatio(page)))) return false;
-    await L.moreRatio(page).click({ force: true, timeout: 8000 });
-    await sleep(800);
-    const options = [
+    if (!(await tryClick(page, [L.cropTool], { timeout: 5000, label: 'công cụ Cắt và mở rộng' }))) return false;
+    const picker = await waitClickable(page, [L.ratioPicker, L.moreRatio], { timeout: 5000, label: 'picker “Thêm”' });
+    await picker.click({ force: true, timeout: 5000 });
+    const option = await waitClickable(page, [
       (p) => L.ratio916(p),
       (p) => L.ratio916Role(p),
       (p) => p.getByText('9:16', { exact: true }).first(),
-    ];
-    let picked = false;
-    for (const make of options) {
-      const loc = make(page);
-      if (!(await isClickable(loc))) continue;
-      await loc.click({ force: true, timeout: 8000 });
-      picked = true;
-      break;
-    }
-    if (!picked) return false;
-    await sleep(800);
-    if (await isClickable(L.cropApply(page))) {
-      await L.cropApply(page).click({ force: true, timeout: 8000 });
-      await sleep(1500);
-      // Adobe có thể hiện hộp "Confirm crop": phải xác nhận thì khung 9:16 mới áp dụng,
-      // nếu không các thao tác chấm sửa/tô cọ sau đó bị chặn bởi hộp thoại này.
-      if (await isClickable(L.cropConfirm(page))) {
-        await L.cropConfirm(page).click({ force: true, timeout: 8000 });
-        await sleep(1200);
-      }
-    }
+    ], { timeout: 5000, label: 'preset 9:16' });
+    await option.click({ force: true, timeout: 5000 });
+    if (!(await tryClick(page, [L.cropApply], { timeout: 5000, label: 'nút Cắt' }))) return false;
+    // Hộp “Xác nhận cắt” hiện ra ngay sau khi bấm Cắt; chờ có điều kiện rồi bấm, không ngủ cố định 1500ms.
+    await dismissFireflyDialogs(page, 1500);
     return true;
   } catch (_) {
     return false; // không được làm đứt luồng xóa logo chỉ vì Adobe đổi lại giao diện chọn khung
@@ -361,8 +411,8 @@ async function selectAspect916(page) {
 
 function normalizeMask(mask) {
   const n = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
-  const xPct = Math.min(99, Math.max(0, n(mask?.xPct, 84.375)));
-  const yPct = Math.min(99, Math.max(0, n(mask?.yPct, 91.352)));
+  const xPct = Math.min(99, Math.max(0, n(mask?.xPct, 89.940)));
+  const yPct = Math.min(99, Math.max(0, n(mask?.yPct, 94.329)));
   return {
     xPct, yPct,
     wPct: Math.max(0.1, Math.min(100 - xPct, n(mask?.wPct, 6.12))),
@@ -370,18 +420,30 @@ function normalizeMask(mask) {
   };
 }
 
-async function findCanvas(page) {
+async function findCanvas(page, { prefer9x16 = false } = {}) {
   // Không dùng :visible vì canvas nằm trong shadow DOM; lọc bằng boundingBox bên dưới.
   const candidates = page.locator('canvas');
   const count = await candidates.count();
   let best = null;
-  let bestArea = 0;
+  let bestScore = Infinity;
   for (let i = 0; i < count; i++) {
     const c = candidates.nth(i);
     const box = await c.boundingBox().catch(() => null);
-    if (!box || box.width < 200 || box.height < 200) continue;
-    const area = box.width * box.height;
-    if (area > bestArea) { bestArea = area; best = { locator: c, box }; }
+    if (!box) continue;
+    const cls = await c.evaluate((el) => String(el.className || '')).catch(() => '');
+    const isMask = /mask-canvas/i.test(cls);
+    // Canvas mask trên ảnh 2K chỉ rộng ~199px: ngưỡng 200px cũ loại nó và chọn nhầm canvas nền.
+    if (isMask ? (box.width < 60 || box.height < 100) : (box.width < 200 || box.height < 200)) continue;
+    let score;
+    if (prefer9x16) {
+      // Sau khi bấm “Chấm sửa và xóa” Firefly có 2 canvas: canvas nền (tỷ lệ ~1.7)
+      // và canvas mask thật (class mask-canvas, tỷ lệ 9:16). Chọn nhầm canvas nền
+      // làm cọ chấm ngoài ảnh → bấm Xóa nhưng logo vẫn còn.
+      score = isMask ? -1000 : Math.abs(box.width / box.height - 9 / 16);
+    } else {
+      score = -box.width * box.height; // lúc upload chỉ có canvas nền: lấy canvas lớn nhất
+    }
+    if (score < bestScore) { bestScore = score; best = { locator: c, box }; }
   }
   if (!best) throw new Error('Không tìm thấy vùng ảnh trên Firefly để xóa logo.');
   return best;
@@ -394,78 +456,116 @@ async function waitForCanvas(page, timeoutMs = 30000) {
   }
   throw last || new Error('Firefly chưa hiển thị ảnh để xóa logo.');
 }
+async function waitForMaskCanvas(page, timeoutMs = 30000) {
+  const end = Date.now() + timeoutMs;
+  let last;
+  while (Date.now() < end) {
+    try { return await findCanvas(page, { prefer9x16: true }); } catch (e) { last = e; await sleep(500); }
+  }
+  throw last || new Error('Firefly chưa hiện đúng vùng ảnh 9:16 để chấm logo.');
+}
+
+// Cỡ cọ nằm trong hộp “Cài đặt cọ vẽ: 64px”. Web component <sp-slider> có input[type=range]
+// bên trong shadow root; gán .value bằng JS KHÔNG cập nhật state, phải dùng bàn phím như người thật.
+async function setBrushSize(page, size) {
+  const target = Math.min(128, Math.max(5, Math.round(Number(size) || 14)));
+  await clickEnabledAny(page, [L.brushSettings], { timeout: 10000, label: 'nút Cài đặt cọ vẽ' });
+  let range = L.brushSizeRange(page);
+  if (!(await waitUntil(async () => (await range.count().catch(() => 0)) > 0, 2500, null, 100).catch(() => false))) {
+    const byRole = L.brushSizeRole(page);
+    if (await waitUntil(async () => (await byRole.count().catch(() => 0)) > 0, 1000, null, 100).catch(() => false)) {
+      range = byRole.locator('input[type="range"]').first();
+    }
+  }
+  if (!(await range.count().catch(() => 0))) throw new Error('Không thấy thanh “Kích thước cọ” trong Firefly.');
+  const min = Number(await range.getAttribute('min')) || 5;
+  const current = Number(await range.inputValue());
+  if (current !== target) {
+    await range.focus();
+    await page.keyboard.press('Home'); // về mức nhỏ nhất rồi tăng từng nấc như người bấm
+    const steps = Math.max(0, Math.min(128 - min, target - min));
+    for (let i = 0; i < steps; i++) await page.keyboard.press('ArrowRight');
+    // Đợi state web component nhận đúng giá trị; không ngủ cố định 500ms.
+    await waitUntil(async () => Number(await range.inputValue().catch(() => NaN)) === target, 1500, null, 100).catch(() => {});
+  }
+  const label = await L.brushSettings(page).innerText().catch(() => '');
+  await page.keyboard.press('Escape'); // đóng hộp cài đặt để không che canvas
+  await waitUntil(async () => !(await range.isVisible().catch(() => false)), 1000, null, 100).catch(() => {});
+  return { target, label };
+}
 async function waitForDownloadReady(page, timeoutMs = 120000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
     if (await downloadReady(page)) return true; // Ảnh đã tạo xong: bỏ qua banner quota còn sót lại.
     if (await detectQuotaBlock(page)) throw quotaError();
-    await sleep(1000);
+    await sleep(400);
   }
   throw new Error('Firefly chưa tạo xong ảnh để tải xuống.');
 }
 
-async function applyBrush(page, mask, imagePath) {
-  const { locator, box } = await findCanvas(page);
+async function applyBrush(page, mask, imagePath, brushSize, cropped = true) {
+  // Chấm đúng 1 lần vào tâm vùng logo trên canvas mask 9:16 — đúng thao tác người dùng
+  // đã làm trực tiếp: chỉnh cọ mức 14 rồi chấm, sau đó bấm Xóa.
+  const { box } = await waitForMaskCanvas(page);
   const m = normalizeMask(mask);
-  // Ảnh 9:16 thường được Firefly hiển thị dạng "contain" trong canvas; quy đổi phần trăm
-  // theo đúng khung ảnh thật thay vì toàn bộ canvas để không tô lệch vùng logo.
-  let frame = box;
+  const brush = await setBrushSize(page, brushSize);
+
+  let rel = { x: (m.xPct + m.wPct / 2) / 100, y: (m.yPct + m.hPct / 2) / 100 };
   const src = imagePath ? imageDimensions(imagePath) : null;
-  if (src?.width > 0 && src?.height > 0 && box.width > 0 && box.height > 0) {
-    const scale = Math.min(box.width / src.width, box.height / src.height);
-    const w = src.width * scale;
-    const h = src.height * scale;
-    frame = { x: box.x + (box.width - w) / 2, y: box.y + (box.height - h) / 2, width: w, height: h };
-  }
-  // Brush size: slightly larger than logo width in pixels.
-  const targetBrush = Math.max(8, Math.round((m.wPct / 100) * frame.width * 1.15));
-  const slider = (await L.brushSize(page).isVisible().catch(() => false)) ? L.brushSize(page) : L.brushSizeInput(page);
-  if (await slider.isVisible().catch(() => false) || await slider.count().catch(() => 0)) {
-    try { await slider.fill(String(targetBrush)); } catch (_) {
-      try {
-        await slider.focus();
-        await page.keyboard.press('Control+A');
-        await page.keyboard.type(String(targetBrush));
-        await page.keyboard.press('Enter');
-      } catch (_) {}
+  if (cropped && src?.width > 0 && src?.height > 0) {
+    // Firefly crop ảnh về 9:16 bằng cách cắt giữa. Mask được cấu hình theo phần trảm
+    // của ảnh gốc nên phải đổi sang phần trăm của khung đã cắt trước khi chấm.
+    const ratio = 9 / 16;
+    let cropW, cropH, offX, offY;
+    if (src.width / src.height > ratio) {
+      cropH = src.height; cropW = src.height * ratio; offX = (src.width - cropW) / 2; offY = 0;
+    } else {
+      cropW = src.width; cropH = src.width / ratio; offX = 0; offY = (src.height - cropH) / 2;
     }
+    const px = rel.x * src.width;
+    const py = rel.y * src.height;
+    rel = {
+      x: Math.min(1, Math.max(0, (px - offX) / cropW)),
+      y: Math.min(1, Math.max(0, (py - offY) / cropH)),
+    };
   }
 
-  const x1 = frame.x + (m.xPct / 100) * frame.width;
-  const y1 = frame.y + (m.yPct / 100) * frame.height;
-  const x2 = x1 + (m.wPct / 100) * frame.width;
-  const y2 = y1 + (m.hPct / 100) * frame.height;
-  const cx = (x1 + x2) / 2;
-  const cy = (y1 + y2) / 2;
-
-  // Cọ đủ lớn rồi quét nhiều lượt ngang (cách nhau chừng nửa đường kính cọ) để phủ kín
-  // vùng logo; một nét giữa đơn lẻ dễ sót chữ ở góc trên/dưới.
-  const cover = Math.max(6, Math.round(targetBrush * 0.55));
-  const rows = Math.max(2, Math.ceil((y2 - y1) / cover) + 1);
-  const strokes = [];
-  for (let i = 0; i < rows; i++) {
-    const y = y1 + ((i + 0.5) * (y2 - y1)) / rows;
-    strokes.push([{ x: x1, y }, { x: x2, y }]);
-  }
-  strokes.push([{ x: cx, y: y1 }, { x: cx, y: y2 }]);
-  for (const pts of strokes) {
-    await page.mouse.move(pts[0].x, pts[0].y);
-    await page.mouse.down();
-    for (const pt of pts.slice(1)) await page.mouse.move(pt.x, pt.y, { steps: 12 });
-    await page.mouse.up();
-    await sleep(120);
-  }
-  return { box, mask: m, brush: targetBrush };
+  const cx = box.x + rel.x * box.width;
+  const cy = box.y + rel.y * box.height;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.up();
+  await sleep(200); // nhỏ để Firefly kịp nhận event pointer, không phải chờ 900ms cũ
+  // Chờ Firefly nhận nét chấm (nút Xóa được bật) thay vì sleep 900ms cố định.
+  await waitClickable(page, [L.removeBtn, L.removeBtnText], { timeout: 3000, label: 'nút xóa sau khi chấm' }).catch(() => {});
+  return { box, mask: m, brush: brush.target, brushLabel: brush.label, point: { cx, cy } };
 }
+
+// Firefly hết free có 2 dạng: banner “hết lượt” hoặc màn hình mời “nâng cấp gói trả phí”.
+// Cả hai đều là hết lượt free hàng ngày, không phải lỗi và không nên tự mua gói.
+const QUOTA_TEXT_RE = /đã hết lượt|hết lượt (?:tạo|miễn phí|free|generative)|đã đạt giới hạn|nâng cấp[^.]{0,40}(?:trả phí|premium|pro|paid|để tiếp tục)|mua thêm lượt|mua thêm credit|out of generative credits|no generative credits|generation limit reached|daily limit reached|insufficient credits|quota exceeded|upgrade[^.]{0,40}(?:paid|premium|pro) plan|subscribe to continue|buy more credits|get more (?:generative )?credits/i;
+const QUOTA_LOCATOR_RES = [
+  /đã hết lượt|hết lượt/i,
+  /đã đạt giới hạn/i,
+  /nâng cấp[^.]{0,40}(?:trả phí|premium|pro|paid|để tiếp tục)/i,
+  /mua thêm lượt|mua thêm credit/i,
+  /out of generative credits|no generative credits|insufficient credits/i,
+  /generation limit reached|daily limit reached|quota exceeded/i,
+  /upgrade[^.]{0,40}(?:paid|premium|pro) plan/i,
+  /subscribe to continue|buy more credits|get more (?:generative )?credits/i,
+];
 
 function isQuotaText(text) {
-  return /đã hết lượt|hết lượt (?:tạo|miễn phí|free|generative)|đã đạt giới hạn|out of generative credits|no generative credits|generation limit reached|daily limit reached|insufficient credits|quota exceeded/i.test(String(text || ''));
+  return QUOTA_TEXT_RE.test(String(text || ''));
 }
 
-async function detectQuotaBlock(page) {
-  const state = await readPageState(page);
-  if (isQuotaText(state.body) || isQuotaText(state.deepText)) return true;
-  for (const re of [/đã hết lượt|hết lượt/i, /đã đạt giới hạn/i, /out of generative credits|no generative credits|insufficient credits/i, /generation limit reached|daily limit reached|quota exceeded/i]) {
+function stateHasQuota(state) {
+  return isQuotaText(state?.body) || isQuotaText(state?.deepText) || isQuotaText(state?.uiText);
+}
+
+async function detectQuotaBlock(page, state) {
+  if (stateHasQuota(state || await readPageState(page))) return true;
+  for (const re of QUOTA_LOCATOR_RES) {
     const loc = page.getByText(re).first();
     if (await loc.isVisible().catch(() => false)) return true;
   }
@@ -481,9 +581,10 @@ async function waitForDownloadClick(page, timeoutMs = 180000) {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
       if (download) return download;
+      const state = await readPageState(page);
       // Chỉ coi là hết lượt khi KHÔNG có nút tải: ảnh đã tạo thì vẫn cho tải tiếp.
-      if (await detectQuotaBlock(page) && !(await downloadReady(page))) throw quotaError();
-      await sleep(1000);
+      if (await detectQuotaBlock(page, state) && !(await downloadReady(page))) throw quotaError();
+      await sleep(400);
     }
     throw new Error('Firefly chưa tạo xong ảnh để tải xuống.');
   } finally {
@@ -492,7 +593,7 @@ async function waitForDownloadClick(page, timeoutMs = 180000) {
 }
 
 function quotaError() {
-  return Object.assign(new Error('Đã hết lượt free Firefly. Hãy kết nối lại bằng Gmail khác rồi tiếp tục.'), { code: 'FIREFLY_QUOTA' });
+  return Object.assign(new Error('Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.'), { code: 'FIREFLY_QUOTA' });
 }
 function loginError() {
   return Object.assign(new Error('Chưa đăng nhập Adobe Firefly. Bấm “Kết nối Firefly” và đăng nhập rồi thử lại.'), { code: 'FIREFLY_LOGIN' });
@@ -515,17 +616,18 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       await p.bringToFront().catch(() => {});
       assertNotCanceled(isCanceled);
       if (!(await isLoggedIn(p))) throw loginError();
-      // 5–10 giây đầu Firefly còn đang xác nhận tài khoản, bấm ngay sẽ trượt nút.
+      // 5 giây đầu Firefly xác nhận tài khoản: chờ MỘT LẦN cho cả tab, không chờ lại ở editor.
       if (!(await waitForFireflyReady(p))) throw loginError();
 
       onPhase?.('Đang mở Chỉnh sửa hình ảnh…');
-      // Menu "Hình ảnh / Chỉnh sửa hình ảnh" đổi role liên tục (menuitem/listitem/link).
-      // Đi thẳng vào editor trước, chỉ bấm menu khi Adobe redirect không ra /image-editor.
-      let onEditor = false;
-      try {
-        await p.goto(editorUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 });
-        onEditor = /image-editor/i.test(p.url());
-      } catch (_) {}
+      // getTab đã vào thẳng /image-editor; chỉ goto/bấm menu khi Adobe redirect sang trang chủ.
+      let onEditor = /image-editor/i.test(p.url());
+      if (!onEditor) {
+        try {
+          await p.goto(editorUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 });
+          onEditor = /image-editor/i.test(p.url());
+        } catch (_) {}
+      }
       if (!onEditor) {
         await clickEnabledAny(p, [L.imagesNav, L.imagesNavLegacy, L.imagesNavLink, L.imagesNavText], { label: 'mục Hình ảnh' }).catch(() => {});
         assertNotCanceled(isCanceled);
@@ -537,24 +639,27 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       onPhase?.('Đang tải ảnh 2K lên Firefly…');
       await uploadImage(p, imagePath);
       await waitForCanvas(p);
+      await dismissFireflyDialogs(p);
       if (await detectQuotaBlock(p)) throw quotaError();
       assertNotCanceled(isCanceled);
 
+      onPhase?.('Đang cắt ảnh về khung chuẩn 9:16…');
       const ratio916 = await selectAspect916(p);
       onPhase?.(ratio916 ? 'Đã cắt ảnh về khung chuẩn 9:16.' : 'Không tìm thấy nút chọn 9:16, giữ khung ảnh gốc.');
 
       onPhase?.('Đang bấm công cụ Chấm sửa và xóa…');
       await clickEnabledAny(p, [L.removeObject, L.removeObjectText], { label: 'công cụ Chấm sửa và xóa' });
-      await sleep(1200);
       assertNotCanceled(isCanceled);
 
-      onPhase?.('Đang chỉnh cỡ cọ đủ phủ logo và tô vùng logo…');
-      await applyBrush(p, cfg.get().logoRemoveMask, imagePath);
+      onPhase?.(`Đang mở Cài đặt cọ, chọn cỡ ${cfg.get().logoBrushSize}…`);
+      onPhase?.('Đang chấm vào đúng vùng logo trên ảnh 9:16…');
+      await applyBrush(p, cfg.get().logoRemoveMask, imagePath, cfg.get().logoBrushSize, ratio916);
       if (await detectQuotaBlock(p)) throw quotaError();
 
       onPhase?.('Đang bấm Xóa để Firefly xóa logo…');
       await clickEnabledAny(p, [L.removeBtn, L.removeBtnText], { timeout: 30000, label: 'nút xóa/áp dụng' });
-      await waitForDownloadReady(p);
+      onPhase?.('Đang chờ Firefly báo “Đã hoàn tất thao tác tạo sinh”…');
+      await waitForRemovalComplete(p);
       assertNotCanceled(isCanceled);
 
       onPhase?.('Đã xóa logo trên Firefly. Chờ bạn bấm “Ổn” để tải xuống.');
@@ -624,5 +729,5 @@ module.exports = {
   status, open, reveal,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs,
-  _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916 },
+  _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },
 };
