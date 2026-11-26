@@ -249,14 +249,19 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .scene-menu .btn{justify-content:flex-start}
 /* Thiết kế mới Bước 4: mỗi cảnh 2 ô ảnh — gốc / Firefly chiếu trực tiếp */
 .scene.logoscene{grid-template-columns:minmax(0,1fr);display:grid}
-.logosplit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start;max-width:430px}
+.logosplit{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:10px;align-items:start;max-width:640px}
 .logocell{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
-/* Bước 4: cả 2 ô cùng khung 9:16, cùng kích thước để so sánh ảnh gốc / Firefly 1:1.
+/* Bước 4: cả 2 ô cùng khung 9:16 để căn tọa độ 1:1; ô gốc giữ gọn, ô Firefly kéo dài sang phải.
    cover cắt giữa đúng như Firefly cắt ảnh gốc về 9:16 → tọa độ trên khung khớp canvas Firefly. */
 .logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:210px;margin-inline:auto}
+/* Ô Firefly rộng hơn, kéo dài sang phải để nhìn rõ vùng đã xóa. */
+.logocell.firefly img{max-width:none}
 .logocell.firefly img:not([src]){opacity:.45}
+/* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
+.logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}
+.logocell.firefly .phase{background:transparent;border:0;padding:0}
 .logocell-foot{min-height:29px;display:flex;align-items:center;padding:5px 8px;border-top:1px solid var(--line)}
 .logocell-foot .badge{font-size:11px}
 .live-note{margin-top:7px;font-size:11.5px;color:var(--muted)}

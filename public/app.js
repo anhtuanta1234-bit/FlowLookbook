@@ -898,7 +898,11 @@ function logoSceneHtml(s, i) {
     st === 'waiting_ok' ? '<button class="btn sm" data-act="fireflyreveal" data-tip="Mở cửa sổ Firefly để kiểm tra ảnh">Xem trên Firefly</button>' : '',
     st === 'waiting_ok' ? `<button class="btn sm ghost" data-act="logoskip" data-sid="${s.id}">Bỏ qua</button>` : '',
   ].filter(Boolean).join('');
-  const phases = (lr.phases || []).slice(-10).map((x) => `<div class="phase"><span>${esc(x.note)}</span><time>${esc(new Date(x.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`).join('') || '<div class="hint">Chưa có thao tác nào được ghi lại.</div>';
+  // Tiến trình nằm trong ô Firefly: chỉ hiện 1 bước mới nhất, đổi theo thời gian thực.
+  const lastPhase = (lr.phases || []).slice(-1)[0];
+  const phase = lastPhase
+    ? `<div class="phase"><span>${esc(lastPhase.note)}</span><time>${esc(new Date(lastPhase.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`
+    : '<div class="hint">Chưa có thao tác nào được ghi lại.</div>';
   return `<div class="scene logoscene" data-sid="${s.id}">
     <div class="meta"><b>Ảnh ${String(+(s.order || i + 1)).padStart(2, '0')}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}<span class="grow"></span></div>
     <div class="logosplit">
@@ -910,10 +914,10 @@ function logoSceneHtml(s, i) {
         <div class="logocell-lab">Firefly <span class="chip">chiếu trực tiếp</span></div>
         <img class="firefly-shot" data-preview-sid="${s.id}"${previewSrc ? ` src="${previewSrc}"` : ''} alt="Firefly của ảnh ${esc(s.label || i + 1)}">
         <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span></div>
+        <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
       </div>
     </div>
     <div class="live-note" data-live-note="${s.id}">${esc(lr.note || (clean ? 'Đã lưu ảnh sạch trong anhdaxoalogo.' : 'Chờ đến lượt xóa logo.'))}</div>
-    <div class="phaselist">${phases}</div>
     <div class="scene-actions">${actions || '<span class="hint">Chờ đến lượt xóa logo.</span>'}</div>
   </div>`;
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.42 - 2026-11-26
+- Bước 4: ô ảnh gốc giữ gọn ~210px, ô Firefly kéo dài sang phải để nhìn rõ vùng đã xóa; cả 2 vẫn khung 9:16 nên căn tọa độ 1:1.
+- Tiến trình Firefly chuyển từ dưới 2 ô vào ngay dưới ô Firefly, chỉ hiện từng bước một theo thời gian thực.
+
+
 ## v1.1.41 - 2026-11-26
 - Làm gọn 2 ô ảnh Bước 4 (mỗi ô tối đa ~210px chiều rộng) nhưng vẫn giữ cùng khung 9:16 và cùng kích thước để so sánh/căn tọa độ.
 

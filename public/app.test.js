@@ -191,8 +191,8 @@ test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật k
   assert.match(src, /id="logoPhaseList"/, 'Phải có danh sách tiến trình Firefly');
   assert.match(src, /id="logoNow"/, 'Phải hiện thao tác đang chạy');
   assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
-  assert.match(src, /\(lr\.phases \|\| \[\]\)\.slice\(-10\)\.map\(\(x\) =>/, 'Mỗi cảnh phải hiện nhật ký thao tác');
-  assert.match(src, /<div class="phaselist">\$\{phases\}<\/div>/);
+  assert.match(src, /\(lr\.phases \|\| \[\]\)\.slice\(-1\)\[0\]/, 'Mỗi cảnh chỉ hiện 1 bước mới nhất');
+  assert.match(src, /<div class="phaselist" data-phase-sid="\$\{s\.id\}">\$\{phase\}<\/div>/, 'Tiến trình nằm trong ô Firefly, không còn dưới cả 2 ô');
   assert.match(src, /data-act="logook"[\s\S]{0,180}>Ổn<\/button>/, 'Bấm Ổn mới tải ảnh sạch');
   assert.match(src, /data-act="savefireflycfg"/, 'Bước 4 phải có nút Lưu cọ/mask ngay trong bước');
 });
@@ -252,12 +252,12 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="fireflyreveal"[\s\S]{0,160}>Firefly<\/button>/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
 });
 
-test('Bước 4: 2 ô ảnh cùng khung 9:16 gọn, cùng kích thước, ảnh gốc khít viền', () => {
+test('Bước 4: ô gốc gọn 9:16, ô Firefly rộng hơn sang phải, cùng căn tọa độ 1:1', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:210px;margin-inline:auto\}/, 'cả 2 ô dùng chung một khung 9:16, có giới hạn chiều rộng');
-  assert.match(css, /\.logosplit\{[^}]*max-width:430px\}/, '2 ô gọn lại, không chiếm toàn khung phải');
+  assert.match(css, /\.logosplit\{[^}]*grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)[^}]*max-width:640px\}/, 'ô gốc nhỏ, ô Firefly kéo dài sang phải');
+  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:210px;margin-inline:auto\}/, 'ảnh gốc khung 9:16 có giới hạn chiều rộng');
+  assert.match(css, /\.logocell\.firefly img\{max-width:none\}/, 'ô Firefly không bị giới hạn 210px');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
-  assert.ok(!/\.logocell\.firefly img\{aspect-ratio/.test(css), 'không còn rule riêng làm ô Firefly khác kích thước ô gốc');
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {
