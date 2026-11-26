@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.39 - 2026-11-26
+- Tách Firefly ra Chrome riêng (profile + cổng CDP riêng) để đổi Gmail liên tục không làm mất session Google đang dùng ở Flow; Firefly chỉ bật cửa sổ của Firefly.
+- Firefly báo lỗi / hết lượt / tạm dừng thì đóng ngay tab và tắt luôn process Chrome Firefly khi hết việc, giải phóng RAM; ảnh bị chặn sẽ tạo lại đúng ảnh đó bằng Gmail mới, không làm lại những ảnh đã xong.
+
+
 ## v1.1.38 - 2026-11-26
 - Chốt tọa độ vùng xóa logo theo tâm (93%, 96%) — lùi trái 2%, xuống 4% từ điểm cũ (95%, 92%); sửa giá trị dự phòng cũ trong server về đúng 89.940 / 94.329 để không lệch khi config mất trường mask.
 

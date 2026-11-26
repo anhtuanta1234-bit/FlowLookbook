@@ -49,12 +49,12 @@ test('hết lượt Firefly rồi đổi Gmail: tiếp tục từ ảnh bị ch�
   assert.match(prepare, /sc\.logoRemoval\.generated = true/, 'tạo xong thì đánh dấu có ảnh trên Firefly');
 
   const download = slice('async function downloadLogoRemoval(', 'async function save2k(');
-  assert.match(download, /keepTabOnQuota: true/, 'tải bị hết lượt thì giữ tab để tải lại');
-  assert.match(download, /if \(quota\) sc\.logoRemoval\.generated = true/, 'ảnh đã tạo thì vẫn giữ mốc');
+  assert.match(download, /Lỗi\/hết lượt\/tạm dừng: Firefly đóng tab ngay/, 'tải bị lỗi / hết lượt thì đóng tab, không giữ Chrome');
+  assert.match(download, /sc\.logoRemoval\.generated = false/, 'tab đã đóng nên không còn ảnh để tải lại');
 
   const resume = slice("app.post('/api/projects/:id/logo-remove/resume'", 'app.post(\'/api/projects/:id/open-logo-output\'');
   assert.match(resume, /if \(lr\?\.status !== 'quota_blocked'\) continue/, 'không đụng ảnh đã xong / đang chờ Ổn');
-  assert.match(resume, /logoResumeStatus\(lr, firefly\.hasSceneTab\(req\.params\.id, sc\.id\)\)/, 'quyết định tải lại hay tạo tiếp theo tab còn/mất');
+  assert.match(resume, /logoResumeStatus\(lr, firefly\.hasSceneTab\(req\.params\.id, sc\.id\)\)/, 'chỉ xử lý đúng ảnh bị chặn');
   assert.match(resume, /lr\.status = next/);
 });
 

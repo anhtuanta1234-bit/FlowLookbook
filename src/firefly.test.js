@@ -64,13 +64,15 @@ test('banner hết lượt không làm mất ảnh đã tạo: có nút Tải xu
   assert.match(src, /!\(await downloadReady\(p\)\) && await detectQuotaBlock\(p\)/, 'bấm tải: ảnh đã tạo thì không chặn');
 });
 
-test('hết lượt lúc tải thì giữ tab Firefly để đổi Gmail rồi tải lại, không tạo lại ảnh', () => {
-  assert.match(src, /keepTabOnQuota = false/);
-  assert.match(src, /keepTabOnQuota && e\?\.code === 'FIREFLY_QUOTA'\) quotaBlocked = true/);
-  assert.match(src, /if \(!quotaBlocked\) await releaseTab\(key\)/, 'lỗi hết lượt lúc tải thì không đóng tab');
-  assert.match(src, /function hasSceneTab\(projectId, sceneId\)[\s\S]*?tabs\.has/);
-  assert.match(src, /e\?\.code === 'FIREFLY_QUOTA'\) await open\(\)/, 'hết lượt lúc tạo thì mở cửa sổ để đổi Gmail');
-  assert.match(src, /prepareScene, downloadPrepared, discardScene, hasSceneTab/);
+test('lỗi / hết lượt / tạm dừng thì đóng ngay tab Firefly để nhẹ RAM', () => {
+  assert.match(src, /require\('\.\/chrome-firefly'\)/, 'Firefly phải dùng Chrome riêng, không chung profile với Flow');
+  assert.ok(!src.includes('keepTabOnQuota'), 'không còn giữ tab khi Firefly chặn tải');
+  assert.match(src, /async function closeIfIdle\(\)[\s\S]*?if \(tabs\.size \|\| loginKeepAlive\) return;[\s\S]*?await chrome\.close\(\)/);
+  assert.match(src, /async function releaseTab\(key\)[\s\S]*?await closeIfIdle\(\)/, 'xong / lỗi thì đóng tab và process Chrome nếu hết việc');
+  assert.match(src, /async function downloadPrepared\([\s\S]*?finally \{\s*await releaseTab\(key\);\s*\}/, 'tải lỗi cũng đóng tab ngay');
+  assert.ok(!src.includes('quotaBlocked'), 'không giữ cửa sổ Firefly chờ đổi Gmail');
+  assert.match(src, /e\?\.code === 'FIREFLY_QUOTA'\) await open\(\)/, 'hết lượt lúc tạo vẫn mở cửa sổ để đổi Gmail');
+  assert.match(src, /closeProjectTabs, closeAll/, 'tắt tool phải đóng luôn Chrome Firefly');
 });
 
 test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {

@@ -273,12 +273,12 @@ app.post('/api/flow/close', async (req, res) => {
         if (ch) pushProject(full);
       }
     });
-    await flow.close();
+    await Promise.allSettled([flow.close(), firefly.closeAll()]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Chỉ sao lưu dữ liệu thật. chrome-profile bị Chrome khoá (EBUSY) nên KHÔNG đụng vào; logs/backups cũng bỏ qua.
+// Chỉ sao lưu dữ liệu thật. chrome-profile / chrome-firefly-profile bị Chrome khoá (EBUSY) nên KHÔNG đụng vào; logs/backups cũng bỏ qua.
 const BACKUP_ENTRIES = ['projects', 'koc', 'config.json', 'templates.json', 'auto.json', 'paused.json'];
 
 // Đếm số file + tổng byte của một mục (file đơn hoặc thư mục, đệ quy) để ghi vào manifest.
@@ -1683,7 +1683,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
   try {
     await firefly.prepareScene({
       projectId, sceneId, imagePath: prep.imagePath,
-      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled(),
+      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
@@ -1758,8 +1758,8 @@ async function downloadLogoRemoval(projectId, sceneId) {
   try {
     const result = await firefly.downloadPrepared({
       projectId, sceneId, targetPath: prep.target,
-      keepTabOnQuota: true, // ảnh đã tạo xong: giữ tab để đổi Gmail rồi tải lại, không tạo lại
-      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled(),
+      // Lỗi/hết lượt/tạm dừng: Firefly đóng tab ngay, không giữ Chrome ăn RAM.
+      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'downloading') return;
@@ -1808,11 +1808,12 @@ async function downloadLogoRemoval(projectId, sceneId) {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval) return;
       sc.logoRemoval.status = quota ? 'quota_blocked' : 'error';
-      if (quota) sc.logoRemoval.generated = true; // ảnh đã có trên Firefly, chỉ chờ tải lại
+      // Tab Firefly đã đóng ngay: không còn ảnh để tải lại, sẽ tạo lại đúng ảnh này bằng Gmail mới.
+      sc.logoRemoval.generated = false;
       sc.logoRemoval.code = e?.code || '';
       sc.logoRemoval.error = quota ? 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' : (e?.message || 'Lỗi tải ảnh sạch.');
       sc.logoRemoval.note = quota
-        ? 'Ảnh đã tạo xong trên Firefly. Đăng nhập Gmail khác rồi bấm “Đã đổi Gmail khác, tiếp tục”; tool sẽ chỉ tải lại ảnh này, không tạo lại.'
+        ? 'Firefly đã đóng tab để nhẹ RAM. Đăng nhập Gmail khác rồi bấm “Đã đổi Gmail khác, tiếp tục”; tool tạo lại đúng ảnh này, không làm lại ảnh cũ.'
         : sc.logoRemoval.error;
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
@@ -1993,7 +1994,7 @@ app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
         lr.error = '';
         lr.note = next === 'waiting_ok'
           ? 'Ảnh đã tạo trên Firefly. Bấm “Ổn” để tải lại; tool không tạo lại ảnh.'
-          : 'Chờ xóa logo sau khi đã tải hết ảnh Bước 3';
+          : 'Firefly đã đóng tab lỗi để nhẹ RAM. Ảnh này sẽ được tạo lại bằng Gmail mới; ảnh cũ không bị làm lại.';
         lr.updatedAt = Date.now();
         changed = true;
       }

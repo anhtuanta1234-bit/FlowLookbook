@@ -19,6 +19,7 @@ function readConfig(env, action = '') {
       removeLogoEnabled: cfg.get().removeLogoEnabled,
       logoRemoveMask: cfg.get().logoRemoveMask,
       logoBrushSize: cfg.get().logoBrushSize,
+      fireflyCdpPort: cfg.get().fireflyCdpPort,
     }));
   `;
   return JSON.parse(execFileSync(process.execPath, ['-e', script], {
@@ -64,6 +65,7 @@ test('xóa logo tắt mặc định và vùng mask được giới hạn trong k
     assert.equal(fresh.removeLogoEnabled, false);
     assert.deepEqual(fresh.logoRemoveMask, { xPct: 89.94, yPct: 94.329, wPct: 6.12, hPct: 3.343 });
     assert.equal(fresh.logoBrushSize, 14);
+    assert.equal(fresh.fireflyCdpPort, 9334, 'Firefly dùng cổng CDP riêng, không chung 9333 với Flow');
 
     const action = `cfg.set({ removeLogoEnabled: true, logoBrushSize: 999, logoRemoveMask: { xPct: 120, yPct: -5, wPct: 50, hPct: 30 } });`;
     const saved = readConfig(env, action);

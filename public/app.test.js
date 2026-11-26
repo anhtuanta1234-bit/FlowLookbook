@@ -96,7 +96,8 @@ test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo kh�
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'phải nói rõ giới hạn free hàng ngày');
   assert.match(src, /không làm lại ảnh cũ/);
   assert.match(src, /data-act="fireflyopen">Mở Firefly để đổi Gmail/, 'phải có nút mở Firefly để đăng nhập mail khác');
-  assert.match(src, /lr\.generated \? ' <span class="badge warn"/, 'ảnh đã tạo phải hiện trạng thái chờ tải lại');
+  assert.match(src, /tab đã đóng, chờ Gmail mới/, 'ảnh bị chặn phải báo tab đã đóng, sẽ tạo lại bằng Gmail mới');
+  assert.ok(!src.includes('ảnh đã tạo, chờ tải lại'), 'không còn hứa tải lại ảnh cũ khi tab đã đóng');
 });
 
 test('manifest raw bị cache cũ vẫn lấy bản mới từ GitHub Releases API', async () => {

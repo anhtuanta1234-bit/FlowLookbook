@@ -26,6 +26,8 @@ const fixedOutputRoot = process.env.FLOW_DISABLE_FIXED_OUTPUT === '1' ? '' : (pr
 
 const defaults = {
   cdpPort: 9333,
+  // Firefly chạy Chrome riêng (profile + cổng riêng) để đổi Gmail không đụng session Flow.
+  fireflyCdpPort: 9334,
   chromePath: '',
   outputRoot, // thư mục gốc để lưu ảnh 2K theo từng dự án
   maxParallelRuns: 4, // số lượt Flow chạy cùng lúc trong 1 tab

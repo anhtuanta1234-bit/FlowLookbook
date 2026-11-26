@@ -1,5 +1,5 @@
 {
-  "version": "1.1.38",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.38/Flow.Lookbook.Setup.1.1.38.exe",
-  "notes": "- Chốt tọa độ vùng xóa logo theo tâm (93%, 96%) — lùi trái 2%, xuống 4% từ điểm cũ (95%, 92%); sửa giá trị dự phòng cũ trong server về đúng 89.940 / 94.329 để không lệch khi config mất trường mask."
+  "version": "1.1.39",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.39/Flow.Lookbook.Setup.1.1.39.exe",
+  "notes": "- Tách Firefly ra Chrome riêng (profile + cổng CDP riêng) để đổi Gmail liên tục không làm mất session Google đang dùng ở Flow; Firefly chỉ bật cửa sổ của Firefly.\n- Firefly báo lỗi / hết lượt / tạm dừng thì đóng ngay tab và tắt luôn process Chrome Firefly khi hết việc, giải phóng RAM; ảnh bị chặn sẽ tạo lại đúng ảnh đó bằng Gmail mới, không làm lại những ảnh đã xong."
 }

@@ -116,12 +116,12 @@ function step3ReadyForLogo(project) {
     && scenes.every((s) => s.chosen?.status === 'saved' && s.chosen?.target);
 }
 
-// Sau khi hết lượt Firefly và đổi Gmail: ảnh ĐÃ tạo xong (generated + còn tab) chỉ cần bấm Ổn
-// để tải lại — không được tạo lại. Ảnh chưa tạo thì xếp hàng tạo tiếp. Cảnh đã xong
+// Firefly giờ đóng tab ngay khi lỗi/hết lượt/tạm dừng để nhẹ RAM, nên không còn ảnh "chờ Ổn" sau quota.
+// Ảnh bị chặn được tạo lại bằng Gmail mới — chỉ đúng ảnh số kế tiếp. Cảnh đã xong
 // (approved/skipped) trả null để không bao giờ đưa lại vào hàng đợi.
-function logoResumeStatus(lr, hasSceneTab = false) {
+function logoResumeStatus(lr) {
   if (lr?.status !== 'quota_blocked') return null;
-  return lr.generated && hasSceneTab ? 'waiting_ok' : 'queued';
+  return 'queued';
 }
 
 module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, LOGO_PHASE_LIMIT, normalizeLogoRemoval, appendLogoPhase, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets };

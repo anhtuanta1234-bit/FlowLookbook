@@ -838,7 +838,7 @@ function sceneHtml(s, i) {
     ])}`
     : lr.status === 'downloading' ? `<span class="badge warn">đang tải ảnh sạch…</span>`
     : lr.status === 'preparing' || lr.status === 'queued' ? `<span class="badge warn" data-tip="${esc(lr.note || '')}">đang xóa logo…</span>`
-    : lr.status === 'quota_blocked' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">hết lượt Firefly</span>${lr.generated ? ' <span class="badge warn" data-tip="Ảnh đã tạo xong trên Firefly, sẽ chỉ tải lại sau khi đổi Gmail">ảnh đã tạo, chờ tải lại</span>' : ''} <button class="btn sm" data-act="logoresume" data-sid="${s.id}">Đã đổi Gmail khác, tiếp tục</button>`
+    : lr.status === 'quota_blocked' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">hết lượt Firefly</span> <span class="badge warn" data-tip="Tab Firefly đã đóng để nhẹ RAM; ảnh này sẽ được tạo lại bằng Gmail mới">tab đã đóng, chờ Gmail mới</span> <button class="btn sm" data-act="logoresume" data-sid="${s.id}">Đã đổi Gmail khác, tiếp tục</button>`
     : lr.status === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi xóa logo</span> ${lr.code === 'FIREFLY_LOGIN' ? '<button class="btn sm" data-act="fireflyopen">Kết nối Firefly</button> ' : ''}<button class="btn sm" data-act="logoretry" data-sid="${s.id}">Làm lại xóa logo</button>`
     : ''
   );

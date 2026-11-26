@@ -94,7 +94,7 @@ test('đổi Gmail xong chỉ tiếp tục ảnh bị chặn, không làm lại 
   assert.equal(logoResumeStatus({ status: 'queued' }, true), null, 'ảnh đang chạy không bị đẩy lại');
   assert.equal(logoResumeStatus({ status: 'quota_blocked' }, true), 'queued', 'chưa tạo được thì tạo tiếp');
   assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, false), 'queued', 'mất tab thì phải tạo lại');
-  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, true), 'waiting_ok', 'đã tạo xong thì chỉ tải lại');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, true), 'queued', 'tab đã đóng nên tạo lại bằng Gmail mới');
 });
 
 test('disconnect drops empty queued runs and keeps finished, failed, and in-flight runs', () => {

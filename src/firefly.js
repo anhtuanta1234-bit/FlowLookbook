@@ -1,9 +1,10 @@
-// Adobe Firefly logo removal automation via existing Chrome CDP profile (shared with Flow).
+// Adobe Firefly logo removal automation qua Chrome RIÊNG (không chung profile/CDP với Flow).
+// Đổi Gmail Firefly liên tục vì thế không đụng session Google của Flow.
 // UI selectors are centralized here because Firefly changes frequently.
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config');
-const chrome = require('./chrome');
+const chrome = require('./chrome-firefly');
 const { imageDimensions } = require('./image');
 
 const DEFAULT_HOME = 'https://firefly.adobe.com/';
@@ -220,6 +221,7 @@ class Lock {
 
 const tabs = new Map(); // key -> Promise<tab>
 const lock = new Lock();
+let loginKeepAlive = false; // cửa sổ Firefly đang mở cho người dùng đổi Gmail: không tự tắt
 
 function fireflyHome() {
   const url = String(cfg.get().fireflyHomeUrl || DEFAULT_HOME).trim();
@@ -255,6 +257,7 @@ async function status() {
 }
 
 async function open() {
+  loginKeepAlive = true; // người dùng đang đăng nhập/đổi Gmail: giữ cửa sổ này lại
   await chrome.ensureBrowser({ visible: true });
   await chrome.showWindow();
   const ctx = await chrome.getContext();
@@ -266,6 +269,7 @@ async function open() {
 }
 
 async function reveal() {
+  loginKeepAlive = true;
   await chrome.ensureBrowser({ visible: true });
   await chrome.showWindow();
   const ctx = await chrome.getContext();
@@ -283,7 +287,7 @@ async function getTab(key) {
     try {
       // Vào thẳng editor: đi qua trang chủ rồi mới goto lại tốn thêm một lần tải trang.
       await page.goto(editorUrl(), { waitUntil: 'domcontentloaded' });
-    } catch (e) { await page.close().catch(() => {}); tabs.delete(key); throw e; }
+    } catch (e) { await page.close().catch(() => {}); tabs.delete(key); await closeIfIdle(); throw e; }
     return t;
   })();
   tabs.set(key, pr);
@@ -291,11 +295,19 @@ async function getTab(key) {
   return pr;
 }
 
+// Hết tab Firefly (xong / lỗi / hết lượt / tạm dừng) thì tắt luôn process Chrome riêng để nhẹ RAM.
+// Chỉ giữ lại khi người dùng đang mở cửa sổ để đổi Gmail (loginKeepAlive).
+async function closeIfIdle() {
+  if (tabs.size || loginKeepAlive) return;
+  await chrome.close().catch(() => {});
+}
+
 async function releaseTab(key) {
   const pr = tabs.get(key);
-  if (!pr) return;
+  if (!pr) { await closeIfIdle(); return; }
   tabs.delete(key);
   try { const t = await pr; await t.page.close().catch(() => {}); } catch (_) {}
+  await closeIfIdle();
 }
 
 async function closeProjectTabs(projectId) {
@@ -307,6 +319,7 @@ async function closeProjectTabs(projectId) {
     closing.push(pr.then((t) => t.page.close().catch(() => {})).catch(() => {}));
   }
   await Promise.all(closing);
+  await closeIfIdle();
 }
 
 async function clickAny(page, locators, timeout = 15000) {
@@ -606,6 +619,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
   return lock.run(async () => {
     const key = `${projectId}:${sceneId}`;
     assertNotCanceled(isCanceled);
+    loginKeepAlive = false; // đã bắt đầu xóa logo: không giữ cửa sổ đăng nhập cũ
     await releaseTab(key); // clean old session
     const t = await getTab(key);
     const p = t.page;
@@ -674,7 +688,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
   });
 }
 
-async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCanceled, keepTabOnQuota = false }) {
+async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCanceled }) {
   return lock.run(async () => {
     const key = `${projectId}:${sceneId}`;
     const pr = tabs.get(key);
@@ -682,7 +696,6 @@ async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCan
     const t = await pr;
     const p = t.page;
     const tmp = targetPath + '.part';
-    let quotaBlocked = false;
     try {
       assertNotCanceled(isCanceled);
       await chrome.showWindow().catch(() => {});
@@ -706,17 +719,16 @@ async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCan
       return { ok: true, file: final, width: size.width, height: size.height };
     } catch (e) {
       fs.rmSync(tmp, { force: true });
-      // Ảnh đã tạo nhưng Firefly chặn tải: giữ tab lại để đổi Gmail xong chỉ bấm Ổn,
-      // không phải tạo lại ảnh (tốn thêm lượt free của Gmail mới).
-      if (keepTabOnQuota && e?.code === 'FIREFLY_QUOTA') quotaBlocked = true;
+      // Lỗi / hết lượt / tạm dừng: đóng tab Firefly ngay, không giữ process Chrome ăn RAM.
+      // Ảnh bị chặn sẽ được tạo lại đúng ảnh đó bằng Gmail mới (không làm lại ảnh đã xong).
       throw e;
     } finally {
-      if (!quotaBlocked) await releaseTab(key);
+      await releaseTab(key);
     }
   });
 }
 
-// Cảnh đã tạo xong trên Firefly còn giữ tab không? Dùng để quyết định tải lại hay tạo lại.
+// Giữ lại cho dữ liệu cũ: giờ Firefly đóng tab ngay khi lỗi/tạm dừng nên hầu như luôn trả false.
 function hasSceneTab(projectId, sceneId) {
   return tabs.has(`${projectId}:${sceneId}`);
 }
@@ -725,8 +737,20 @@ async function discardScene({ projectId, sceneId }) {
   return lock.run(async () => { await releaseTab(`${projectId}:${sceneId}`); });
 }
 
+// Đóng toàn bộ Chrome Firefly khi tắt tool (không đụng Chrome đang chạy Flow).
+async function closeAll() {
+  return lock.run(async () => {
+    loginKeepAlive = false;
+    for (const [key, pr] of [...tabs]) {
+      tabs.delete(key);
+      try { const t = await pr; await t.page.close().catch(() => {}); } catch (_) {}
+    }
+    await chrome.close().catch(() => {});
+  });
+}
+
 // Ảnh xem trước cho ô Firefly trên app: chụp tab nền qua CDP.
-// KHÔNG gọi bringToFront/showWindow — cửa sổ Chrome đang chạy Flow không bị đẩy lên.
+// KHÔNG gọi bringToFront/showWindow — không đẩy cửa sổ Firefly lên khi chỉ chụp ảnh xem trước.
 let previewCache = { key: '', at: 0, data: '' };
 async function preview({ projectId, sceneId } = {}) {
   if (!projectId || !sceneId) return { ok: false };
@@ -777,6 +801,6 @@ async function preview({ projectId, sceneId } = {}) {
 module.exports = {
   status, open, reveal, preview,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
-  closeProjectTabs,
+  closeProjectTabs, closeAll,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },
 };
