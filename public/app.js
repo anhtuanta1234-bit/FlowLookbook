@@ -693,8 +693,7 @@ function buildLogoCtl(p) {
       <details class="lite-details"><summary>Hướng dẫn</summary>
         <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, bạn bấm <b>Ổn</b>; tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
       </details>
-    </div>
-    <div class="sec"><h3>Ảnh Bước 4</h3><div class="slots" id="slots"></div></div>`;
+    </div>`;
 }
 
 function buildCtl() {

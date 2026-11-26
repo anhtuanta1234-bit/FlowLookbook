@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.46 - 2026-11-26
+- Bỏ ô “Ảnh Bước 4” thừa trong khung điều khiển bên trái (ngay dưới mục Hướng dẫn); khung phải — tải ảnh lên và chiếu trực tiếp Firefly — giữ nguyên.
+
+
 ## v1.1.45 - 2026-11-26
 - Bỏ dòng note/error dài bên dưới 2 khung Bước 4 (kể cả câu báo hết lượt free) — không còn chiếm chỗ; trạng thái vẫn hiện trên badge và tiến trình trong ô Firefly.
 - Mỗi cảnh Bước 4 có thêm nút **Xóa** ở góc phải trên cùng để bỏ cảnh đó; đang chạy Firefly thì chặn xóa và đóng luôn tab Firefly khi xóa xong.

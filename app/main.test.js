@@ -127,7 +127,7 @@ test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗ
   assert.ok(ui.includes("btn.textContent = pct >= 0 ? `Đang tải… ${pct}%`"), 'phải giữ thông báo tiến độ trong lúc tải');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('/style.css?v=20261126-step4-del-1'), 'phải bump cache-buster CSS khi bỏ dòng note Bước 4');
-  assert.ok(html.includes('/app.js?v=20261126-step4-del-1'), 'phải bump cache-buster JS khi thêm nút Xóa cảnh');
+  assert.ok(html.includes('/app.js?v=20261126-step4-noslot-1'), 'phải bump cache-buster JS khi bỏ ô ảnh thừa khung trái');
 });
 
 test('xác nhận helper bằng file ready, không tin câu log ghi trước khi kiểm tra lock', () => {

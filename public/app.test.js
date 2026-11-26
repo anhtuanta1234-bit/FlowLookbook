@@ -205,6 +205,8 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /<span class="qno">\$\{x\.no\}<\/span>/, 'Mỗi cảnh phải hiện số thứ tự trong hàng chời');
   assert.match(src, /trong hàng chờ/, 'Ảnh chưa tới lượt phải hiện rõ là đang chờ');
   assert.match(ctl, /\$\{logoQueueHtml\(p\)\}/, 'Hàng chờ nằm trong khung trái');
+  assert.match(ctl, /<summary>Hướng dẫn<\/summary>/, 'Giữ mục Hướng dẫn trong khung trái');
+  assert.ok(!/Ảnh Bước 4/.test(ctl), 'Bỏ ô ảnh thừa bên dưới Hướng dẫn trong khung trái');
   assert.ok(!/logoQueueHtml\(p\)/.test(results), 'Khung phải không còn hàng chờ trùng');
   assert.match(scene, /class="logosplit"/, 'Mỗi cảnh chia 2 ô');
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
