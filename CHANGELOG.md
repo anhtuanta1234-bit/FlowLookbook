@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.38 - 2026-11-26
+- Chốt tọa độ vùng xóa logo theo tâm (93%, 96%) — lùi trái 2%, xuống 4% từ điểm cũ (95%, 92%); sửa giá trị dự phòng cũ trong server về đúng 89.940 / 94.329 để không lệch khi config mất trường mask.
+
+
 ## v1.1.37 - 2026-11-26
 - Thiết kế lại Bước 4: khung phải bỏ hàng chờ trùng, mỗi cảnh chia 2 ô — ảnh gốc chưa xóa logo và ảnh Firefly chiếu trực tiếp trên app.
 - Ô Firefly hiện “đang xóa logo” lúc chạy, “đã xóa xong logo” khi xong; nút Ổn / Làm lại / Thử lại nằm chung một hàng ngang.

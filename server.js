@@ -164,8 +164,9 @@ app.post('/api/config', (req, res) => {
     const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
     const cur = cfg.get().logoRemoveMask || {};
     patch.logoRemoveMask = {
-      xPct: Math.min(100, Math.max(0, num(m.xPct, cur.xPct ?? 84.375))),
-      yPct: Math.min(100, Math.max(0, num(m.yPct, cur.yPct ?? 91.352))),
+      // Tọa độ chốt: tâm (93%, 96%) = trái 2%, xuống 4% từ (95%, 92%).
+      xPct: Math.min(100, Math.max(0, num(m.xPct, cur.xPct ?? 89.940))),
+      yPct: Math.min(100, Math.max(0, num(m.yPct, cur.yPct ?? 94.329))),
       wPct: Math.min(100, Math.max(0.1, num(m.wPct, cur.wPct ?? 6.12))),
       hPct: Math.min(100, Math.max(0.1, num(m.hPct, cur.hPct ?? 3.343))),
     };
