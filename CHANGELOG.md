@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.1.41 - 2026-11-26
+- Làm gọn 2 ô ảnh Bước 4 (mỗi ô tối đa ~210px chiều rộng) nhưng vẫn giữ cùng khung 9:16 và cùng kích thước để so sánh/căn tọa độ.
+
+
 ## v1.1.40 - 2026-11-26
 - Sửa nhận diện hết lượt Firefly: chỉ tin banner thật sự hiển thị (`Hôm nay còn 0 lượt tạo`, `Nâng cấp để tiếp tục tạo`), không còn đếm tooltip ẩn hay mã JS trong shadow DOM thành hết lượt.
 - Bước 4: ảnh gốc và khung chiếu Firefly giờ cùng kích thước, cùng khung 9:16; ảnh gốc khít viền (không bị `max-height` cắt), dễ so sánh và căn tọa độ 1:1.

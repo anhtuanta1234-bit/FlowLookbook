@@ -1,5 +1,5 @@
 {
-  "version": "1.1.40",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.40/Flow.Lookbook.Setup.1.1.40.exe",
-  "notes": "- Sửa nhận diện hết lượt Firefly: chỉ tin banner thật sự hiển thị (`Hôm nay còn 0 lượt tạo`, `Nâng cấp để tiếp tục tạo`), không còn đếm tooltip ẩn hay mã JS trong shadow DOM thành hết lượt.\n- Bước 4: ảnh gốc và khung chiếu Firefly giờ cùng kích thước, cùng khung 9:16; ảnh gốc khít viền (không bị `max-height` cắt), dễ so sánh và căn tọa độ 1:1.\n- Kiểm tra trực tiếp theo nghi ngờ của bạn: cửa sổ Firefly bị thu nhỏ làm canvas mask co lại dưới ngưỡng, tool bỏ qua canvas mask rồi chấm nhầm canvas nền — giờ ưu tiên `mask-canvas` tuyệt đối dù rất nhỏ, mỗi lần thử chấm tính lại tọa độ theo box mới, và `showWindow()` tự phóng cửa sổ Firefly về tối thiểu 1100×760.\n- Giữ đăng nhập Firefly khi tách Chrome: lần đầu mở dùng riêng sẽ sao chép profile cũ sang `chrome-firefly-profile`, không bắt đăng nhập lại Gmail.\n- Test live xác nhận tọa độ chấm logo (tâm 93% / 96% ảnh gốc → 93% / 96,4% khung 9:16) đã xóa đúng; sửa lỗi Firefly đôi khi không nhận nét cọ khi vừa đóng hộp cài đặt (bấm lại tối đa 3 lần).\n- Ô chiếu trực tiếp Firefly giờ chụp đúng vùng ảnh 9:16, chất lượng cao và 2x pixel, không cắt khung 16:9; khi Firefly báo xong mà chưa bấm “Ổn” thì đóng băng khung hình, không bật lên tắt xuống nữa."
+  "version": "1.1.41",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.41/Flow.Lookbook.Setup.1.1.41.exe",
+  "notes": "- Làm gọn 2 ô ảnh Bước 4 (mỗi ô tối đa ~210px chiều rộng) nhưng vẫn giữ cùng khung 9:16 và cùng kích thước để so sánh/căn tọa độ."
 }

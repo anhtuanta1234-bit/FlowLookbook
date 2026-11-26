@@ -252,9 +252,10 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="fireflyreveal"[\s\S]{0,160}>Firefly<\/button>/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
 });
 
-test('Bước 4: 2 ô ảnh cùng khung 9:16, cùng kích thước, ảnh gốc khít viền', () => {
+test('Bước 4: 2 ô ảnh cùng khung 9:16 gọn, cùng kích thước, ảnh gốc khít viền', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\)\}/, 'cả 2 ô dùng chung một khung 9:16');
+  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:210px;margin-inline:auto\}/, 'cả 2 ô dùng chung một khung 9:16, có giới hạn chiều rộng');
+  assert.match(css, /\.logosplit\{[^}]*max-width:430px\}/, '2 ô gọn lại, không chiếm toàn khung phải');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.ok(!/\.logocell\.firefly img\{aspect-ratio/.test(css), 'không còn rule riêng làm ô Firefly khác kích thước ô gốc');
 });
