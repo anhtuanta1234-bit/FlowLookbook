@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v1.1.37 - 2026-11-26
+- Thiết kế lại Bước 4: khung phải bỏ hàng chờ trùng, mỗi cảnh chia 2 ô — ảnh gốc chưa xóa logo và ảnh Firefly chiếu trực tiếp trên app.
+- Ô Firefly hiện “đang xóa logo” lúc chạy, “đã xóa xong logo” khi xong; nút Ổn / Làm lại / Thử lại nằm chung một hàng ngang.
+- Chụp tab Firefly qua CDP để chiếu lên app: không bật cửa sổ, không chiếm tab hay làm đụng lượt Flow đang chạy; ảnh lỗi thì chỉ hiện ô trống, không báo lỗi giả.
+- Đưa nút bật/tắt “Xóa logo” ra thanh công cụ trên cùng, mặc định TẮT và chỉ lưu khi bạn bấm; Cài đặt giờ chỉ còn chức năng của app.
+- Cỡ cọ và vùng logo chuyển thành phần “Tùy chỉnh Firefly” ngay trong Bước 4, có nút Lưu riêng; rút gọn dòng báo hết lượt free.
+- Vẫn giữ nguyên luồng Firefly đã kiểm tra (9:16 → Chấm sửa và xóa → cọ 14 → chấm logo → Xóa → chờ Firefly báo xong → bạn bấm Ổn → tool tải ảnh sạch vào anhdaxoalogo).
+
+
 ## v1.1.36 - 2026-11-26
 - Gọn giao diện Bước 4: chỉ còn một nút Firefly trên thanh điều khiển; hướng dẫn dài được gập lại.
 - Nút “Đã đổi Gmail khác, tiếp tục” chỉ hiện trên đúng ảnh bị chặn; mỗi ảnh giờ có một nút chính (Ổn / làm lại / tiếp tục), các thao tác phụ gấp vào menu “Thêm”; bỏ nút trùng và rút ngắn tiến trình, hàng chờ, nhật ký.

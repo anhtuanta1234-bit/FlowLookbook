@@ -126,7 +126,7 @@ test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗ
   assert.ok(ui.includes('await window.flowBridge.installUpdate(file, info.version)'), 'phải chờ cài đến khi Electron trả kết quả');
   assert.ok(ui.includes("btn.textContent = pct >= 0 ? `Đang tải… ${pct}%`"), 'phải giữ thông báo tiến độ trong lúc tải');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('?v=20261123-no-update-timeout-1'), 'phải bump cache-buster khi đổi app.js');
+  assert.ok(html.includes('?v=20261126-step4-split-1'), 'phải bump cache-buster khi đổi app.js');
 });
 
 test('xác nhận helper bằng file ready, không tin câu log ghi trước khi kiểm tra lock', () => {

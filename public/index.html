@@ -18,7 +18,7 @@
 <link rel="apple-touch-icon" href="/logo.svg">
 <link rel="preload" href="/fonts/be-vietnam-pro-vietnamese-500-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/style.css?v=20261123-no-update-timeout-1">
+<link rel="stylesheet" href="/style.css?v=20261126-step4-split-1">
 <script>
   // đặt giao diện sáng/tối trước khi vẽ để không bị nháy
   try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
@@ -39,6 +39,7 @@
   <button id="btnOpenFlow" class="btn ghost sm" type="button" data-tip="Mở cửa sổ Chrome để đăng nhập Google / Flow lần đầu. Sau đó tool tự chạy ngầm, không cần mở lại">Đăng nhập Flow</button>
   <button id="btnDisconnectFlow" class="btn ghost sm" type="button" data-tip="Đóng cửa sổ Chrome mà tool đang chạy. Sau khi ngắt, các lượt đang chạy sẽ dừng lại.">Ngắt kết nối Flow</button>
   <button id="btnAuto" class="btn sm" type="button" aria-pressed="true" data-tip="Bật: tool tự tải ảnh 2K về thư mục và tự sang bước sau. Tắt: bạn tự thao tác bằng tay.">Tự động: Bật</button>
+  <button id="btnLogo" class="btn sm" type="button" aria-pressed="false" data-tip="Bật/tắt Bước 4 xóa logo bằng Firefly. Mặc định TẮT, không cần vào Cài đặt.">Xóa logo: Tắt</button>
   <button id="btnKoc" class="btn ghost sm" type="button" data-tip="Quản lý ảnh mặt KOC dùng xuyên suốt cho mọi sản phẩm">Thư viện KOC</button>
   <button id="btnSettings" class="btn ghost sm" type="button" data-tip="Thư mục lưu ảnh 2K và số lượt chạy cùng lúc">Cài đặt</button>
   <button id="btnReload" class="btn ghost sm" type="button" data-tip="Tải lại giao diện cho mượt. Việc đang chạy vẫn tiếp tục, dữ liệu không mất." aria-label="Tải lại giao diện">Tải lại</button>
@@ -88,6 +89,6 @@
 <noscript><p style="padding:24px">Flow Lookbook cần bật JavaScript để hoạt động.</p></noscript>
 
 <script src="/cropper.js?v=20261121-slot-fit-1"></script>
-<script src="/app.js?v=20261123-koc-name-input-1"></script>
+<script src="/app.js?v=20261126-step4-split-1"></script>
 </body>
 </html>

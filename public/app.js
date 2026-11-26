@@ -14,7 +14,7 @@ const compareVer = (a, b) => {
   }
   return 0;
 };
-const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false };
+const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 const sortedProjects = () => [...S.projects].sort((a, b) => projectNameOrder.compare(a.name || '', b.name || ''));
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -155,6 +155,8 @@ function promptOutputFolder() {
 // ---------- khởi động ----------
 async function init() {
   S.cfg = await api('GET', '/api/config');
+  syncLogoToggle();
+  startFireflyPreview();
   try {
     const v = await api('GET', '/api/version');
     CURRENT_VERSION = v.version || '';
@@ -308,6 +310,7 @@ async function refreshFlow() {
   if (db) db.disabled = !S.flow.browser;
 }
 $('#btnAuto').onclick = async () => { try { const on = S.flow.auto === false; await api('POST', '/api/auto', { on }); toast(on ? 'Đã bật tự động. Tool kiểm tra các ảnh đã chọn và làm tiếp phần còn dở.' : 'Đã tắt tự động. Bạn thao tác bằng tay; bật lại thì tool tự làm tiếp.', 'ok'); refreshFlow(); } catch (e) { fail(e); } };
+$('#btnLogo').onclick = toggleLogo;
 $('#btnOpenFlow').onclick = () => api('POST', '/api/flow/open').then(() => { toast(S.flow.loggedIn ? 'Đã hiện cửa sổ Flow. Lượt chạy sau tool tự ẩn lại.' : 'Đã mở cửa sổ Chrome. Đăng nhập Google rồi tool tự ẩn đi và chạy ngầm.', 'ok'); refreshFlow(); }).catch(fail);
 $('#btnDisconnectFlow').onclick = async () => {
   try {
@@ -631,28 +634,64 @@ function patchLogoPhases() {
   const html = tmp.firstElementChild?.innerHTML || '';
   if (box.innerHTML !== html) box.innerHTML = html;
   const now = $('#logoNow'); if (now) {
-    const text = (S.cfg?.removeLogoEnabled ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Tính năng xóa logo đang TẮT. Mở Cài đặt để bật.');
+    const text = (S.cfg?.removeLogoEnabled ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.');
     if (now.textContent !== text) now.textContent = text;
   }
 }
+// Nút bật/tắt Bước 4 nằm trên thanh công cụ (luôn thấy ở mọi bước), KHÔNG nằm trong Cài đặt.
+function syncLogoToggle() {
+  const b = $('#btnLogo'); if (!b) return;
+  const on = !!S.cfg?.removeLogoEnabled;
+  b.textContent = `Xóa logo: ${on ? 'Bật' : 'Tắt'}`;
+  b.classList.toggle('outline', on);
+  b.setAttribute('aria-pressed', String(on));
+  b.dataset.tip = on
+    ? 'Bước 4 đang BẬT: tool xóa logo sau khi Bước 3 dọn xong. Bấm để tắt.'
+    : 'Bước 4 đang TẮT (mặc định). Bấm để bật xóa logo bằng Firefly.';
+}
+async function toggleLogo() {
+  const on = !S.cfg?.removeLogoEnabled;
+  if (on && !confirm('Bật Bước 4 — xóa logo bằng Firefly?\n\nTool chỉ chạy sau khi bạn bấm “Tải hết ảnh về & Dọn dẹp” ở Bước 3. Firefly free 3 ảnh/ngày; hết lượt tool nhắc đổi Gmail. Bạn tự đăng nhập, app không lưu mật khẩu.')) return;
+  if (!on && (S.p?.s3?.scenes || []).some((s) => ['preparing', 'downloading', 'waiting_ok', 'queued', 'quota_blocked'].includes(s.logoRemoval?.status))) {
+    toast('Đang có ảnh Bước 4 chưa xong. Hãy xử lý xong ảnh đó rồi mới tắt.', 'warn');
+    return;
+  }
+  try {
+    await api('POST', '/api/config', { removeLogoEnabled: on });
+    S.cfg = { ...(S.cfg || {}), removeLogoEnabled: on };
+    syncLogoToggle();
+    toast(on ? 'Đã bật Bước 4. Sau khi dọn xong Bước 3, tool sẽ bắt đầu xóa logo.' : 'Đã tắt Bước 4. Các bước 1–3 không đổi.', 'ok');
+    if (S.p) { buildCtl(); refresh(); }
+  } catch (er) { fail(er); }
+}
+
 function buildLogoCtl(p) {
   const on = !!S.cfg?.removeLogoEnabled;
   const lr = currentLogoState();
   $('#ctl').innerHTML = `
     <div class="sec">
-      <h3>Bước 4 — Xóa logo bằng Firefly</h3>
-      <div class="hint" id="logoNow">${esc(on ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Tính năng xóa logo đang TẮT. Mở Cài đặt để bật.')}</div>
+      <h3>Bước 4 — Xóa logo</h3>
+      <div class="hint" id="logoNow">${esc(on ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.')}</div>
       ${logoFlowHtml(lr)}
       ${logoQueueHtml(p)}
       <div class="logo-toolbar">
-        <span class="chip">Lượt free ${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</span><span class="grow"></span>
+        <span class="chip">Free ${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</span><span class="grow"></span>
         <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện Firefly để kiểm tra ảnh hoặc đổi Gmail">Firefly</button>
-        <button class="btn sm ghost" data-act="opensettings" data-tip="Bật/tắt xóa logo, chỉnh cỡ cọ và vùng logo">Cài đặt</button>
       </div>
-      <details class="lite-details"><summary>Hướng dẫn &amp; lưu ý</summary>
-        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, bạn bấm <b>Ổn</b> rồi tool tải vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
-        <div class="hint" style="margin-top:6px">Ảnh được đánh số <b>01, 02, 03,…</b> từ Bước 3; ảnh sạch giữ cùng số. Đổi Gmail giữa chừng thì tool lấy đúng ảnh kế (xong 1-2-3 thì làm ảnh 4).</div>
-        <div class="hint" style="margin-top:6px">Lượt free hôm nay: <b>${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</b> ảnh. Hết lượt thì đổi Gmail trong Firefly rồi bấm nút “Đã đổi Gmail khác, tiếp tục” ngay thẻ ảnh bị chặn.</div>
+      <details class="lite-details"><summary>Tùy chỉnh Firefly</summary>
+        <label class="lbl" for="fBrush" style="margin:0">Cỡ cọ (mặc định 14)</label>
+        <input id="fBrush" type="number" min="5" max="128" step="1" value="${+(S.cfg?.logoBrushSize || 14)}">
+        <div class="hint" style="margin-top:6px">Vùng logo (phần trăm khung ảnh)</div>
+        <div class="mini-grid">
+          <label class="lbl" for="fMaskX">X<input id="fMaskX" type="number" min="0" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.xPct ?? 89.940)}"></label>
+          <label class="lbl" for="fMaskY">Y<input id="fMaskY" type="number" min="0" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.yPct ?? 94.329)}"></label>
+          <label class="lbl" for="fMaskW">Rộng<input id="fMaskW" type="number" min="0.1" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.wPct ?? 6.12)}"></label>
+          <label class="lbl" for="fMaskH">Cao<input id="fMaskH" type="number" min="0.1" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.hPct ?? 3.343)}"></label>
+        </div>
+        <div class="mini-actions"><button class="btn sm primary" data-act="savefireflycfg" data-tip="Lưu cỡ cọ và vùng logo, áp dụng cho ảnh chưa xóa">Lưu</button></div>
+      </details>
+      <details class="lite-details"><summary>Hướng dẫn</summary>
+        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, bạn bấm <b>Ổn</b>; tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
       </details>
     </div>
     <div class="sec"><h3>Ảnh Bước 4</h3><div class="slots" id="slots"></div></div>`;
@@ -826,48 +865,78 @@ function sceneMoreMenu(items) {
   return `<details class="scene-more"><summary class="btn sm xs" data-tip="Thêm thao tác" aria-label="Thêm thao tác">${I.more}</summary><div class="scene-menu">${items.join('')}</div></details>`;
 }
 
-// Bước 4: mỗi cảnh một thẻ, hiện trạng thái + nhật ký thao tác Firefly đang chạy.
+// Bước 4: mỗi cảnh = 2 ô ảnh (gốc / Firefly chiếu trực tiếp) + 1 hàng nút ngang.
+const LOGO_LIVE_STATUS = {
+  preparing: 'đang xóa logo',
+  downloading: 'đang xóa logo · đang tải ảnh sạch',
+  waiting_ok: 'đã xóa xong logo',
+  approved: 'đã xóa xong logo',
+  quota_blocked: 'hết lượt free Firefly',
+  error: 'lỗi xóa logo',
+  skipped: 'đã bỏ qua',
+  queued: 'trong hàng chờ',
+};
 function logoSceneHtml(s, i) {
   const lr = s.logoRemoval || {};
   const st = lr.status || '';
   const clean = st === 'approved' && lr.cleanFile;
-  const q = logoQueueRows(S.p).find((x) => x.s.id === s.id);
-  const queueTag = q ? `<span class="badge">hàng chờ ${q.no}</span>` : '';
-  const badge = st === 'approved' ? '<span class="badge ok">đã xóa logo</span>'
-    : st === 'waiting_ok' ? '<span class="badge warn">chờ bấm Ổn</span>'
-    : st === 'downloading' ? '<span class="badge warn">đang tải ảnh sạch…</span>'
-    : st === 'preparing' ? `<span class="badge warn" data-tip="${esc(lr.note || '')}">đang xóa logo…</span>`
-    : st === 'queued' ? `<span class="badge" data-tip="${esc(lr.note || '')}">trong hàng chờ${q ? ` ${q.no}/${logoQueueRows(S.p).length}` : ''}</span>`
-    : st === 'quota_blocked' ? '<span class="badge err">hết lượt Firefly</span>'
-    : st === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi xóa logo</span>`
-    : st === 'skipped' ? '<span class="badge warn">đã bỏ qua</span>' : '';
   const src = s.chosen?.status === 'saved' ? `/files/saved/${S.p.id}/${s.id}${clean ? '?clean=1' : ''}` : imgUrl(s.file);
-  const acts = st === 'waiting_ok'
-    ? `<button class="btn sm primary" data-act="logook" data-sid="${s.id}" data-tip="Đã kiểm tra trên Firefly: tải ảnh sạch">Ổn</button>`
-      + sceneMoreMenu([
-        '<button class="btn sm xs" data-act="fireflyreveal" data-tip="Xem lại ảnh trên Firefly">Xem trên Firefly</button>',
-        `<button class="btn sm xs" data-act="logoretry" data-sid="${s.id}">Làm lại</button>`,
-        `<button class="btn sm xs" data-act="logoskip" data-sid="${s.id}" data-tip="Giữ ảnh có logo, bỏ qua cảnh này">Bỏ qua</button>`,
-      ])
-    : st === 'quota_blocked'
-      ? '<button class="btn sm primary" data-act="logoresume" data-tip="Đã đổi Gmail: làm tiếp đúng ảnh kế, không làm lại ảnh cũ">Đã đổi Gmail khác, tiếp tục</button>'
-      : st === 'error'
-        ? (lr.code === 'FIREFLY_LOGIN'
-          ? '<button class="btn sm primary" data-act="fireflyreveal">Đăng nhập Firefly</button>'
-          : `<button class="btn sm primary" data-act="logoretry" data-sid="${s.id}">Làm lại</button>`)
-        : st === 'skipped'
-          ? `<button class="btn sm" data-act="logoretry" data-sid="${s.id}">Thử lại</button>`
-          : '';
+  const badge = st === 'approved' ? '<span class="badge ok">đã lưu ảnh sạch</span>'
+    : st === 'waiting_ok' ? '<span class="badge warn">chờ bạn bấm Ổn</span>'
+    : (st === 'preparing' || st === 'downloading') ? '<span class="badge warn">đang chạy</span>'
+    : st === 'quota_blocked' ? '<span class="badge err">hết lượt free</span>'
+    : st === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi</span>`
+    : st === 'skipped' ? '<span class="badge">đã bỏ qua</span>' : '';
+  const live = LOGO_LIVE_STATUS[st] || 'chờ đến lượt xóa logo';
+  const previewSrc = S.preview.get(s.id) || '';
+  const actions = [
+    st === 'waiting_ok' ? `<button class="btn sm primary" data-act="logook" data-sid="${s.id}" data-tip="Firefly đã xong: tải ảnh sạch về anhdaxoalogo">Ổn</button>` : '',
+    st === 'quota_blocked' ? '<button class="btn sm primary" data-act="logoresume" data-tip="Đã đổi Gmail: làm tiếp ảnh này, không làm lại ảnh cũ">Đã đổi Gmail khác, tiếp tục</button>' : '',
+    st === 'error' ? `<button class="btn sm primary" data-act="logoretry" data-sid="${s.id}">${lr.code === 'FIREFLY_LOGIN' ? 'Kết nối lại Firefly' : 'Làm lại'}</button>` : '',
+    st === 'skipped' ? `<button class="btn sm primary" data-act="logoretry" data-sid="${s.id}">Thử lại</button>` : '',
+    st === 'approved' ? `<button class="btn sm" data-act="openclean" data-sid="${s.id}">Xem ảnh sạch</button>` : '',
+    st === 'waiting_ok' ? '<button class="btn sm" data-act="fireflyreveal" data-tip="Mở cửa sổ Firefly để kiểm tra ảnh">Xem trên Firefly</button>' : '',
+    st === 'waiting_ok' ? `<button class="btn sm ghost" data-act="logoskip" data-sid="${s.id}">Bỏ qua</button>` : '',
+  ].filter(Boolean).join('');
   const phases = (lr.phases || []).slice(-10).map((x) => `<div class="phase"><span>${esc(x.note)}</span><time>${esc(new Date(x.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`).join('') || '<div class="hint">Chưa có thao tác nào được ghi lại.</div>';
   return `<div class="scene logoscene" data-sid="${s.id}">
-    <div class="src"><img src="${src}" data-zoom="${src}" alt="Ảnh ${esc(s.label)} ở Bước 4"><div class="acts">${clean ? `<button class="btn sm xs" data-act="openclean" data-sid="${s.id}">Xem sạch</button>` : ''}</div></div>
-    <div style="min-width:0">
-      <div class="meta"><b>Ảnh ${+(s.order || i + 1)}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}${queueTag}</div>
-      <div class="hint">${esc(lr.note || (clean ? 'Đã lưu ảnh sạch trong anhdaxoalogo.' : 'Chờ đến lượt xóa logo.'))}</div>
-      <div class="phaselist">${phases}</div>
-      <div class="scene-actions">${acts}</div>
+    <div class="meta"><b>Ảnh ${String(+(s.order || i + 1)).padStart(2, '0')}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}<span class="grow"></span></div>
+    <div class="logosplit">
+      <div class="logocell">
+        <div class="logocell-lab">Ảnh gốc <span>chưa xóa logo</span></div>
+        <img src="${src}" data-zoom="${src}" alt="Ảnh gốc ${esc(s.label || i + 1)} ở Bước 4">
+      </div>
+      <div class="logocell firefly">
+        <div class="logocell-lab">Firefly <span class="chip">chiếu trực tiếp</span></div>
+        <img class="firefly-shot" data-preview-sid="${s.id}"${previewSrc ? ` src="${previewSrc}"` : ''} alt="Firefly của ảnh ${esc(s.label || i + 1)}">
+        <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span></div>
+      </div>
     </div>
+    <div class="live-note" data-live-note="${s.id}">${esc(lr.note || (clean ? 'Đã lưu ảnh sạch trong anhdaxoalogo.' : 'Chờ đến lượt xóa logo.'))}</div>
+    <div class="phaselist">${phases}</div>
+    <div class="scene-actions">${actions || '<span class="hint">Chờ đến lượt xóa logo.</span>'}</div>
   </div>`;
+}
+
+// Chụp tab Firefly đang chạy (không bật cửa sổ, không đụng lượt Flow) rồi chiếu vào ô phải.
+// Ảnh được cache trong S.preview nên morph() của SSE không làm mất khung hình.
+let fireflyPreviewTimer = null;
+async function patchFireflyPreviews() {
+  if (S.stage !== 4 || !S.p) return;
+  const scenes = (S.p.s3?.scenes || []).filter((s) => ['preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
+  for (const s of scenes) {
+    let out;
+    try { out = await api('GET', `/api/firefly/preview?projectId=${encodeURIComponent(S.p.id)}&sceneId=${encodeURIComponent(s.id)}`); } catch (_) { continue; }
+    if (!out?.ok || !out.data) continue;
+    const el = document.querySelector(`[data-preview-sid="${s.id}"]`);
+    if (!el) continue;
+    S.preview.set(s.id, out.data);
+    if (el.getAttribute('src') !== out.data) el.setAttribute('src', out.data);
+  }
+}
+function startFireflyPreview() {
+  if (fireflyPreviewTimer) return;
+  fireflyPreviewTimer = setInterval(() => { patchFireflyPreviews().catch(() => {}); }, 1800);
 }
 function logoResultsHtml(p) {
   const scenes = p.s3.scenes || [];
@@ -875,13 +944,12 @@ function logoResultsHtml(p) {
   const done = scenes.filter((s) => ['approved', 'skipped'].includes(s.logoRemoval?.status)).length;
   let h = `<div class="rhead"><h3>Bước 4 (${done}/${scenes.length})</h3><span class="grow"></span><button class="btn sm ghost" data-act="openlogoout" data-tip="Mở thư mục anhdaxoalogo">Thư mục ảnh sạch</button></div>`;
   if (!p.cleaned) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Bước 3 chưa dọn xong. Về Bước 3 bấm “Tải hết ảnh về &amp; Dọn dẹp” rồi tool mới bắt đầu Bước 4. <button class="btn sm" data-act="goto" data-stage="3">Về Bước 3</button></div>`;
-  if (!on) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Tính năng xóa logo đang TẮT. Bật trong Cài đặt rồi quay lại Bước 3 bấm “Tải hết ảnh về &amp; Dọn dẹp”. <button class="btn sm" data-act="opensettings">Mở Cài đặt</button></div>`;
+  if (!on) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Bước 4 đang TẮT. Bấm nút “Xóa logo: Tắt” trên thanh công cụ để bật; không cần vào Cài đặt.</div>`;
   const quotaIndex = scenes.findIndex((s) => s.logoRemoval?.status === 'quota_blocked');
   const quotaScene = scenes[quotaIndex];
   const quotaNo = +(quotaScene?.order || quotaIndex + 1);
-  if (quotaScene) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Firefly hết lượt free ở <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> — ảnh số <b>${String(quotaNo).padStart(2, '0')}</b> (tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh/ngày). Đổi Gmail trong Firefly rồi bấm nút “Đã đổi Gmail khác, tiếp tục” trên thẻ ảnh này: tool làm tiếp ảnh số ${quotaNo}, không làm lại ảnh cũ.</div>`;
-  else if (S.flow?.fireflyQuotaPaused) h += `<div class="banner" style="margin:10px 0;border-radius:8px">Firefly đã hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt free hôm nay. Đổi Gmail trong Firefly rồi bấm “Đã đổi Gmail khác, tiếp tục” để tiếp tục các ảnh còn lại. <button class="btn sm primary" data-act="logoresume">Đã đổi Gmail khác, tiếp tục</button></div>`;
-  h += logoQueueHtml(p);
+  if (quotaScene) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết lượt free ở <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> — ảnh số <b>${String(quotaNo).padStart(2, '0')}</b> (tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh/ngày). Đổi Gmail rồi bấm “Đã đổi Gmail khác, tiếp tục”, không làm lại ảnh cũ.</div>`;
+  else if (S.flow?.fireflyQuotaPaused) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt free hôm nay. Đổi Gmail rồi bấm “Đã đổi Gmail khác, tiếp tục”.</div>`;
   h += scenes.map(logoSceneHtml).join('') || `<div class="drop" data-act="goto" data-stage="3" role="button" tabindex="0">Chưa có cảnh nào. Về Bước 3 thêm ảnh cảnh người thật.</div>`;
   return h;
 }
@@ -1067,6 +1135,16 @@ async function act(b) {
   if (a === 'logoresume') return api('POST', `/api/projects/${p.id}/logo-remove/resume`);
   if (a === 'fireflyopen') return api('POST', '/api/firefly/open');
   if (a === 'fireflyreveal') return api('POST', '/api/firefly/reveal');
+  if (a === 'savefireflycfg') {
+    const val = (id, def) => { const el = $('#' + id); return el ? +el.value : def; };
+    await api('POST', '/api/config', {
+      logoBrushSize: val('fBrush', 14),
+      logoRemoveMask: { xPct: val('fMaskX', 89.940), yPct: val('fMaskY', 94.329), wPct: val('fMaskW', 6.12), hPct: val('fMaskH', 3.343) },
+    });
+    S.cfg = await api('GET', '/api/config');
+    syncLogoToggle();
+    return toast('Đã lưu cỡ cọ và vùng logo.', 'ok');
+  }
   if (a === 'opensettings') return $('#btnSettings')?.click();
   if (a === 'openlogoout') return api('POST', `/api/projects/${p.id}/open-logo-output`);
   if (a === 'recrop') return recrop(g, f, b.dataset.sid);
@@ -1302,11 +1380,6 @@ function settingsHasUnsavedChanges() {
   if (val('cHq', c.hqIntermediate !== false) !== (c.hqIntermediate !== false)) return true;
   if (val('cFast', !!c.fastMode) !== !!c.fastMode) return true;
   if (val('cAutoClean', c.autoCleanOldInstallers !== false) !== (c.autoCleanOldInstallers !== false)) return true;
-  if (val('cRemoveLogo', !!c.removeLogoEnabled) !== !!c.removeLogoEnabled) return true;
-  if (+val('cBrush', c.logoBrushSize ?? 14) !== +(c.logoBrushSize ?? 14)) return true;
-  for (const [id, key, def] of [['cMaskX', 'xPct', 84.375], ['cMaskY', 'yPct', 91.352], ['cMaskW', 'wPct', 6.12], ['cMaskH', 'hPct', 3.343]]) {
-    if (+val(id, c.logoRemoveMask?.[key] ?? def) !== +(c.logoRemoveMask?.[key] ?? def)) return true;
-  }
   return false;
 }
 
@@ -1339,25 +1412,6 @@ $('#btnSettings').onclick = async () => {
     <div class="hint">Tránh hết RAM khi chạy nhiều cảnh + tải 2K song song. Khuyên dùng 12.</div>
     <label class="lbl" style="display:flex;gap:8px;align-items:flex-start;font-weight:500"><input id="cHq" type="checkbox" ${c.hqIntermediate !== false ? 'checked' : ''} style="margin-top:3px"><span>Lấy <b>bản 2K nét</b> cho ảnh đã chọn ở bước 1 và 2 trước khi dùng cho bước sau (ảnh đầu vào nét hơn, kết quả cuối nét hơn). Mỗi ảnh đã chọn tốn thêm vài giây.</span></label>
     <label class="lbl" style="display:flex;gap:8px;align-items:flex-start;font-weight:500"><input id="cAutoClean" type="checkbox" ${c.autoCleanOldInstallers !== false ? 'checked' : ''} style="margin-top:3px"><span><b>Tự dọn file cài đặt cũ</b>: sau khi bản mới mở lại, xóa file installer vừa tải và các installer cũ trong thư mục <code>dist</code> (chỉ giữ bản mới nhất). Không đụng vào dự án/ảnh của bạn.</span></label>
-    <details class="adv" ${c.removeLogoEnabled ? 'open' : ''}><summary>Bước 4 - Xóa logo (Adobe Firefly)</summary>
-      <label class="lbl" style="display:flex;gap:8px;align-items:flex-start;font-weight:500"><input id="cRemoveLogo" type="checkbox" ${c.removeLogoEnabled ? 'checked' : ''} style="margin-top:3px"><span><b>Xóa logo sau Bước 3</b> bằng Adobe Firefly. Mặc định tắt, không ảnh hưởng Bước 1–3.</span></label>
-      <div class="hint">Dùng tài khoản Flow thường có thể bật. Tool đang dùng lượt free hàng ngày của Firefly; nếu Firefly hiện thông tin nâng cấp phí / hết lượt, app sẽ dừng và nhắc đổi mail khác. Bạn tự đăng nhập, app không lưu mật khẩu.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <button class="btn sm ghost" id="cFireflyOpen" type="button">Kết nối Firefly</button>
-        <span class="hint" id="cFireflyStatus" style="margin:0;align-self:center">Chưa kiểm tra kết nối Firefly.</span>
-      </div>
-      <label class="lbl" for="cBrush" style="margin-top:8px">Cỡ cọ Firefly (mặc định 14)</label>
-      <input id="cBrush" type="number" min="5" max="128" step="1" value="${c.logoBrushSize ?? 14}">
-      <div class="hint">Tool sẽ mở <b>Cài đặt cọ vẽ</b> trên Firefly và kéo slider đến mức này trước khi chấm vào logo. Mức 14 là thao tác đã kiểm tra trên máy của bạn.</div>
-      <div class="hint" style="margin-top:8px">Vùng logo mặc định cho ảnh mẫu 768×1376 (phần trăm khung ảnh). Nếu logo ở ví trí khác, chỉnh 4 ô này rồi Lưu; bạn có thể bấm “Làm lại xóa logo” để áp dụng cho các cảnh chưa duyệt.</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:6px">
-        <label class="lbl" for="cMaskX" style="margin:0">X (%)<input id="cMaskX" type="number" min="0" max="100" step="0.001" value="${c.logoRemoveMask?.xPct ?? 84.375}"></label>
-        <label class="lbl" for="cMaskY" style="margin:0">Y (%)<input id="cMaskY" type="number" min="0" max="100" step="0.001" value="${c.logoRemoveMask?.yPct ?? 91.352}"></label>
-        <label class="lbl" for="cMaskW" style="margin:0">Rộng (%)<input id="cMaskW" type="number" min="0.1" max="100" step="0.001" value="${c.logoRemoveMask?.wPct ?? 6.12}"></label>
-        <label class="lbl" for="cMaskH" style="margin:0">Cao (%)<input id="cMaskH" type="number" min="0.1" max="100" step="0.001" value="${c.logoRemoveMask?.hPct ?? 3.343}"></label>
-      </div>
-      <div class="hint" style="margin-top:8px">Quy trình: sau khi Bước 3 lưu xong toàn bộ ảnh đã chọn, bạn bấm <b>Tải hết ảnh về &amp; Dọn dẹp</b> (xóa <code>_tam</code>, chỉ giữ ảnh 2K đã chọn). Tool mới mở Firefly, xử lý <b>từng ảnh một</b>: cắt 9:16 → Chấm sửa và xóa → Cài đặt cọ mức đã chọn → chấm 1 lần vào logo → bấm Xóa. Khi bạn bấm <b>Ổn</b>, app mới tải xuống và lưu vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>, rồi mới mở ảnh kế tiếp trong hàng chờ. Sau khi toàn bộ ảnh sạch đã lưu, app mới xóa ảnh gốc có logo trong thư mục output.</div>
-    </details>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn ghost sm" id="cBackup" type="button" data-tip="Sao lưu toàn bộ dữ liệu (dự án + ảnh) vào thư mục backups trong data/">Sao lưu dữ liệu</button>
       <span class="hint" style="margin:0;align-self:center">${c.lastBackupAt ? 'Lần sao lưu gần nhất: ' + new Date(c.lastBackupAt).toLocaleString('vi-VN') : 'Chưa sao lưu lần nào.'}</span>
@@ -1377,19 +1431,10 @@ $('#btnSettings').onclick = async () => {
       try { const dir = await window.flowBridge.pickFolder($('#cOut').value.trim()); if (dir) $('#cOut').value = dir; } catch (er) { fail(er); }
     };
   }
-  $('#cFireflyOpen').onclick = async () => {
-    try { await api('POST', '/api/firefly/open'); $('#cFireflyStatus').textContent = 'Đã mở Firefly. Hãy đăng nhập nếu chưa có.'; } catch (er) { fail(er); }
-  };
-  const loadFireflyStatus = async () => {
-    const el = $('#cFireflyStatus'); if (!el) return;
-    try { const st = await api('GET', '/api/firefly/status'); el.textContent = st.loggedIn ? 'Đã kết nối Firefly.' : (st.browser ? 'Chưa đăng nhập Firefly.' : 'Chưa mở Chrome Firefly.'); }
-    catch (_) { el.textContent = 'Chưa kiểm tra kết nối Firefly.'; }
-  };
-  loadFireflyStatus();
   $('#sOk').onclick = async () => {
-    const payload = { hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, autoCleanOldInstallers: $('#cAutoClean').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value, removeLogoEnabled: $('#cRemoveLogo').checked, logoBrushSize: +$('#cBrush').value, logoRemoveMask: { xPct: +$('#cMaskX').value, yPct: +$('#cMaskY').value, wPct: +$('#cMaskW').value, hPct: +$('#cMaskH').value } };
+    const payload = { hqIntermediate: $('#cHq').checked, fastMode: $('#cFast').checked, autoCleanOldInstallers: $('#cAutoClean').checked, maxParallelRuns: +$('#cPar').value, concurrent2k: +$('#c2k').value, maxChromeTabs: +$('#cTabs').value, chromePath: $('#cChrome').value };
     if (!fixed) payload.outputRoot = $('#cOut').value;
-    try { await api('POST', '/api/config', payload); m.close(); S.cfg = await api('GET', '/api/config').catch(() => S.cfg); toast('Đã lưu cài đặt.', 'ok'); } catch (er) { fail(er); }
+    try { await api('POST', '/api/config', payload); m.close(); S.cfg = await api('GET', '/api/config').catch(() => S.cfg); syncLogoToggle(); toast('Đã lưu cài đặt.', 'ok'); } catch (er) { fail(er); }
   };
   $('#cCheckUpdate').onclick = async () => {
     const btn = $('#cCheckUpdate'); const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Đang kiểm tra…';

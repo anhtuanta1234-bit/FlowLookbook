@@ -725,8 +725,57 @@ async function discardScene({ projectId, sceneId }) {
   return lock.run(async () => { await releaseTab(`${projectId}:${sceneId}`); });
 }
 
+// Ảnh xem trước cho ô Firefly trên app: chụp tab nền qua CDP.
+// KHÔNG gọi bringToFront/showWindow — cửa sổ Chrome đang chạy Flow không bị đẩy lên.
+let previewCache = { key: '', at: 0, data: '' };
+async function preview({ projectId, sceneId } = {}) {
+  if (!projectId || !sceneId) return { ok: false };
+  if (!(await chrome.isRunning())) return { ok: false };
+  const key = `${projectId}:${sceneId}`;
+  const pr = tabs.get(key) || [...tabs.entries()].find(([k]) => k.startsWith(`${projectId}:`))?.[1];
+  if (!pr) return { ok: false };
+  const tab = await pr.catch(() => null);
+  const page = tab?.page;
+  if (!page || page.isClosed()) return { ok: false };
+  const now = Date.now();
+  if (previewCache.key === key && now - previewCache.at < 800) return { ok: true, data: previewCache.data };
+  let session;
+  const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('preview timeout')), ms);
+    Promise.resolve(promise).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+  try {
+    let data = '';
+    try {
+      // Playwright chụp đúng nội dung tab nền (không cần đưa cửa sổ lên trước).
+      const buf = await withTimeout(page.screenshot({ type: 'jpeg', quality: 45, animations: 'disabled', timeout: 2200 }), 2500);
+      data = buf?.toString('base64') || '';
+    } catch (_) {}
+    if (!data) {
+      // Dự phòng khi Playwright không chụp được: CDP chụp trực tiếp, không đụng cửa sổ Chrome.
+      try {
+        session = await page.context().newCDPSession(page);
+        let vp = { width: 1280, height: 800 };
+        try { const m = await withTimeout(session.send('Page.getLayoutMetrics'), 1200); vp = m.cssContentSize || m.cssLayoutViewport || vp; } catch (_) {}
+        const clip = {
+          x: 0, y: 0,
+          width: Math.max(320, Math.min(Math.round(vp.width), 1600)),
+          height: Math.max(240, Math.min(Math.round(vp.height), 1000)),
+          scale: 0.45,
+        };
+        const shot = await withTimeout(session.send('Page.captureScreenshot', { format: 'jpeg', quality: 45, fromSurface: false, captureBeyondViewport: false, clip }), 2500);
+        data = shot?.data || '';
+      } catch (_) {}
+    }
+    if (!data) return { ok: false };
+    previewCache = { key, at: now, data: `data:image/jpeg;base64,${data}` };
+    return { ok: true, data: previewCache.data };
+  } catch (_) { return { ok: false }; }
+  finally { await session?.detach().catch(() => {}); }
+}
+
 module.exports = {
-  status, open, reveal,
+  status, open, reveal, preview,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },

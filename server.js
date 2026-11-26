@@ -240,6 +240,13 @@ app.post('/api/firefly/open', async (req, res) => {
 app.post('/api/firefly/reveal', async (req, res) => {
   try { await firefly.reveal(); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Xem trước Firefly trên app: ảnh lỗi thì trả {ok:false} chứ không báo lỗi lên giao diện.
+app.get('/api/firefly/preview', async (req, res) => {
+  try {
+    const out = await firefly.preview({ projectId: String(req.query.projectId || ''), sceneId: String(req.query.sceneId || '') });
+    res.json(out?.ok ? out : { ok: false });
+  } catch (_) { res.json({ ok: false }); }
+});
 
 // Mở Flow ở đúng dự án đang gặp lỗi (body: { url } hoặc { projectId, stage, sceneId })
 app.post('/api/flow/reveal', async (req, res) => {
