@@ -925,6 +925,9 @@ async function patchFireflyPreviews() {
   if (S.stage !== 4 || !S.p) return;
   const scenes = (S.p.s3?.scenes || []).filter((s) => ['preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
   for (const s of scenes) {
+    // Firefly đã báo xong mà người dùng CHƯA bấm Ổn: đóng băng khung hình cuối,
+    // không chụp lại nữa để ô chiếu không bật lên tắt xuống / nháy liên tục.
+    if (s.logoRemoval?.status === 'waiting_ok' && S.preview.has(s.id)) continue;
     let out;
     try { out = await api('GET', `/api/firefly/preview?projectId=${encodeURIComponent(S.p.id)}&sceneId=${encodeURIComponent(s.id)}`); } catch (_) { continue; }
     if (!out?.ok || !out.data) continue;

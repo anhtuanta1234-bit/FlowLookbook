@@ -31,7 +31,17 @@ test('màn hình nâng cấp trả phí cũng là hết lượt free, báo đổ
   assert.equal(_test.isQuotaText('Upgrade to a paid plan to continue generating.'), true);
   assert.equal(_test.isQuotaText('Mua thêm lượt tạo sinh'), true);
   assert.equal(_test.isQuotaText('Bạn có 10 lượt tạo miễn phí theo ngày'), false);
+  assert.equal(_test.isQuotaText('Hôm nay còn 0 lượt tạo'), true, 'Firefly hiện báo số lượt còn lại bằng câu này');
+  assert.equal(_test.isQuotaText('Bạn đã dùng hết số lượt tạo miễn phí hằng ngày.'), true);
   assert.match(src, /Firefly đang dùng lượt free hàng ngày và đã hết\. Vui lòng đổi mail khác/);
+});
+
+test('chỉ coi banner hết lượt là có thật khi nó visible, không đếm tooltip ẩn trong shadow DOM', () => {
+  assert.match(src, /function stateHasQuota\(state\) \{[\s\S]*?return isQuotaText\(state\?\.body\);/, 'chỉ tin body, không tin deepText/uiText');
+  assert.ok(!/isQuotaText\(state\?\.deepText\)/.test(src), 'không đọc text ẩn');
+  assert.ok(!/isQuotaText\(state\?\.uiText\)/.test(src), 'không đọc text ẩn');
+  assert.match(src, /const count = Math\.min\(await loc\.count\(\)\.catch\(\(\) => 0\), 12\)/);
+  assert.match(src, /loc\.nth\(i\)\.isVisible\(\)/, 'kiểm tra từng kết quả có thật sự hiện không');
 });
 
 test('đường dẫn editor luôn nằm trên firefly.adobe.com', () => {
@@ -73,6 +83,27 @@ test('lỗi / hết lượt / tạm dừng thì đóng ngay tab Firefly để nh
   assert.ok(!src.includes('quotaBlocked'), 'không giữ cửa sổ Firefly chờ đổi Gmail');
   assert.match(src, /e\?\.code === 'FIREFLY_QUOTA'\) await open\(\)/, 'hết lượt lúc tạo vẫn mở cửa sổ để đổi Gmail');
   assert.match(src, /closeProjectTabs, closeAll/, 'tắt tool phải đóng luôn Chrome Firefly');
+});
+
+test('canvas mask dù bị thu nhỏ vẫn được chọn, không chấm nhầm canvas nền', () => {
+  assert.match(src, /if \(isMask \? \(box\.width < 10 \|\| box\.height < 10\)/, 'không loại canvas mask vì nhỏ hơn 60/100px');
+  assert.match(src, /score = isMask \? -Infinity : Math\.abs/, 'mask-canvas được ưu tiên tuyệt đối');
+  assert.ok(!src.includes('box.width < 60'), 'ngưỡng cũ loại canvas mask khi cửa sổ nhỏ đã bỏ');
+});
+
+test('chấm cọ thử lại khi Firefly chưa nhận nét, mỗi lần lấy box canvas mới', () => {
+  assert.match(src, /const boxBefore = \(await waitForMaskCanvas\(page\)\)\.box/);
+  assert.match(src, /const brush = await setBrushSize\(page, brushSize\);[\s\S]*?const boxAfter = \(await waitForMaskCanvas\(page\)\)\.box/, 'đóng hộp cọ xong phải lấy box mới');
+  assert.match(src, /for \(; attempts < 3 && !ready; attempts\+\+\)/, 'nút Xóa chưa bật thì chấm lại tối đa 3 lần');
+  assert.match(src, /box = \(await waitForMaskCanvas\(page\)\)\.box;[\s\S]*?cx = box\.x \+ rel\.x \* box\.width/, 'mỗi lần thử tính lại tọa độ theo box hiện tại');
+  assert.match(src, /if \(!ready\) throw new Error\('Firefly không nhận nét chấm/);
+});
+
+test('ô chiếu trực tiếp chụp đúng canvas 9:16, nét và không cắt khung', () => {
+  assert.match(src, /findCanvas\(page, \{ prefer9x16: true \}\)\)\.box/, 'chụp đúng vùng ảnh, không chụp cả trang Firefly');
+  assert.match(src, /scale: 2, \/\/ 2x device pixel/);
+  assert.match(src, /format: 'jpeg', quality: 90/);
+  assert.ok(!src.includes("quality: 45"), 'không chụp ảnh mờ quality 45');
 });
 
 test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {
@@ -119,8 +150,8 @@ test('chọn cỡ cọ thật trong hộp Cài đặt cọ vẽ, rồi chấm đ
 
   assert.match(src, /async function findCanvas\(page, \{ prefer9x16 = false \} = \{\}\)/);
   assert.ok(src.includes('/mask-canvas/i.test(cls)'), 'Chọn canvas mask 9:16, không chọn canvas nền to hơn');
-  assert.match(src, /const \{ box \} = await waitForMaskCanvas\(page\)/, 'Chấm trên canvas mask thật');
-  assert.match(src, /await page\.mouse\.move\(cx, cy\);[\s\S]*?await page\.mouse\.down\(\);[\s\S]*?await page\.mouse\.up\(\);/, 'Một lần chấm duy nhất tại tâm logo');
+  assert.match(src, /await waitForMaskCanvas\(page\)\)\.box/, 'Chấm trên canvas mask thật');
+  assert.match(src, /await page\.mouse\.move\(cx, cy\);[\s\S]*?await page\.mouse\.down\(\);[\s\S]*?await page\.mouse\.up\(\);/, 'Chấm tại tâm logo (có thử lại nếu Firefly chưa nhận)');
   assert.ok(!src.includes('strokes.push'), 'Không quét nhiều nét làm sai thao tác người dùng');
   assert.match(src, /cfg\.get\(\)\.logoBrushSize/, 'Cỡ cọ lấy từ cài đặt, mặc định 14');
 });
@@ -134,9 +165,9 @@ test('chờ đúng câu Firefly báo hoàn tất tạo sinh trước khi tải',
   assert.match(src, /if \(await removalComplete\(page, state\)\) return true; \/\/ Firefly đã báo xong mới được phép tải\./);
 });
 
-test('canvas mask 2K rộng ~199px vẫn được chọn, không loại bởi ngưỡng 200px', () => {
-  assert.match(src, /isMask \? \(box\.width < 60 \|\| box\.height < 100\) : \(box\.width < 200 \|\| box\.height < 200\)/);
-  assert.match(src, /score = isMask \? -1000 : Math\.abs\(box\.width \/ box\.height - 9 \/ 16\)/);
+test('canvas mask 2K rộng ~199px vẫn được chọn, kể cả khi thu nhỏ còn ~50px', () => {
+  assert.match(src, /isMask \? \(box\.width < 10 \|\| box\.height < 10\) : \(box\.width < 200 \|\| box\.height < 200\)/);
+  assert.match(src, /score = isMask \? -Infinity : Math\.abs\(box\.width \/ box\.height - 9 \/ 16\)/);
 });
 
 test('mỗi ảnh mở một tab Firefly mới và đóng tab khi ảnh xong', () => {
@@ -152,7 +183,7 @@ test('tăng tốc bằng chờ theo điều kiện thật, không sleep cố đ�
   assert.match(src, /async function dismissFireflyDialogs\(page, graceMs = 400\)/);
   assert.ok(!/await sleep\((?:600|800|900|1000|1200|1500)\)/.test(src), 'Không được ngủ cố định các mốc cũ');
   assert.match(src, /const remain = minWaitMs - \(Date\.now\(\) - start\);[\s\S]*?return true;\n\}/, 'Editor không cộng thêm 5s sau khi đã chờ lúc mở tab');
-  assert.match(src, /await waitClickable\(page, \[L\.removeBtn, L\.removeBtnText\], \{ timeout: 3000/, 'Chờ cọ được Firefly ghi nhận thay vì sleep 900ms');
+  assert.match(src, /await waitClickable\(page, \[L\.removeBtn, L\.removeBtnText\], \{ timeout: 2500/, 'Chờ cọ được Firefly ghi nhận thay vì sleep 900ms');
   assert.match(src, /await sleep\(400\);\n  \}\n  throw new Error\('Firefly chưa báo/);
 });
 

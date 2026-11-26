@@ -445,14 +445,15 @@ async function findCanvas(page, { prefer9x16 = false } = {}) {
     if (!box) continue;
     const cls = await c.evaluate((el) => String(el.className || '')).catch(() => '');
     const isMask = /mask-canvas/i.test(cls);
-    // Canvas mask trên ảnh 2K chỉ rộng ~199px: ngưỡng 200px cũ loại nó và chọn nhầm canvas nền.
-    if (isMask ? (box.width < 60 || box.height < 100) : (box.width < 200 || box.height < 200)) continue;
+    // Canvas mask trên ảnh 2K chỉ rộng ~199px; khi cửa sổ bị thu nhỏ có thể xuống ~50px.
+    // Ngưỡng cũ 60/100 loại nó → chấm nhầm canvas nền → logo vẫn còn. Chỉ loại canvas vô hình.
+    if (isMask ? (box.width < 10 || box.height < 10) : (box.width < 200 || box.height < 200)) continue;
     let score;
     if (prefer9x16) {
       // Sau khi bấm “Chấm sửa và xóa” Firefly có 2 canvas: canvas nền (tỷ lệ ~1.7)
-      // và canvas mask thật (class mask-canvas, tỷ lệ 9:16). Chọn nhầm canvas nền
-      // làm cọ chấm ngoài ảnh → bấm Xóa nhưng logo vẫn còn.
-      score = isMask ? -1000 : Math.abs(box.width / box.height - 9 / 16);
+      // và canvas mask thật (class mask-canvas, tỷ lệ 9:16). mask-canvas là vùng chấm
+      // THEO ĐỊNH NGHĨA — ưu tiên tuyệt đối, kể cả khi nó nhỏ vì cửa sổ bị thu lại.
+      score = isMask ? -Infinity : Math.abs(box.width / box.height - 9 / 16);
     } else {
       score = -box.width * box.height; // lúc upload chỉ có canvas nền: lấy canvas lớn nhất
     }
@@ -519,9 +520,14 @@ async function waitForDownloadReady(page, timeoutMs = 120000) {
 async function applyBrush(page, mask, imagePath, brushSize, cropped = true) {
   // Chấm đúng 1 lần vào tâm vùng logo trên canvas mask 9:16 — đúng thao tác người dùng
   // đã làm trực tiếp: chỉnh cọ mức 14 rồi chấm, sau đó bấm Xóa.
-  const { box } = await waitForMaskCanvas(page);
+  const boxBefore = (await waitForMaskCanvas(page)).box;
   const m = normalizeMask(mask);
   const brush = await setBrushSize(page, brushSize);
+  // Cọ vừa đóng hộp cài đặt: lấy lại box mới, không dùng box cũ đã bị dịch layout.
+  const boxAfter = (await waitForMaskCanvas(page)).box;
+  if (process.env.FLOW_FIREFLY_DEBUG) {
+    console.log('[FIREFLY DEBUG] boxBefore=' + JSON.stringify(boxBefore) + ' boxAfter=' + JSON.stringify(boxAfter));
+  }
 
   let rel = { x: (m.xPct + m.wPct / 2) / 100, y: (m.yPct + m.hPct / 2) / 100 };
   const src = imagePath ? imageDimensions(imagePath) : null;
@@ -543,22 +549,29 @@ async function applyBrush(page, mask, imagePath, brushSize, cropped = true) {
     };
   }
 
-  const cx = box.x + rel.x * box.width;
-  const cy = box.y + rel.y * box.height;
-  await page.mouse.move(cx, cy);
-  await page.mouse.down();
-  await page.mouse.up();
-  await sleep(200); // nhỏ để Firefly kịp nhận event pointer, không phải chờ 900ms cũ
-  // Chờ Firefly nhận nét chấm (nút Xóa được bật) thay vì sleep 900ms cố định.
-  await waitClickable(page, [L.removeBtn, L.removeBtnText], { timeout: 3000, label: 'nút xóa sau khi chấm' }).catch(() => {});
-  return { box, mask: m, brush: brush.target, brushLabel: brush.label, point: { cx, cy } };
+  // Firefly đôi khi không nhận nét chấm đầu (UI còn transition), hoặc cửa sổ bị thu/thay đổi
+  // layout ngay lúc chấm. Mỗi lần thử lấy LẠI box canvas để tính tọa độ mới, không dùng box cũ.
+  let attempts = 0, ready = false, box = boxAfter, cx = 0, cy = 0;
+  for (; attempts < 3 && !ready; attempts++) {
+    if (attempts) await sleep(400);
+    box = (await waitForMaskCanvas(page)).box;
+    cx = box.x + rel.x * box.width;
+    cy = box.y + rel.y * box.height;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.up();
+    await sleep(200);
+    ready = !!(await waitClickable(page, [L.removeBtn, L.removeBtnText], { timeout: 2500, label: 'nút xóa sau khi chấm' }).catch(() => null));
+  }
+  if (!ready) throw new Error('Firefly không nhận nét chấm vào vùng logo. Hãy thử lại xóa logo.');
+  return { box, mask: m, brush: brush.target, brushLabel: brush.label, point: { cx, cy }, attempts };
 }
 
 // Firefly hết free có 2 dạng: banner “hết lượt” hoặc màn hình mời “nâng cấp gói trả phí”.
 // Cả hai đều là hết lượt free hàng ngày, không phải lỗi và không nên tự mua gói.
-const QUOTA_TEXT_RE = /đã hết lượt|hết lượt (?:tạo|miễn phí|free|generative)|đã đạt giới hạn|nâng cấp[^.]{0,40}(?:trả phí|premium|pro|paid|để tiếp tục)|mua thêm lượt|mua thêm credit|out of generative credits|no generative credits|generation limit reached|daily limit reached|insufficient credits|quota exceeded|upgrade[^.]{0,40}(?:paid|premium|pro) plan|subscribe to continue|buy more credits|get more (?:generative )?credits/i;
+const QUOTA_TEXT_RE = /đã hết lượt|hết lượt (?:tạo|miễn phí|free|generative)|hôm nay còn 0 lượt|đã dùng hết số lượt tạo|đã đạt giới hạn|nâng cấp để tiếp tục tạo|nâng cấp[^.]{0,40}(?:trả phí|premium|pro|paid|để tiếp tục)|mua thêm lượt|mua thêm credit|out of generative credits|no generative credits|generation limit reached|daily limit reached|insufficient credits|quota exceeded|upgrade[^.]{0,40}(?:paid|premium|pro) plan|subscribe to continue|buy more credits|get more (?:generative )?credits/i;
 const QUOTA_LOCATOR_RES = [
-  /đã hết lượt|hết lượt/i,
+  /đã hết lượt|hết lượt|hôm nay còn 0 lượt|đã dùng hết số lượt tạo/i,
   /đã đạt giới hạn/i,
   /nâng cấp[^.]{0,40}(?:trả phí|premium|pro|paid|để tiếp tục)/i,
   /mua thêm lượt|mua thêm credit/i,
@@ -573,14 +586,25 @@ function isQuotaText(text) {
 }
 
 function stateHasQuota(state) {
-  return isQuotaText(state?.body) || isQuotaText(state?.deepText) || isQuotaText(state?.uiText);
+  // CHỈ tin body (text người dùng thấy được). deepText/uiText gồm cả tooltip ẨN và mã JS
+  // của Firefly — từng làm tool tưởng hết lượt dù ảnh đã tải lên và còn lượt.
+  return isQuotaText(state?.body);
 }
 
 async function detectQuotaBlock(page, state) {
-  if (stateHasQuota(state || await readPageState(page))) return true;
+  const st = state || await readPageState(page);
+  // Banner quota nằm trong shadow DOM nên body.innerText thường không thấy: dùng locator,
+  // nhưng phải kiểm tra TỪNG kết quả có isVisible() thật — không được đếm tooltip ẩn.
+  if (stateHasQuota(st)) return true;
   for (const re of QUOTA_LOCATOR_RES) {
-    const loc = page.getByText(re).first();
-    if (await loc.isVisible().catch(() => false)) return true;
+    const loc = page.getByText(re);
+    const count = Math.min(await loc.count().catch(() => 0), 12);
+    for (let i = 0; i < count; i++) {
+      if (await loc.nth(i).isVisible().catch(() => false)) {
+        if (process.env.FLOW_FIREFLY_DEBUG) console.log('[FIREFLY DEBUG] quota banner visible: ' + re.source);
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -679,6 +703,10 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       onPhase?.('Đã xóa logo trên Firefly. Chờ bạn bấm “Ổn” để tải xuống.');
       return { ok: true, key };
     } catch (e) {
+      if (process.env.FLOW_FIREFLY_DEBUG) {
+        await p.screenshot({ path: require('path').join(require('os').tmpdir(), 'flb-firefly-debug.png') }).catch(() => {});
+        console.log('[FIREFLY DEBUG] screenshot saved, error=' + e.message);
+      }
       // Lỗi/quota/hủy: đóng tab nền Firefly, không để nặng máy hay tồn session cũ.
       await releaseTab(key);
       // Hết lượt: mở lại 1 cửa sổ Firefly nhìn thấy được để bạn tự đăng nhập Gmail khác.
@@ -770,25 +798,34 @@ async function preview({ projectId, sceneId } = {}) {
   });
   try {
     let data = '';
+    // Chụp ĐÚNG vùng ảnh (canvas 9:16) chứ không chụp cả trang → không bị cắt 16:9, nét hơn hẳn.
+    let box = null;
+    try { box = (await findCanvas(page, { prefer9x16: true })).box; } catch (_) {}
     try {
-      // Playwright chụp đúng nội dung tab nền (không cần đưa cửa sổ lên trước).
-      const buf = await withTimeout(page.screenshot({ type: 'jpeg', quality: 45, animations: 'disabled', timeout: 2200 }), 2500);
-      data = buf?.toString('base64') || '';
+      session = await page.context().newCDPSession(page);
+      let vp = { width: 1280, height: 800 };
+      try { const m = await withTimeout(session.send('Page.getLayoutMetrics'), 1200); vp = m.cssContentSize || m.cssLayoutViewport || vp; } catch (_) {}
+      const clip = box ? {
+        x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)),
+        width: Math.max(200, Math.min(Math.round(box.width), Math.round(vp.width))),
+        height: Math.max(200, Math.min(Math.round(box.height), Math.round(vp.height))),
+        scale: 2, // 2x device pixel để ô chiếu không bị mờ khi phóng to
+      } : {
+        x: 0, y: 0,
+        width: Math.max(320, Math.min(Math.round(vp.width), 1600)),
+        height: Math.max(240, Math.min(Math.round(vp.height), 1000)),
+        scale: 1,
+      };
+      const shot = await withTimeout(session.send('Page.captureScreenshot', { format: 'jpeg', quality: 90, fromSurface: false, captureBeyondViewport: false, clip }), 3000);
+      data = shot?.data || '';
     } catch (_) {}
     if (!data) {
-      // Dự phòng khi Playwright không chụp được: CDP chụp trực tiếp, không đụng cửa sổ Chrome.
+      // Dự phòng: Playwright chụp đúng phần tử canvas, vẫn giữ chất lượng cao.
       try {
-        session = await page.context().newCDPSession(page);
-        let vp = { width: 1280, height: 800 };
-        try { const m = await withTimeout(session.send('Page.getLayoutMetrics'), 1200); vp = m.cssContentSize || m.cssLayoutViewport || vp; } catch (_) {}
-        const clip = {
-          x: 0, y: 0,
-          width: Math.max(320, Math.min(Math.round(vp.width), 1600)),
-          height: Math.max(240, Math.min(Math.round(vp.height), 1000)),
-          scale: 0.45,
-        };
-        const shot = await withTimeout(session.send('Page.captureScreenshot', { format: 'jpeg', quality: 45, fromSurface: false, captureBeyondViewport: false, clip }), 2500);
-        data = shot?.data || '';
+        const buf = box
+          ? await withTimeout(page.screenshot({ type: 'jpeg', quality: 90, animations: 'disabled', clip: box, timeout: 2200 }), 2500)
+          : await withTimeout(page.screenshot({ type: 'jpeg', quality: 90, animations: 'disabled', timeout: 2200 }), 2500);
+        data = buf?.toString('base64') || '';
       } catch (_) {}
     }
     if (!data) return { ok: false };

@@ -214,6 +214,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /waiting_ok: 'đã xóa xong logo'/, 'Xong thì báo đã xóa xong logo');
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');
   assert.match(src, /function patchFireflyPreviews\(\)/, 'Ảnh Firefly được làm mới định kỳ');
+  assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)\) continue/, 'Xong mà chưa bấm Ổn thì đóng băng khung hình, không chụp lại gây nháy');
   assert.match(src, /Firefly hết lượt free ở <b>\$\{esc\(quotaScene\.label \|\| `Cảnh \$\{quotaIndex \+ 1\}`\)\}<\/b>/, 'Banner phải nói tên ảnh hết lượt');
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'Banner phải nói rõ giới hạn 3 ảnh/ngày');
   assert.match(src, /Đã đổi Gmail khác, tiếp tục/, 'Banner phải hướng dẫn bấm nút đổi Gmail');
@@ -249,6 +250,13 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/Ổn — tải ảnh sạch/.test(scene), 'không còn chuỗi nút dài');
   assert.ok(!/data-act="fireflyopen"/.test(results), 'kết quả Bước 4 không còn nút mở Firefly trùng');
   assert.ok(!/data-act="fireflyreveal"[\s\S]{0,160}>Firefly<\/button>/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
+});
+
+test('Bước 4: 2 ô ảnh cùng khung 9:16, cùng kích thước, ảnh gốc khít viền', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\)\}/, 'cả 2 ô dùng chung một khung 9:16');
+  assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
+  assert.ok(!/\.logocell\.firefly img\{aspect-ratio/.test(css), 'không còn rule riêng làm ô Firefly khác kích thước ô gốc');
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {

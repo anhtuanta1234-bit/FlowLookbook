@@ -253,8 +253,9 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .logocell{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
-.logocell img{display:block;width:100%;height:auto;max-height:340px;object-fit:contain;background:var(--bg2)}
-.logocell.firefly img{aspect-ratio:16/9;object-fit:cover}
+/* Bước 4: cả 2 ô cùng khung 9:16, cùng kích thước để so sánh ảnh gốc / Firefly 1:1.
+   cover cắt giữa đúng như Firefly cắt ảnh gốc về 9:16 → tọa độ trên khung khớp canvas Firefly. */
+.logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
 .logocell-foot{min-height:29px;display:flex;align-items:center;padding:5px 8px;border-top:1px solid var(--line)}
 .logocell-foot .badge{font-size:11px}

@@ -41,8 +41,18 @@ function killTree(pid) {
   });
 }
 
+// Lần đầu tách Firefly: kế thừa đăng nhập từ profile cũ (Chrome đang đóng mới copy được).
+// Copies chứa cookie Adobe đã đăng nhập; sau đó 2 profile phát triển riêng, đổi Gmail Firefly
+// không đụng session Google của Flow.
+function seedProfile(dir, seedFrom) {
+  if (!seedFrom || fs.existsSync(dir)) return;
+  const src = path.join(cfg.dataDir, seedFrom);
+  if (!fs.existsSync(src)) return;
+  try { fs.cpSync(src, dir, { recursive: true }); } catch (_) {}
+}
+
 // Tạo một bộ Chrome độc lập. Flow và Firefly truyền cổng/profile/trang mở đầu khác nhau.
-function createChrome({ getPort, profileName, startUrl }) {
+function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
   let browser = null;
   let starting = null;
   let chromePid = null; // PID của process Chrome mà bộ này đã spawn
@@ -60,6 +70,7 @@ function createChrome({ getPort, profileName, startUrl }) {
         const exe = findChrome();
         if (!exe) throw new Error('Không tìm thấy Chrome. Hãy cài Google Chrome hoặc điền đường dẫn trong Cài đặt > Nâng cao.');
         const dir = profile();
+        seedProfile(dir, seedFrom); // copy profile cũ trước khi Chrome khởi động
         fs.mkdirSync(dir, { recursive: true });
         const args = [
           `--remote-debugging-port=${p}`,
@@ -107,6 +118,34 @@ function createChrome({ getPort, profileName, startUrl }) {
   const hideWindow = () => setWindowState('minimized');
   async function showWindow() {
     await setWindowState('normal');
+    // Firefly cần cửa sổ đủ lớn: bị thu nhỏ thì canvas mask co lại, dễ chấm nhầm canvas nền.
+    if (minWindow) {
+      try {
+        const b = await ensureBrowser();
+        const targets = ((await httpJson(port(), '/json/list')) || []).filter((t) => t.type === 'page');
+        const s = await b.newBrowserCDPSession();
+        try {
+          const ids = new Set();
+          for (const t of targets) {
+            try { ids.add((await s.send('Browser.getWindowForTarget', { targetId: t.id })).windowId); } catch (_) {}
+          }
+          for (const windowId of ids) {
+            try {
+              const cur = (await s.send('Browser.getWindowBounds', { windowId })).bounds || {};
+              if ((cur.width || 0) < minWindow.width || (cur.height || 0) < minWindow.height) {
+                await s.send('Browser.setWindowBounds', {
+                  windowId,
+                  bounds: {
+                    width: Math.max(cur.width || 0, minWindow.width),
+                    height: Math.max(cur.height || 0, minWindow.height),
+                  },
+                });
+              }
+            } catch (_) {}
+          }
+        } finally { await s.detach().catch(() => {}); }
+      } catch (_) {}
+    }
     const ctx = await getContext();
     const pg = ctx.pages()[0]; if (pg) await pg.bringToFront().catch(() => {});
   }
@@ -196,6 +235,8 @@ const fireflyChrome = createChrome({
   },
   profileName: 'chrome-firefly-profile',
   startUrl: FIREFLY_HOME,
+  seedFrom: 'chrome-profile', // giữ đăng nhập Firefly sau khi tách Chrome
+  minWindow: { width: 1100, height: 760 }, // canvas mask không được co lại đến mức bị bỏ qua
 });
 
 module.exports = {
