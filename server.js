@@ -193,6 +193,7 @@ app.get('/api/flow/status', async (req, res) => {
   if (loginPending && st.loggedIn) { loginPending = false; setTimeout(() => flow.hide(), 3000); }
   res.json({ ...st, paused, queued: queue.length, auto: autoOn, interrupted: interruptedCount, fireflyQuotaPaused: !!logoRemovePausedQuota,
     fireflyDaily: cfg.fireflyDailyFree(),
+    fireflyStatus: await firefly.status(),
     logoQueue: { active: logoRemoveActiveKey, waiting: logoRemoveQueue.length, pausedQuota: !!logoRemovePausedQuota } });
 });
 app.post('/api/auto', (req, res) => { setAuto(!!req.body.on); if (autoOn) resumeAuto(); res.json({ auto: autoOn }); });
@@ -1918,6 +1919,37 @@ app.post('/api/projects/:id/logo-remove/ok', async (req, res) => {
     const result = await downloadLogoRemoval(req.params.id, sceneId);
     if (result?.code) return res.status(result.code).json({ error: result.error });
     res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// “Chạy tất cả” Bước 4: đưa MỌI ảnh chưa xong vào hàng chờ theo đúng số 01, 02, 03…
+// Tool vẫn mở từng ảnh một; đạt 3 ảnh/mail thì dừng và báo đổi Gmail (không tự tăng lượt).
+// Ảnh đã có ảnh sạch (approved/skipped) KHÔNG bao giờ bị đưa lại vào hàng đợi.
+app.post('/api/projects/:id/logo-remove/run-all', async (req, res) => {
+  try {
+    const out = await writeLock.run(() => {
+      const p = store.load(req.params.id); if (!p) return { code: 404 };
+      if (!shouldStartLogoRemoval(p)) return { code: 400, error: 'Hãy hoàn tất Bước 3: bấm “Tải hết ảnh về & Dọn dẹp” rồi mới xóa logo.' };
+      ensureLogoRemovalState(p);
+      const daily = cfg.fireflyDailyFree();
+      // Qua ngày mới thì cờ tạm dừng của hôm trước không còn ý nghĩa.
+      if (logoRemovePausedQuota?.kind === 'daily' && daily.count < daily.limit) logoRemovePausedQuota = null;
+      let queued = 0;
+      const ordered = p.s3.scenes.slice().sort((a, b) => sceneNo(p, a.id) - sceneNo(p, b.id));
+      for (const sc of ordered) {
+        const st = sc.logoRemoval?.status;
+        if (['approved', 'skipped', 'waiting_ok', 'preparing', 'downloading', 'quota_blocked'].includes(st)) continue;
+        if (st === 'error' || !st) {
+          sc.logoRemoval = normalizeLogoRemoval({ status: 'queued', note: 'Đã bấm “Chạy tất cả” — chờ đến lượt', sourceTarget: sc.chosen?.target, createdAt: Date.now(), updatedAt: Date.now() });
+        }
+        queued++;
+      }
+      pushProject(p);
+      return { queued };
+    });
+    if (out.code) return res.status(out.code).json({ error: out.error });
+    await queueLogoRemoval(req.params.id);
+    res.json({ ok: true, queued: out.queued });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 

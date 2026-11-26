@@ -226,7 +226,9 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
   assert.match(scene, /data-preview-sid=/, 'Ô 2 chiếu ảnh Firefly');
   assert.match(scene, /data-live-dot="\$\{s\.id\}"/, 'Ô Firefly có chấm báo chiếu trực tiếp');
+  assert.match(scene, /data-live-chip="\$\{s\.id\}"/, 'Chữ “chiếu trực tiếp” đổi màu cùng chấm');
   assert.match(src, /function setLiveDot\(id, on\)/, 'Chấm bật/tắt theo trạng thái chiếu');
+  assert.match(src, /\[data-live-chip="\$\{id\}"\]/, 'Chữ chip bật/tắt cùng chấm');
   assert.match(src, /setLiveDot\(s\.id, true\)/, 'Đang chiếu thì chấm xanh');
   assert.match(src, /setLiveDot\(s\.id, false\)/, 'Dừng chiếu thì chấm tắt');
   assert.match(src, /S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\)/, 'Chờ Ổn thì đóng băng và tắt chấm');
@@ -266,7 +268,7 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="fireflyopen"/.test(ctl), 'thanh điều khiển không còn nút Firefly trùng');
   assert.ok(!/data-act="logoresume"/.test(ctl), 'thanh điều khiển không còn nút tiếp tục trùng');
   assert.match(ctl, /<details class="lite-details">/, 'hướng dẫn dài được gập lại');
-  assert.match(ctl, /data-act="fireflyreveal"[\s\S]{0,120}>Firefly<\/button>/, 'chỉ còn một nút Firefly');
+  assert.match(ctl, /data-act="fireflyreveal"[\s\S]{0,160}>Kết nối Firefly<\/button>/, 'nút Firefly ghi rõ “Kết nối Firefly”');
   assert.match(scene, /<div class="scene-actions">\$\{actions \|\|/, 'các nút nằm chung một hàng ngang');
   assert.match(scene, /data-act="logook"[\s\S]{0,180}>Ổn<\/button>/, 'nút chính là Ổn');
   assert.ok(scene.includes("'Làm lại'"), 'có nút Làm lại');
@@ -277,6 +279,18 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="fireflyreveal"[\s\S]{0,160}>Firefly<\/button>/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
 });
 
+test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện trạng thái kết nối Firefly', () => {
+  const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
+  assert.match(ctl, /data-act="logoall"/, 'Bước 4 có nút Chạy tất cả');
+  assert.match(ctl, />Chạy tất cả<\/button>/, 'Nút ghi đúng chữ Chạy tất cả');
+  assert.match(ctl, /chạy từng ảnh một[\s\S]{0,220}không làm lại ảnh cũ/, 'tip nói rõ hàng chờ, 3 ảnh/mail và không làm lại ảnh cũ');
+  assert.match(ctl, /id="fireflyStatus"/, 'Khung trái có chip trạng thái Firefly');
+  assert.match(src, /a === 'logoall'/, 'Có handler cho nút Chạy tất cả');
+  assert.match(src, /\/logo-remove\/run-all/, 'Gọi đúng endpoint xếp hàng tất cả');
+  assert.match(src, /const fs = S\.flow\.fireflyStatus \|\| \{\}/, 'Chip Firefly lấy trạng thái từ server');
+  assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
+});
+
 test('Bước 4: ô gốc gọn 9:16, ô Firefly rộng ngang tới mép phải nhưng không dài xuống', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(css, /\.logosplit\{[^}]*grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)[^}]*\}/, 'ô gốc nhỏ, ô Firefly chiếm phần còn lại tới mép phải');
@@ -285,6 +299,7 @@ test('Bước 4: ô gốc gọn 9:16, ô Firefly rộng ngang tới mép phải 
   assert.match(css, /\.logocell\.firefly img\{width:100%;max-width:none;height:373px;aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var\(--bg2\)\}/, 'ảnh Firefly rộng ngang, cao cố ~373px, giữ nguyên 9:16 không phóng to/cắt');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.livedot\.on\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm chiếu trực tiếp nhấp nháy xanh');
+  assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*animation:livechip-blink/, 'chữ “chiếu trực tiếp” cũng nhấp nháy xanh');
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.1.48 - 2026-11-26
+- Bước 4 thêm nút **Chạy tất cả**: xếp mọi ảnh chưa xong vào hàng chờ, tool chạy từng ảnh một theo số 01, 02, 03…; đúng 3 ảnh/mỗi Gmail, hết lượt thì nhắc đổi Gmail rồi làm tiếp ảnh kế tiếp, không làm lại ảnh đã xong.
+- Khung trái đổi nút thành **Kết nối Firefly** và thêm chip báo trạng thái kết nối Firefly.
+- Chữ “chiếu trực tiếp” trên ô Firefly cũng chuyển **xanh nhấp nháy** cùng chấm tròn khi đang chiếu thật.
+
+
 ## v1.1.47 - 2026-11-26
 - Tắt “Xóa logo” thì tab **Bước 4** biến mất hẳn, chỉ còn 1-2-3; bật lại thì Bước 4 hiện ngay sau Bước 3. Chưa xong Bước 3 thì bấm bật cũng không chuyển nút sang trạng thái BẬT.
 - Ô chiếu trực tiếp Firefly có chấm tròn: đang chiếu thì **xanh lá nhấp nháy**, dừng/chờ Ổn thì tắt.

@@ -89,6 +89,19 @@ test('Firefly free tối đa 3 ảnh/ngày: đạt giới hạn thì dừng, bá
   assert.match(src, /fireflyDaily: cfg\.fireflyDailyFree\(\)/, 'status phải trả số lượt đã dùng cho UI');
 });
 
+test('nút Chạy tất cả: xếp mọi ảnh chưa xong theo thứ tự, không đụng ảnh cũ và không reset lượt free', () => {
+  const all = slice("app.post('/api/projects/:id/logo-remove/run-all'", "app.post('/api/projects/:id/logo-remove/retry'");
+  assert.match(all, /shouldStartLogoRemoval\(p\)/, 'phải xong Bước 3 mới chạy');
+  assert.match(all, /ensureLogoRemovalState\(p\)/, 'tạo trạng thái chờ cho ảnh chưa có');
+  assert.match(all, /sort\(\(a, b\) => sceneNo\(p, a\.id\) - sceneNo\(p, b\.id\)\)/, 'xếp theo đúng số ảnh 01, 02, 03');
+  assert.match(all, /\['approved', 'skipped', 'waiting_ok', 'preparing', 'downloading', 'quota_blocked'\]/, 'không đưa lại ảnh đã xong / đang chạy / đang bị chặn');
+  assert.match(all, /st === 'error' \|\| !st/, 'chỉ làm lại đúng ảnh lỗi');
+  assert.ok(!/resetFireflyDailyFree/.test(all), 'Chạy tất cả KHÔNG tự mở thêm lượt free');
+  assert.match(all, /await queueLogoRemoval\(req\.params\.id\)/, 'dùng lại hàng đợi một ảnh một lần');
+  const status = slice("app.get('/api/flow/status'", "app.post('/api/auto'");
+  assert.match(status, /fireflyStatus: await firefly\.status\(\)/, 'status phải trả trạng thái kết nối Firefly cho khung trái');
+});
+
 test('ảnh Firefly tải về lưu đúng vào output/<dự án>/anhdaxoalogo', () => {
   assert.match(src, /const LOGO_OUTPUT_DIRNAME = 'anhdaxoalogo'/, 'giữ nguyên tên thư mục anhdaxoalogo');
   assert.match(src, /function logoRemovalDirFor\(p\)[\s\S]*?store\.outputDirFor\(p\), LOGO_OUTPUT_DIRNAME/, 'thư mục nằm ngay trong thư mục dự án');

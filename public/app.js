@@ -303,6 +303,12 @@ async function refreshFlow() {
   else if (S.flow.loggedIn) { el.className = 'chip ok'; el.textContent = 'Flow: đã kết nối · chạy nền'; }
   else { el.className = 'chip warn'; el.textContent = 'Flow: chưa đăng nhập'; }
   if (S.flow.fireflyQuotaPaused) { el.className = 'chip warn'; el.textContent += ` · Firefly hết ${S.flow.fireflyDaily?.limit || 3} lượt free/ngày — đổi mail`; }
+  const ff = $('#fireflyStatus');
+  if (ff) {
+    const fs = S.flow.fireflyStatus || {};
+    ff.className = fs.browser && fs.loggedIn ? 'chip ok' : 'chip warn';
+    ff.textContent = !fs.browser ? 'Firefly: chưa kết nối' : fs.loggedIn ? 'Firefly: đã kết nối' : 'Firefly: chưa đăng nhập';
+  }
   const ob = $('#btnOpenFlow');
   if (ob) {
     const logged = !!S.flow.loggedIn;
@@ -698,7 +704,9 @@ function buildLogoCtl(p) {
       ${logoQueueHtml(p)}
       <div class="logo-toolbar">
         <span class="chip">Free ${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</span><span class="grow"></span>
-        <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện Firefly để kiểm tra ảnh hoặc đổi Gmail">Firefly</button>
+        <span id="fireflyStatus" class="chip" role="status" aria-live="polite" data-tip="Trạng thái kết nối Adobe Firefly — dùng để xóa logo">Firefly: đang kiểm tra…</span>
+        <button class="btn sm primary" data-act="logoall" data-tip="Xếp mọi ảnh chưa xong vào hàng chờ; tool chạy từng ảnh một, tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh cho mỗi Gmail. Hết lượt sẽ nhắc đổi Gmail rồi làm tiếp ảnh kế tiếp, không làm lại ảnh cũ">Chạy tất cả</button>
+        <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện Firefly để đăng nhập / đổi Gmail hoặc kiểm tra ảnh">Kết nối Firefly</button>
       </div>
       <details class="lite-details"><summary>Tùy chỉnh Firefly</summary>
         <label class="lbl" for="fBrush" style="margin:0">Cỡ cọ (mặc định 14)</label>
@@ -932,7 +940,7 @@ function logoSceneHtml(s, i) {
         <img src="${src}" data-zoom="${src}" alt="Ảnh gốc ${esc(s.label || i + 1)} ở Bước 4">
       </div>
       <div class="logocell firefly">
-        <div class="logocell-lab">Firefly <span class="chip">chiếu trực tiếp</span><span class="grow"></span><span class="livedot${S.liveDot?.has(s.id) ? ' on' : ''}" data-live-dot="${s.id}" title="Đang chiếu trực tiếp từ Firefly" aria-label="Đang chiếu trực tiếp từ Firefly"></span></div>
+        <div class="logocell-lab">Firefly <span class="chip livechip${S.liveDot?.has(s.id) ? ' on' : ''}" data-live-chip="${s.id}">chiếu trực tiếp</span><span class="grow"></span><span class="livedot${S.liveDot?.has(s.id) ? ' on' : ''}" data-live-dot="${s.id}" title="Đang chiếu trực tiếp từ Firefly" aria-label="Đang chiếu trực tiếp từ Firefly"></span></div>
         <img class="firefly-shot" data-preview-sid="${s.id}"${previewSrc ? ` src="${previewSrc}"` : ''} alt="Firefly của ảnh ${esc(s.label || i + 1)}">
         <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span></div>
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
@@ -948,8 +956,10 @@ let fireflyPreviewTimer = null;
 // Chấm tròn nhỏ trên ô Firefly: xanh nhấp nháy đúng lúc đang chiếu, xám khi dừng/chờ.
 function setLiveDot(id, on) {
   if (on) S.liveDot.add(id); else S.liveDot.delete(id);
-  const el = document.querySelector(`[data-live-dot="${id}"]`);
-  if (el) el.classList.toggle('on', on);
+  for (const sel of [`[data-live-dot="${id}"]`, `[data-live-chip="${id}"]`]) {
+    const el = document.querySelector(sel);
+    if (el) el.classList.toggle('on', on);
+  }
 }
 async function patchFireflyPreviews() {
   if (S.stage !== 4 || !S.p) return;
@@ -1175,6 +1185,11 @@ async function act(b) {
   if (a === 'logook') return api('POST', `/api/projects/${p.id}/logo-remove/ok`, { sceneId: b.dataset.sid });
   if (a === 'logoretry') return api('POST', `/api/projects/${p.id}/logo-remove/retry`, { sceneId: b.dataset.sid });
   if (a === 'logoskip') { if (!confirm('Bỏ qua xóa logo cho cảnh này? Ảnh gốc có logo sẽ được giữ lại để bạn tự xử lý.')) return; return api('POST', `/api/projects/${p.id}/logo-remove/skip`, { sceneId: b.dataset.sid }); }
+  if (a === 'logoall') {
+    const r = await api('POST', `/api/projects/${p.id}/logo-remove/run-all`);
+    toast(r.queued ? `Đã xếp ${r.queued} ảnh vào hàng chờ; tool chạy từng ảnh một.` : 'Không còn ảnh nào chờ xóa logo.', 'ok');
+    return refreshFlow();
+  }
   if (a === 'logoresume') return api('POST', `/api/projects/${p.id}/logo-remove/resume`);
   if (a === 'fireflyopen') return api('POST', '/api/firefly/open');
   if (a === 'fireflyreveal') return api('POST', '/api/firefly/reveal');

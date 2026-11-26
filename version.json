@@ -1,5 +1,5 @@
 {
-  "version": "1.1.47",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.47/Flow.Lookbook.Setup.1.1.47.exe",
-  "notes": "- Tắt “Xóa logo” thì tab **Bước 4** biến mất hẳn, chỉ còn 1-2-3; bật lại thì Bước 4 hiện ngay sau Bước 3. Chưa xong Bước 3 thì bấm bật cũng không chuyển nút sang trạng thái BẬT.\n- Ô chiếu trực tiếp Firefly có chấm tròn: đang chiếu thì **xanh lá nhấp nháy**, dừng/chờ Ổn thì tắt."
+  "version": "1.1.48",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.1.48/Flow.Lookbook.Setup.1.1.48.exe",
+  "notes": "- Bước 4 thêm nút **Chạy tất cả**: xếp mọi ảnh chưa xong vào hàng chờ, tool chạy từng ảnh một theo số 01, 02, 03…; đúng 3 ảnh/mỗi Gmail, hết lượt thì nhắc đổi Gmail rồi làm tiếp ảnh kế tiếp, không làm lại ảnh đã xong.\n- Khung trái đổi nút thành **Kết nối Firefly** và thêm chip báo trạng thái kết nối Firefly.\n- Chữ “chiếu trực tiếp” trên ô Firefly cũng chuyển **xanh nhấp nháy** cùng chấm tròn khi đang chiếu thật."
 }
