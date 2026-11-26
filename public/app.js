@@ -943,7 +943,8 @@ async function patchFireflyPreviews() {
 }
 function startFireflyPreview() {
   if (fireflyPreviewTimer) return;
-  fireflyPreviewTimer = setInterval(() => { patchFireflyPreviews().catch(() => {}); }, 1800);
+  // Chụp liên tục nhưng nhẹ: 650ms/lần (cache 250ms ở server) để ô chiếu mượt, không delay.
+  fireflyPreviewTimer = setInterval(() => { patchFireflyPreviews().catch(() => {}); }, 650);
 }
 function logoResultsHtml(p) {
   const scenes = p.s3.scenes || [];

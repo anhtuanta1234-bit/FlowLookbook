@@ -75,8 +75,8 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
         const args = [
           `--remote-debugging-port=${p}`,
           `--user-data-dir=${dir}`,
-          '--no-first-run', '--no-default-browser-check',
-          '--window-size=1280,900',
+          '--no-first-run', '--no-default-browser-check', '--disable-fre', '--disable-search-engine-choice-screen',
+          '--window-position=60,60', '--window-size=1000,700',
           // giữ trang chạy bình thường khi cửa sổ bị thu nhỏ / che khuất (nếu không Chrome sẽ làm chậm trang ẩn)
           '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
           '--disable-features=CalculateNativeWinOcclusion',
@@ -136,6 +136,8 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
                 await s.send('Browser.setWindowBounds', {
                   windowId,
                   bounds: {
+                    left: minWindow.left ?? cur.left,
+                    top: minWindow.top ?? cur.top,
                     width: Math.max(cur.width || 0, minWindow.width),
                     height: Math.max(cur.height || 0, minWindow.height),
                   },
@@ -236,7 +238,8 @@ const fireflyChrome = createChrome({
   profileName: 'chrome-firefly-profile',
   startUrl: FIREFLY_HOME,
   seedFrom: 'chrome-profile', // giữ đăng nhập Firefly sau khi tách Chrome
-  minWindow: { width: 1100, height: 760 }, // canvas mask không được co lại đến mức bị bỏ qua
+  // Cửa sổ Firefly hiện vừa phải, lệch góc trên để không phủ kín màn hình; vẫn đủ lớn cho canvas mask.
+  minWindow: { left: 60, top: 60, width: 1000, height: 700 },
 });
 
 module.exports = {

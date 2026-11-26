@@ -214,6 +214,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /waiting_ok: 'đã xóa xong logo'/, 'Xong thì báo đã xóa xong logo');
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');
   assert.match(src, /function patchFireflyPreviews\(\)/, 'Ảnh Firefly được làm mới định kỳ');
+  assert.match(src, /setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 650\)/, 'Poll 650ms để chiếu trực tiếp mượt, không delay');
   assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)\) continue/, 'Xong mà chưa bấm Ổn thì đóng băng khung hình, không chụp lại gây nháy');
   assert.match(src, /Firefly hết lượt free ở <b>\$\{esc\(quotaScene\.label \|\| `Cảnh \$\{quotaIndex \+ 1\}`\)\}<\/b>/, 'Banner phải nói tên ảnh hết lượt');
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'Banner phải nói rõ giới hạn 3 ảnh/ngày');
@@ -257,7 +258,7 @@ test('Bước 4: ô gốc gọn 9:16, ô Firefly rộng ngang tới mép phải 
   assert.match(css, /\.logosplit\{[^}]*grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)[^}]*\}/, 'ô gốc nhỏ, ô Firefly chiếm phần còn lại tới mép phải');
   assert.ok(!/\.logosplit\{[^}]*max-width/.test(css), 'không giới hạn tổng chiều rộng, ô Firefly mới tới gần mép phải');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:210px;margin-inline:auto\}/, 'ảnh gốc khung 9:16 có giới hạn chiều rộng');
-  assert.match(css, /\.logocell\.firefly img\{width:100%;max-width:none;height:373px;aspect-ratio:auto;object-fit:cover;object-position:center bottom;margin:0\}/, 'ảnh Firefly rộng ngang, cao cố ~373px, giữ tỉ lệ và vùng logo ở đáy');
+  assert.match(css, /\.logocell\.firefly img\{width:100%;max-width:none;height:373px;aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var\(--bg2\)\}/, 'ảnh Firefly rộng ngang, cao cố ~373px, giữ nguyên 9:16 không phóng to/cắt');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
 });
 

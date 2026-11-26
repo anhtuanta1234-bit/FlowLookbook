@@ -306,7 +306,7 @@ async function releaseTab(key) {
   const pr = tabs.get(key);
   if (!pr) { await closeIfIdle(); return; }
   tabs.delete(key);
-  try { const t = await pr; await t.page.close().catch(() => {}); } catch (_) {}
+  try { const t = await pr; await detachPreview(t); await t.page.close().catch(() => {}); } catch (_) {}
   await closeIfIdle();
 }
 
@@ -316,7 +316,7 @@ async function closeProjectTabs(projectId) {
   for (const [key, pr] of [...tabs]) {
     if (!key.startsWith(prefix)) continue;
     tabs.delete(key);
-    closing.push(pr.then((t) => t.page.close().catch(() => {})).catch(() => {}));
+    closing.push(pr.then(async (t) => { await detachPreview(t); await t.page.close().catch(() => {}); }).catch(() => {}));
   }
   await Promise.all(closing);
   await closeIfIdle();
@@ -771,15 +771,20 @@ async function closeAll() {
     loginKeepAlive = false;
     for (const [key, pr] of [...tabs]) {
       tabs.delete(key);
-      try { const t = await pr; await t.page.close().catch(() => {}); } catch (_) {}
+      try { const t = await pr; await detachPreview(t); await t.page.close().catch(() => {}); } catch (_) {}
     }
     await chrome.close().catch(() => {});
   });
 }
 
-// Ảnh xem trước cho ô Firefly trên app: chụp tab nền qua CDP.
+// Ảnh xem trước cho ô Firefly trên app: chụp ĐÚNG canvas 9:16 của tab nền qua CDP.
 // KHÔNG gọi bringToFront/showWindow — không đẩy cửa sổ Firefly lên khi chỉ chụp ảnh xem trước.
 let previewCache = { key: '', at: 0, data: '' };
+async function detachPreview(tab) {
+  if (!tab?.cdp) return;
+  try { await tab.cdp.detach(); } catch (_) {}
+  tab.cdp = null;
+}
 async function preview({ projectId, sceneId } = {}) {
   if (!projectId || !sceneId) return { ok: false };
   if (!(await chrome.isRunning())) return { ok: false };
@@ -790,49 +795,52 @@ async function preview({ projectId, sceneId } = {}) {
   const page = tab?.page;
   if (!page || page.isClosed()) return { ok: false };
   const now = Date.now();
-  if (previewCache.key === key && now - previewCache.at < 800) return { ok: true, data: previewCache.data };
-  let session;
+  // Cache ngắn để app poll 650ms vẫn mượt mà không delay, nhưng ảnh vẫn cập nhật theo thao tác trên Firefly.
+  if (previewCache.key === key && now - previewCache.at < 250) return { ok: true, data: previewCache.data };
   const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('preview timeout')), ms);
     Promise.resolve(promise).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
   });
   try {
+    // Giữ box canvas ~1,2s thay vì truy DOM mỗi lần → bớt độ trễ khi chụp liên tục.
+    let box = tab.box;
+    if (!box || now - (tab.boxAt || 0) > 1200) {
+      try {
+        box = (await findCanvas(page, { prefer9x16: true })).box;
+        tab.box = box; tab.boxAt = Date.now();
+      } catch (_) { box = tab.box || null; }
+    }
+    // Chưa có canvas 9:16 thì KHÔNG chụp cả trang — tránh hiện giao diện đầu Firefly trong ô chiếu.
+    if (!box) return { ok: false };
     let data = '';
-    // Chụp ĐÚNG vùng ảnh (canvas 9:16) chứ không chụp cả trang → không bị cắt 16:9, nét hơn hẳn.
-    let box = null;
-    try { box = (await findCanvas(page, { prefer9x16: true })).box; } catch (_) {}
     try {
-      session = await page.context().newCDPSession(page);
+      // Dùng lại 1 session CDP cho cả tab: không tạo/huỷ session mỗi lần chụp.
+      if (!tab.cdp) tab.cdp = await withTimeout(page.context().newCDPSession(page), 1500);
+      const session = tab.cdp;
       let vp = { width: 1280, height: 800 };
       try { const m = await withTimeout(session.send('Page.getLayoutMetrics'), 1200); vp = m.cssContentSize || m.cssLayoutViewport || vp; } catch (_) {}
-      const clip = box ? {
+      const clip = {
         x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)),
         width: Math.max(200, Math.min(Math.round(box.width), Math.round(vp.width))),
         height: Math.max(200, Math.min(Math.round(box.height), Math.round(vp.height))),
         scale: 2, // 2x device pixel để ô chiếu không bị mờ khi phóng to
-      } : {
-        x: 0, y: 0,
-        width: Math.max(320, Math.min(Math.round(vp.width), 1600)),
-        height: Math.max(240, Math.min(Math.round(vp.height), 1000)),
-        scale: 1,
       };
-      const shot = await withTimeout(session.send('Page.captureScreenshot', { format: 'jpeg', quality: 90, fromSurface: false, captureBeyondViewport: false, clip }), 3000);
+      const shot = await withTimeout(session.send('Page.captureScreenshot', {
+        format: 'jpeg', quality: 90, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false, clip,
+      }), 2500);
       data = shot?.data || '';
-    } catch (_) {}
+    } catch (_) { await detachPreview(tab); }
     if (!data) {
-      // Dự phòng: Playwright chụp đúng phần tử canvas, vẫn giữ chất lượng cao.
+      // Dự phòng vẫn chỉ chụp đúng canvas, không chụp cả trang.
       try {
-        const buf = box
-          ? await withTimeout(page.screenshot({ type: 'jpeg', quality: 90, animations: 'disabled', clip: box, timeout: 2200 }), 2500)
-          : await withTimeout(page.screenshot({ type: 'jpeg', quality: 90, animations: 'disabled', timeout: 2200 }), 2500);
+        const buf = await withTimeout(page.screenshot({ type: 'jpeg', quality: 90, animations: 'disabled', clip: box, timeout: 1800 }), 2000);
         data = buf?.toString('base64') || '';
       } catch (_) {}
     }
     if (!data) return { ok: false };
-    previewCache = { key, at: now, data: `data:image/jpeg;base64,${data}` };
+    previewCache = { key, at: Date.now(), data: `data:image/jpeg;base64,${data}` };
     return { ok: true, data: previewCache.data };
   } catch (_) { return { ok: false }; }
-  finally { await session?.detach().catch(() => {}); }
 }
 
 module.exports = {

@@ -256,8 +256,8 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 /* Bước 4: ô gốc giữ gọn khung 9:16 (căn tọa độ chấm logo); ảnh gốc khít viền, không bị cắt. */
 .logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:210px;margin-inline:auto}
 /* Ô Firefly rộng ngang gần tới mép phải, chiều cao cố bằng ô gốc (~373px) nên không kéo dài xuống.
-   cover giữ tỉ lệ ảnh, không giãn méo/mờ; object-position bottom giữ đúng vùng logo ở đáy trong tầm mắt. */
-.logocell.firefly img{width:100%;max-width:none;height:373px;aspect-ratio:auto;object-fit:cover;object-position:center bottom;margin:0}
+   contain giữ nguyên khung 9:16 thật của Firefly: không phóng to, không cắt, không giãn méo → ảnh nét. */
+.logocell.firefly img{width:100%;max-width:none;height:373px;aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
 /* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
 .logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}

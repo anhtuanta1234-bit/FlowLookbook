@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.1.44 - 2026-11-26
+- Sửa ô chiếu trực tiếp Firefly: ảnh giữ nguyên khung 9:16 (`contain`), không còn bị phóng to/cắt hay mờ; khung vẫn rộng ngang nhưng không kéo dài xuống.
+- Chiếu trực tiếp mượt hơn: poll 650ms, dùng lại 1 session CDP, cache box canvas và cache ảnh ngắn, bật chụp nhanh `optimizeForSpeed`.
+- Khi Firefly chưa có canvas 9:16 thì ô chiếu để trống thay vì chụp cả trang — không còn hiện giao diện đầu Firefly lên app.
+- Cửa sổ Chrome Firefly mở cỡ ~1000×700, lệch góc trên, vẫn hiện thanh tab; bỏ màn hình chào lần đầu.
+
+
 ## v1.1.43 - 2026-11-26
 - Bước 4: ô Firefly giờ rộng ngang gần tới mép phải, chiều cao cố ~373px bằng ô gốc nên không còn kéo dài xuống; ảnh giữ tỉ lệ, không giãn méo hay mờ.
 - Ảnh chiếu trực tiếp Firefly căn theo đáy để vùng logo luôn nằm trong tầm mắt; chiều cao cố định nên khung không bị nhảy/giật khi ảnh tải về.
