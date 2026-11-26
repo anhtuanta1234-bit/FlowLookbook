@@ -681,11 +681,16 @@ app.delete('/api/projects/:id/scenes/:sid', async (req, res) => {
       if ((scene.runs || []).some((r) => r.status === 'queued' || r.status === 'running' || r.upgrading || (r.preview2kPending || []).length)) {
         return { code: 409, error: 'Cảnh này đang chạy hoặc đang lấy ảnh 2K. Hãy đợi xong rồi xóa.' };
       }
+      const ls = scene.logoRemoval?.status;
+      if (ls && ['queued', 'preparing', 'waiting_ok', 'downloading'].includes(ls)) {
+        return { code: 409, error: 'Cảnh này đang xóa logo trên Firefly. Hãy đợi xong rồi xóa.' };
+      }
       p.s3.scenes = p.s3.scenes.filter((s) => s.id !== req.params.sid);
       pushProject(p);
       return { ok: true };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
+    firefly.discardScene({ projectId: req.params.id, sceneId: req.params.sid }).catch(() => {});
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });

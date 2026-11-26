@@ -210,6 +210,9 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
   assert.match(scene, /data-preview-sid=/, 'Ô 2 chiếu ảnh Firefly');
   assert.match(scene, /data-live-status=/, 'Có dòng trạng thái trực tiếp');
+  assert.ok(!/live-note/.test(scene), 'Bỏ dòng note/error dài (kiểu hết lượt free) bên dưới 2 khung');
+  assert.match(scene, /<div class="meta">[\s\S]*?<span class="grow"><\/span><button class="btn sm xs danger" data-act="rmscene" data-sid="\$\{s\.id\}"/, 'Nút Xóa nằm góc phải trên cùng của mỗi cảnh');
+
   assert.match(scene, /preparing: 'đang xóa logo'/, 'Đang chạy thì báo đang xóa logo');
   assert.match(scene, /waiting_ok: 'đã xóa xong logo'/, 'Xong thì báo đã xóa xong logo');
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');

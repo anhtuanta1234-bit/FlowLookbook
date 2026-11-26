@@ -15,6 +15,12 @@ test('xóa dự án cũng xóa luôn thư mục ảnh trong output (bulk và đ�
   assert.match(src, /logoRemoveQueue\[i\]\.projectId === projectId/, 'xóa dự án phải dọn cả hàng đợi xóa logo');
 });
 
+test('xóa cảnh Bước 4: chặn khi đang xóa logo và dọn tab Firefly của cảnh đó', () => {
+  const del = slice("app.delete('/api/projects/:id/scenes/:sid'", '// ---------- chạy Flow ----------');
+  assert.match(del, /\['queued', 'preparing', 'waiting_ok', 'downloading'\]\.includes\(ls\)/, 'đang chạy Firefly thì không được xóa cảnh');
+  assert.match(del, /firefly\.discardScene\(\{ projectId: req\.params\.id, sceneId: req\.params\.sid \}\)/, 'xóa cảnh thì đóng luôn tab Firefly của cảnh đó');
+});
+
 test('chọn từng ảnh 2K không tự động sang Bước 4', () => {
   const save2k = slice('async function save2k(', "app.post('/api/projects/:id/retry-save'");
   assert.ok(!/ensureLogoRemovalState/.test(save2k), 'save2k không được tạo trạng thái xóa logo');

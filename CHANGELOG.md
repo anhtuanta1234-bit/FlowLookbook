@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.1.45 - 2026-11-26
+- Bỏ dòng note/error dài bên dưới 2 khung Bước 4 (kể cả câu báo hết lượt free) — không còn chiếm chỗ; trạng thái vẫn hiện trên badge và tiến trình trong ô Firefly.
+- Mỗi cảnh Bước 4 có thêm nút **Xóa** ở góc phải trên cùng để bỏ cảnh đó; đang chạy Firefly thì chặn xóa và đóng luôn tab Firefly khi xóa xong.
+
+
 ## v1.1.44 - 2026-11-26
 - Sửa ô chiếu trực tiếp Firefly: ảnh giữ nguyên khung 9:16 (`contain`), không còn bị phóng to/cắt hay mờ; khung vẫn rộng ngang nhưng không kéo dài xuống.
 - Chiếu trực tiếp mượt hơn: poll 650ms, dùng lại 1 session CDP, cache box canvas và cache ảnh ngắn, bật chụp nhanh `optimizeForSpeed`.

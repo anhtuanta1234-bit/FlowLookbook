@@ -904,7 +904,7 @@ function logoSceneHtml(s, i) {
     ? `<div class="phase"><span>${esc(lastPhase.note)}</span><time>${esc(new Date(lastPhase.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`
     : '<div class="hint">Chưa có thao tác nào được ghi lại.</div>';
   return `<div class="scene logoscene" data-sid="${s.id}">
-    <div class="meta"><b>Ảnh ${String(+(s.order || i + 1)).padStart(2, '0')}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}<span class="grow"></span></div>
+    <div class="meta"><b>Ảnh ${String(+(s.order || i + 1)).padStart(2, '0')}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}<span class="grow"></span><button class="btn sm xs danger" data-act="rmscene" data-sid="${s.id}" data-tip="Bỏ cảnh này" aria-label="Bỏ cảnh này">${I.trash}<span>Xóa</span></button></div>
     <div class="logosplit">
       <div class="logocell">
         <div class="logocell-lab">Ảnh gốc <span>chưa xóa logo</span></div>
@@ -917,7 +917,6 @@ function logoSceneHtml(s, i) {
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
       </div>
     </div>
-    <div class="live-note" data-live-note="${s.id}">${esc(lr.note || (clean ? 'Đã lưu ảnh sạch trong anhdaxoalogo.' : 'Chờ đến lượt xóa logo.'))}</div>
     <div class="scene-actions">${actions || '<span class="hint">Chờ đến lượt xóa logo.</span>'}</div>
   </div>`;
 }
