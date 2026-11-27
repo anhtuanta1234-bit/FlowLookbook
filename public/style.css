@@ -255,7 +255,7 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .scene-menu .btn{justify-content:flex-start}
 /* Thiết kế mới Bước 4: mỗi cảnh 2 ô ảnh — gốc / Firefly chiếu trực tiếp */
 .scene.logoscene{grid-template-columns:minmax(0,1fr);display:grid}
-.logosplit{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:10px;align-items:start}
+.logosplit{--shot-w:210px;display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:10px;align-items:start}
 .logocell{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
@@ -267,10 +267,10 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .logocell-lab .livechip.on{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 42%,transparent)}
 .logocell-lab .livechip.on::before{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent);animation:livedot-blink 1.1s ease-in-out infinite}
 /* Bước 4: ô gốc giữ gọn khung 9:16 (căn tọa độ chấm logo); ảnh gốc khít viền, không bị cắt. */
-.logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:210px;margin-inline:auto}
-/* Ô Firefly lấp ĐẦY chiều rộng khung phải; chiều cao tự theo ảnh 9:16 (to, rõ) nhưng KHÔNG phóng to/cắt.
-   Ảnh xem trước là đúng canvas mask-canvas 9:16 nên object-fit:contain không để lại khoảng trống. */
-.logocell.firefly img{width:100%;max-width:none;height:auto;aspect-ratio:9/16;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
+.logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:var(--shot-w);margin-inline:auto}
+/* Ô chiếu CAO BẰNG ảnh gốc chưa xóa logo (cùng --shot-w 210px → cùng 9:16 ~373px).
+   Ảnh chụp từ Chrome được căn giữa, co theo chiều cao đúng khung, không phóng to/cắt. */
+.logocell.firefly img{display:block;width:var(--shot-w);max-width:100%;height:auto;aspect-ratio:9/16;object-fit:contain;object-position:center center;margin-inline:auto;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
 /* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
 .logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}
@@ -406,8 +406,13 @@ code{background:var(--surface3);padding:1px 6px;border-radius:6px;font-size:12px
 .layout.rail .pitem{margin:0;padding:0;aspect-ratio:1;border-radius:14px;border:1px solid var(--line);background:linear-gradient(150deg,var(--surface2),var(--surface));justify-content:center;overflow:hidden;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}
 .layout.rail .pitem:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 14%,transparent)}
 .layout.rail .pitem.active{background:var(--grad);border-color:transparent;box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 30%,transparent)}
-.layout.rail .pav{width:100%;height:100%;border:0;border-radius:14px;background:transparent;color:var(--text);font-size:15px;font-weight:700}
+/* .pav mặc định display:none ở chế độ đầy; phải BẬT lại ở rail nếu không ô thu gọn trống trơn. */
+.layout.rail .pav{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:100%;height:100%;border:0;border-radius:14px;background:transparent;color:var(--text);font-size:15px;font-weight:700}
 .layout.rail .pitem.active .pav{color:#fff}
+/* Dự án đang mở: ô có viền sáng + chữ “đang mở” ngay dưới số, nhìn là biết đang làm dự án 2. */
+.layout.rail .pitem.active{outline:2px solid color-mix(in srgb,var(--ok) 70%,#fff);outline-offset:-3px}
+.layout.rail .pav-cur{display:none}
+.layout.rail .pitem.active .pav-cur{display:block;font-size:8.5px;font-weight:700;line-height:1;letter-spacing:.01em;color:#fff;background:color-mix(in srgb,var(--ok) 78%,#000);padding:2px 4px;border-radius:99px}
 .layout.rail .rail-add{display:grid;place-items:center;margin:0 8px 8px;height:42px;border:1px dashed var(--line2);border-radius:12px;background:var(--surface2);color:var(--muted);font-size:20px;font-weight:500;cursor:pointer;transition:.12s}
 .layout.rail .rail-add:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .layout.rail .side-collapse{margin:0 8px 8px;padding:8px 0;border-radius:12px}

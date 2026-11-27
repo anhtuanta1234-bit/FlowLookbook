@@ -293,13 +293,12 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
 });
 
-test('Bước 4: ô gốc gọn 9:16, ô Firefly rộng ngang tới mép phải nhưng không dài xuống', () => {
+test('Bước 4: khung chiếu CAO BẰNG ảnh gốc chưa xóa logo, Chrome chiếu vừa khung', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{[^}]*grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)[^}]*\}/, 'ô gốc nhỏ, ô Firefly chiếm phần còn lại tới mép phải');
-  assert.ok(!/\.logosplit\{[^}]*max-width/.test(css), 'không giới hạn tổng chiều rộng, ô Firefly mới tới gần mép phải');
-  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:210px;margin-inline:auto\}/, 'ảnh gốc khung 9:16 có giới hạn chiều rộng');
-  assert.match(css, /\.logocell\.firefly img\{width:100%;max-width:none;height:auto;aspect-ratio:9\/16;object-fit:contain/, 'ảnh Firefly lấp đầy chiều rộng, cao theo ảnh 9:16, không phóng to/cắt');
-  assert.ok(!/\.logocell\.firefly img\{[^}]*height:373px/.test(css), 'không ép chiều cao cố, ô phải cao theo ảnh để nhìn rõ');
+  assert.match(css, /\.logosplit\{--shot-w:210px;display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, '2 ô dùng chung chiều rộng ảnh --shot-w');
+  assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
+  assert.match(css, /\.logocell\.firefly img\{display:block;width:var\(--shot-w\);max-width:100%;height:auto;aspect-ratio:9\/16;object-fit:contain/, 'ảnh chiếu dùng chung --shot-w → cao bằng ảnh gốc, căn giữa, không phóng to/cắt');
+  assert.ok(!/\.logocell\.firefly img\{[^}]*max-width:none/.test(css), 'không cho ảnh chiếu tràn rộng hơn ảnh gốc');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
@@ -321,10 +320,19 @@ test('header bỏ nút Tải lại, chỉ chuột phải mới tải lại giao 
   assert.match(src, /<span>Tải lại giao diện<\/span>/, 'menu chuột phải có mục Tải lại giao diện');
 });
 
-test('chip Firefly: chưa kết nối → đã kết nối với chấm xanh nhấp nháy ngay cạnh nút Kết nối', () => {
+test('chip Firefly: bấm Kết nối là cập nhật ngay, chưa kết nối → đã kết nối + chấm xanh nhấp nháy', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  const ffSrc = require('node:fs').readFileSync(path.join(__dirname, '..', 'src', 'firefly.js'), 'utf8');
+  assert.match(src, /function syncFireflyChip\(\)/);
   assert.match(src, /ff\.className = connected \? 'chip ok' : 'chip warn'/);
   assert.match(src, /ff\.textContent = connected \? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối'/);
+  assert.match(src, /syncFireflyChip\(\); \/\/ vẽ lại chip đúng trạng thái/, 'vẽ lại Bước 4 phải cập nhật chip ngay');
+  assert.match(src, /syncFireflyChip\(\);\s*const ob =/, 'refreshFlow cũng cập nhật chip');
+  assert.match(src, /async function connectFirefly\(kind = 'reveal'\)/);
+  assert.match(src, /a === 'fireflyreveal'\) return connectFirefly\('reveal'\)/, 'bấm Kết nối Firefly thì hỏi lại trạng thái ngay');
+  assert.match(src, /for \(let i = 0; i < 12; i\+\+\)[\s\S]{0,220}await refreshFlow\(\)/, 'chờ tối đa ~12s cho chip lên xanh');
+  assert.match(ffSrc, /port: c\.fireflyCdpPort/, 'Firefly status phải đọc cổng 9334 riêng');
+  assert.ok(!/port: c\.cdpPort/.test(ffSrc), 'không đọc nhầm cổng Flow 9333');
   assert.match(css, /#fireflyStatus\.chip\.ok::before\{background:var\(--ok\);animation:livedot-blink/);
   const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
   assert.match(ctl, /id="fireflyStatus"[\s\S]{0,260}data-act="fireflyreveal"/, 'chip và nút Kết nối Firefly nằm cạnh nhau');
@@ -364,14 +372,18 @@ test('nút thư mục ảnh đã xóa logo dùng chung kiểu với Mở thư m�
   assert.match(src, /class="btn sm" data-act="openout"[^>]*>\$\{I\.folder\} Mở thư mục kết quả<\/button>/);
 });
 
-test('sidebar thu gọn: ô số thứ tự dự án, lưới 2 cột, thêm ô + để tạo dự án', () => {
+test('sidebar thu gọn: hiện số + nhãn “đang mở”, lưới 2 cột, ô + để tạo dự án', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(src, /const no = i \+ 1;/);
   assert.match(src, /aria-label="Mở dự án \$\{no\}/);
-  assert.match(src, /<div class="pav" aria-hidden="true">\$\{no\}<\/div>/);
+  assert.match(src, /<div class="pav" aria-hidden="true">\$\{no\}\$\{p\.id === S\.id \? '<span class="pav-cur">đang mở<\/span>' : ''\}<\/div>/, 'ô đang mở có nhãn riêng');
+  assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'số dự án theo thứ tự tạo, không đổi khi sửa tên');
   assert.match(css, /\.layout\.rail\{grid-template-columns:104px 1fr\}/);
   assert.match(css, /\.layout\.rail \.plist\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.layout\.rail \.pav\{display:flex;flex-direction:column;align-items:center;justify-content:center/, 'phải BẬT lại .pav vốn display:none, nếu không thu gọn bị trống ô');
+  assert.match(css, /\.layout\.rail \.pitem\.active \.pav-cur\{display:block/, 'chỉ dự án đang làm mới hiện nhãn “đang mở”');
+  assert.match(css, /\.layout\.rail \.pitem\.active\{outline:2px solid/, 'ô đang mở có viền sáng, nhìn là biết dự án 2');
   assert.match(html, /id="railAdd"/);
   assert.match(src, /\$\('#railAdd'\)\.onclick/);
 });

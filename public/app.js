@@ -16,7 +16,10 @@ const compareVer = (a, b) => {
 };
 const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
-const sortedProjects = () => [...S.projects].sort((a, b) => projectNameOrder.compare(a.name || '', b.name || ''));
+// Số dự án phải ổn định theo thứ tự TẠO (cũ nhất = 1), không đổi khi sửa tên hay chạy dự án.
+// Thu gọn thì số này là thứ duy nhất bạn thấy, nên không được nhảy lung tung.
+const sortedProjects = () => [...S.projects].sort((a, b) =>
+  ((a.createdAt || 0) - (b.createdAt || 0)) || projectNameOrder.compare(a.name || '', b.name || ''));
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 const duplicateName = (name, excludeId) => S.projects.some((p) => p.id !== excludeId && normName(p.name) === normName(name));
 // Hết lượt Firefly: bấm “Đổi Gmail…” thì nhớ lại để nút chuyển thành “Đã đổi Gmail, tiếp tục”.
@@ -303,6 +306,31 @@ function announceProjectCompletions(previous, current) {
     else if (now === 'quota_blocked') toast(`${label}: Firefly hết lượt ở ${sc.label}. Bấm “Đổi Gmail khác để tiếp tục”, đổi xong bấm “Đã đổi Gmail, tiếp tục”.`, 'err');
   }
 }
+// Chip Firefly được tạo lại mỗi lần vẽ Bước 4, nên phải tự cập nhật ngay sau khi vẽ
+// và ngay sau khi bấm “Kết nối Firefly” (không đợi vòng poll 6 giây).
+// Trạng thái lấy từ /api/flow/status → firefly.status() đọc Chrome riêng cổng 9334.
+function syncFireflyChip() {
+  const ff = $('#fireflyStatus');
+  if (!ff) return;
+  const fs = S.flow.fireflyStatus || {};
+  const connected = !!(fs.browser && fs.loggedIn);
+  ff.className = connected ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
+  ff.textContent = connected ? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối';
+  ff.dataset.tip = connected
+    ? 'Đã đăng nhập Adobe Firefly — có thể xóa logo. Chấm xanh nhấp nháy là đang kết nối.'
+    : 'Chưa đăng nhập Adobe Firefly. Bấm nút “Kết nối Firefly” ngay cạnh đây.';
+}
+// Bấm “Kết nối Firefly”: mở cửa sổ Firefly rồi hỏi lại trạng thái vài giây để chip
+// chuyển xanh + chấm nhấp nháy NGAY, không phải đợi vòng poll 6 giây.
+async function connectFirefly(kind = 'reveal') {
+  if (kind === 'open') await api('POST', '/api/firefly/open');
+  else await api('POST', '/api/firefly/reveal');
+  for (let i = 0; i < 12; i++) {
+    await refreshFlow();
+    if (S.flow?.fireflyStatus?.browser && S.flow.fireflyStatus.loggedIn) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 async function refreshFlow() {
   const was = !!S.flow.paused;
   const wasAuto = S.flow.auto;
@@ -317,16 +345,7 @@ async function refreshFlow() {
   else if (S.flow.loggedIn) { el.className = 'chip ok'; el.textContent = 'Flow: đã kết nối · chạy nền'; }
   else { el.className = 'chip warn'; el.textContent = 'Flow: chưa đăng nhập'; }
   if (S.flow.fireflyQuotaPaused) { el.className = 'chip warn'; el.textContent += ` · Firefly hết ${S.flow.fireflyDaily?.limit || 3} lượt free/ngày — đổi mail`; }
-  const ff = $('#fireflyStatus');
-  if (ff) {
-    const fs = S.flow.fireflyStatus || {};
-    const connected = !!(fs.browser && fs.loggedIn);
-    ff.className = connected ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
-    ff.textContent = connected ? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối';
-    ff.dataset.tip = connected
-      ? 'Đã đăng nhập Adobe Firefly — có thể xóa logo. Chấm xanh nhấp nháy là đang kết nối.'
-      : 'Chưa đăng nhập Adobe Firefly. Bấm nút “Kết nối Firefly” ngay cạnh đây.';
-  }
+  syncFireflyChip();
   const ob = $('#btnOpenFlow');
   if (ob) {
     const logged = !!S.flow.loggedIn;
@@ -394,7 +413,7 @@ function renderSidebar() {
     const no = i + 1; // thu gọn hiện THEO SỐ (dự án 1, 2, 3…), không phải chữ cái đầu tên
     return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án ${no}: ${esc(p.name)}" data-tip="Dự án ${no}: ${esc(p.name)}">
       <input class="project-select" type="checkbox" data-pid="${p.id}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Chọn dự án ${esc(p.name)} để xóa" title="${busy ? 'Đang xử lý; chưa thể xóa' : 'Chọn để xóa nhiều dự án cùng lúc'}">
-      <div class="pav" aria-hidden="true">${no}</div>
+      <div class="pav" aria-hidden="true">${no}${p.id === S.id ? '<span class="pav-cur">đang mở</span>' : ''}</div>
       <div class="ptxt"><div class="nm">${esc(p.name)}</div><div class="sub">${projectSummary(p)}</div></div>
       <button class="project-delete" type="button" data-pid="${p.id}" aria-label="Xóa dự án ${esc(p.name)}" title="${busy ? 'Đang xử lý; chưa thể xóa' : `Xóa dự án ${esc(p.name)}`}" ${busy ? 'disabled' : ''}>${I.trash}</button>
     </div>`;
@@ -753,6 +772,7 @@ function buildLogoCtl(p) {
         <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, bạn bấm <b>Ổn</b>; tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
       </details>
     </div>`;
+  syncFireflyChip(); // vẽ lại chip đúng trạng thái hiện tại, không để chữ “đang kiểm tra…” kẹt lại
 }
 
 function buildCtl() {
@@ -1222,15 +1242,15 @@ async function act(b) {
   }
   if (a === 'gmailchange') {
     markGmailChanged(b.dataset.sid);
-    await api('POST', '/api/firefly/reveal'); // mở Firefly cho bạn đăng nhập Gmail khác
+    await connectFirefly('reveal'); // mở Firefly cho bạn đăng nhập Gmail khác, cập nhật chip luôn
     return refresh(); // nút đổi thành “Đã đổi Gmail, tiếp tục”
   }
   if (a === 'logoresume') {
     clearGmailChanged(b.dataset.sid);
     return api('POST', `/api/projects/${p.id}/logo-remove/resume`);
   }
-  if (a === 'fireflyopen') return api('POST', '/api/firefly/open');
-  if (a === 'fireflyreveal') return api('POST', '/api/firefly/reveal');
+  if (a === 'fireflyopen') return connectFirefly('open');
+  if (a === 'fireflyreveal') return connectFirefly('reveal');
   if (a === 'savefireflycfg') {
     const val = (id, def) => { const el = $('#' + id); return el ? +el.value : def; };
     await api('POST', '/api/config', {

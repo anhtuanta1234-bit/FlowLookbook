@@ -243,7 +243,8 @@ async function status() {
   const http = require('http');
   const c = cfg.get();
   const up = await new Promise((res) => {
-    const r = http.get({ host: '127.0.0.1', port: c.cdpPort, path: '/json/list', timeout: 1200 }, (resp) => {
+    // Firefly dùng Chrome RIÊNG cổng 9334. Đọc nhầm 9333 (Flow) thì chip báo “chưa kết nối” mãi.
+    const r = http.get({ host: '127.0.0.1', port: c.fireflyCdpPort, path: '/json/list', timeout: 1200 }, (resp) => {
       let d = ''; resp.on('data', (x) => (d += x)); resp.on('end', () => { try { res(JSON.parse(d)); } catch (_) { res(null); } });
     });
     r.on('error', () => res(null)); r.on('timeout', () => { r.destroy(); res(null); });

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v1.2.2 - 2026-11-27
+- Sửa chip Firefly không lên “đã kết nối”: trạng thái đang đọc nhầm cổng của Flow (9333) thay vì cổng riêng Firefly (9334).
+- Bấm **Kết nối Firefly** thì cập nhật chip ngay (có chờ vài giây), không phải đợi vòng quét 6 giây; chấm xanh nhấp nháy ngay khi có kết nối.
+- Sidebar thu gọn: số dự án trước đây bị ẩn hẳn do CSS, giờ hiện lại rõ; dự án đang mở có viền sáng + nhãn “đang mở” (ví dụ đang làm dự án 2 thì biết ngay).
+- Số dự án giờ ổn định theo thứ tự tạo (dự án đầu tiên là 1), không đổi khi sửa tên hay chạy dự án.
+- Khung chiếu Firefly cao bằng ảnh gốc chưa xóa logo; ảnh chiếu từ Chrome căn giữa, vừa khung, không phóng to/cắt; chấm “chiếu trực tiếp” nhấp nháy xanh lúc đang chiếu.
+
+
 ## v1.2.1 - 2026-11-27
 - Bước 4: nút **Kết nối Firefly** đứng ngay cạnh chip trạng thái; chip “chưa kết nối” chuyển thành “đã kết nối” với chấm xanh nhấp nháy.
 - Bước 4: nút **Chạy tất cả** chuyển xuống chính giữa, to hơn; vẫn chạy từng ảnh một, ảnh 1 xong mới mở tab ảnh 2.

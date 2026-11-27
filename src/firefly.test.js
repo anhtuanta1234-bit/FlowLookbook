@@ -2,7 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { _test } = require('./firefly');
+const http = require('node:http');
+const cfg = require('./config');
+const firefly = require('./firefly');
+const { _test } = firefly;
 
 const src = fs.readFileSync(path.join(__dirname, 'firefly.js'), 'utf8');
 
@@ -46,6 +49,39 @@ test('chỉ coi banner hết lượt là có thật khi nó visible, không đ�
 
 test('đường dẫn editor luôn nằm trên firefly.adobe.com', () => {
   assert.equal(_test.editorUrl(), 'https://firefly.adobe.com/image-editor');
+});
+
+test('trạng thái Firefly đọc cổng CDP riêng 9334, không đọc nhầm cổng Flow 9333', async () => {
+  const flowHits = { n: 0 };
+  const fireflyHits = { n: 0 };
+  const flowSrv = http.createServer((req, res) => {
+    flowHits.n++;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify([{ type: 'page', url: 'about:blank' }]));
+  });
+  const fireflySrv = http.createServer((req, res) => {
+    fireflyHits.n++;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify([{ type: 'page', url: 'https://firefly.adobe.com/' }]));
+  });
+  await Promise.all([
+    new Promise((r) => flowSrv.listen(0, '127.0.0.1', r)),
+    new Promise((r) => fireflySrv.listen(0, '127.0.0.1', r)),
+  ]);
+  const originalGet = cfg.get;
+  cfg.get = () => ({ ...originalGet(), cdpPort: flowSrv.address().port, fireflyCdpPort: fireflySrv.address().port });
+  try {
+    const st = await firefly.status();
+    assert.equal(st.browser, true);
+    assert.equal(st.loggedIn, true, 'phải thấy tab Firefly trên cổng riêng');
+    assert.ok(fireflyHits.n > 0, 'phải hỏi /json/list cổng Firefly');
+  } finally {
+    cfg.get = originalGet;
+    await Promise.all([
+      new Promise((r) => flowSrv.close(r)),
+      new Promise((r) => fireflySrv.close(r)),
+    ]);
+  }
 });
 
 test('Firefly dùng web component, chờ ổn định và đóng tab khi lỗi/xong', () => {
