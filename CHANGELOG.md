@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## v1.2.1 - 2026-11-27
+- Bước 4: nút **Kết nối Firefly** đứng ngay cạnh chip trạng thái; chip “chưa kết nối” chuyển thành “đã kết nối” với chấm xanh nhấp nháy.
+- Bước 4: nút **Chạy tất cả** chuyển xuống chính giữa, to hơn; vẫn chạy từng ảnh một, ảnh 1 xong mới mở tab ảnh 2.
+- Hết lượt free Firefly: hiện nút **Đổi Gmail khác để tiếp tục**; sau khi mở Firefly đổi Gmail thì nút thành **Đã đổi Gmail, tiếp tục**.
+- Ô chiếu Firefly lấp đầy chiều rộng khung, cao theo ảnh 9:16 để nhìn to và rõ; không phóng to, không cắt.
+- Bỏ chấm riêng ở góc ô Firefly: chỉ giữ chấm nhấp nháy ngay trong chữ “chiếu trực tiếp”.
+- Nút **Xóa logo** bật lên nền xanh giống nút **Tự động: Bật**; tắt thì viền/nền giống nút đang tắt. Bật sau khi xong Bước 3 là chuyển thẳng sang Bước 4.
+- Đổi tên nút thành **Thư mục ảnh đã xóa logo**, dùng chung kiểu với nút **Mở thư mục kết quả**.
+- Bỏ nút **Tải lại** trên header; giữ riêng mục “Tải lại giao diện” trong menu chuột phải.
+- Đổi quy ước phiên bản: bản tới là **1.2.1**; mỗi nhánh đi từ .1 đến .10 rồi sang minor kế tiếp (1.2.10 → 1.3.1), không có patch .11.
+- Sidebar thu gọn thiết kế lại: lưới 2 ô số theo thứ tự dự án (1, 2, 3…), thêm ô “+” để tạo dự án mới.
+
+
 ## v1.1.48 - 2026-11-26
 - Bước 4 thêm nút **Chạy tất cả**: xếp mọi ảnh chưa xong vào hàng chờ, tool chạy từng ảnh một theo số 01, 02, 03…; đúng 3 ảnh/mỗi Gmail, hết lượt thì nhắc đổi Gmail rồi làm tiếp ảnh kế tiếp, không làm lại ảnh đã xong.
 - Khung trái đổi nút thành **Kết nối Firefly** và thêm chip báo trạng thái kết nối Firefly.

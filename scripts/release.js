@@ -26,6 +26,7 @@ const has = (f) => args.includes(f);
 
 const readJson = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/^\uFEFF/, ''));
 const writeJson = (f, o) => fs.writeFileSync(path.join(ROOT, f), JSON.stringify(o, null, 2) + '\n');
+const { bump } = require('./version');
 
 function tokenFile() {
   const base = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming');
@@ -93,16 +94,6 @@ function api(method, endpoint, body, upload) {
     if (data) req.write(data);
     req.end();
   });
-}
-
-function bump(version, type) {
-  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  if (!m) throw new Error('Version không hợp lệ: ' + version);
-  let [a, b, c] = m.slice(1).map(Number);
-  if (type === 'major') { a++; b = 0; c = 0; }
-  else if (type === 'minor') { b++; c = 0; }
-  else c++;
-  return `${a}.${b}.${c}`;
 }
 
 function readChangelog() {

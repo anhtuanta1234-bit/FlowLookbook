@@ -18,7 +18,7 @@
 <link rel="apple-touch-icon" href="/logo.svg">
 <link rel="preload" href="/fonts/be-vietnam-pro-vietnamese-500-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/style.css?v=20261126-step4-runall-1">
+<link rel="stylesheet" href="/style.css?v=20261127-firefly-ui-1">
 <script>
   // đặt giao diện sáng/tối trước khi vẽ để không bị nháy
   try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
@@ -42,7 +42,6 @@
   <button id="btnLogo" class="btn sm" type="button" aria-pressed="false" data-tip="Bật/tắt Bước 4 xóa logo bằng Firefly. Mặc định TẮT, không cần vào Cài đặt.">Xóa logo: Tắt</button>
   <button id="btnKoc" class="btn ghost sm" type="button" data-tip="Quản lý ảnh mặt KOC dùng xuyên suốt cho mọi sản phẩm">Thư viện KOC</button>
   <button id="btnSettings" class="btn ghost sm" type="button" data-tip="Thư mục lưu ảnh 2K và số lượt chạy cùng lúc">Cài đặt</button>
-  <button id="btnReload" class="btn ghost sm" type="button" data-tip="Tải lại giao diện cho mượt. Việc đang chạy vẫn tiếp tục, dữ liệu không mất." aria-label="Tải lại giao diện">Tải lại</button>
   <button id="btnTheme" class="ib" type="button" data-tip="Đổi giao diện Sáng / Tối" aria-label="Đổi giao diện sáng hoặc tối"></button>
 </header>
 
@@ -64,6 +63,7 @@
       </div>
     </div>
     <div id="projectList" class="plist" role="list"></div>
+    <button id="railAdd" class="rail-add" type="button" data-tip="Tạo sản phẩm mới" aria-label="Tạo sản phẩm mới">+</button>
     <button id="btnCollapse" class="side-collapse" type="button" data-tip="Thu gọn danh sách sản phẩm cho rộng chỗ làm việc" aria-label="Thu gọn danh sách sản phẩm"><span>Thu gọn</span></button>
   </nav>
 
@@ -89,6 +89,6 @@
 <noscript><p style="padding:24px">Flow Lookbook cần bật JavaScript để hoạt động.</p></noscript>
 
 <script src="/cropper.js?v=20261121-slot-fit-1"></script>
-<script src="/app.js?v=20261126-step4-runall-1"></script>
+<script src="/app.js?v=20261127-firefly-ui-1"></script>
 </body>
 </html>
