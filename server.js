@@ -1709,6 +1709,8 @@ async function prepareLogoRemoval(projectId, sceneId) {
     if (cleanTarget) {
       autoClean = await firefly.downloadPrepared({
         projectId, sceneId, targetPath: cleanTarget,
+        // Ép file sạch đúng chiều rộng/cao của ảnh gốc → 2 ô so sánh cùng kích thước thật.
+        matchSize: prep.imagePath && fs.existsSync(prep.imagePath) ? imageDimensions(prep.imagePath) : null,
         isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
         onPhase: (note) => writeLock.run(() => {
           const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
@@ -1804,8 +1806,10 @@ async function downloadLogoRemoval(projectId, sceneId) {
     return { ok: true };
   }
   try {
+    const srcSizeForMatch = prep.source && fs.existsSync(prep.source) ? imageDimensions(prep.source) : null;
     const result = await firefly.downloadPrepared({
       projectId, sceneId, targetPath: prep.target,
+      matchSize: srcSizeForMatch,
       // Lỗi/hết lượt/tạm dừng: Firefly đóng tab ngay, không giữ Chrome ăn RAM.
       isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
       onPhase: (note) => writeLock.run(() => {
@@ -1818,10 +1822,9 @@ async function downloadLogoRemoval(projectId, sceneId) {
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval) return;
-      // Validate dimensions roughly match source if available.
-      const srcSize = prep.source && fs.existsSync(prep.source) ? imageDimensions(prep.source) : null;
-      // Firefly cắt 9:16 nên chiều cao ảnh sạch có thể nhỏ hơn ảnh 2K gốc vài px.
-      // Chỉ chấp nhận cùng chiều rộng và đúng tỷ lệ 9:16, không báo lỗi sai như so sánh bằng nhau cũ.
+      // Ảnh sạch đã được fitImageToSize ép đúng kích thước gốc ở trên; giữ ngưỡng cũ làm
+      // phương án dự phòng nếu canvas không chạy được (vẫn ưu tiên không hỏng lượt đã tạo).
+      const srcSize = srcSizeForMatch;
       const is916 = Math.abs(result.width / result.height - 9 / 16) < 0.01;
       const okSize = !srcSize
         || (result.width === srcSize.width && result.height === srcSize.height)

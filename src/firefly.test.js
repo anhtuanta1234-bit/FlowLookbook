@@ -124,6 +124,18 @@ test('lỗi / hết lượt / tạm dừng thì đóng ngay tab Firefly để nh
   assert.match(src, /closeProjectTabs, closeAll, closeIdleNow/, 'tắt tool / hết lượt phải đóng luôn Chrome Firefly');
 });
 
+test('ảnh sạch tải về được fit đúng chiều rộng/cao của ảnh gốc', () => {
+  assert.match(src, /async function fitImageToSize\(page, file, size\)/, 'có bộ ép kích thước file sạch');
+  assert.match(src, /c\.width = w; c\.height = h;/, 'canvas đúng kích thước ảnh gốc');
+  assert.match(src, /Math\.max\(w \/ bmp\.width, h \/ bmp\.height\)/, 'crop giữa theo tỷ lệ gốc, không kéo giãn');
+  assert.match(src, /imageSmoothingQuality = 'high'/, 'scale chất lượng cao');
+  const dl = src.slice(src.indexOf('async function downloadPrepared('), src.indexOf('function hasSceneTab('));
+  assert.match(dl, /matchSize/, 'downloadPrepared nhận kích thước ảnh gốc');
+  assert.match(dl, /await fitImageToSize\(p, final, matchSize\)/, 'tải xong thì fit ngay trên tab Firefly');
+  assert.match(dl, /outSize = \{ width: matchSize\.width, height: matchSize\.height \}/, 'trả về đúng kích thước đã ép');
+  assert.match(src, /return buf\.length > 1024 \? buf : null/, 'fit lỗi thì giữ nguyên ảnh đã tải, không hỏng lượt');
+});
+
 test('canvas mask dù bị thu nhỏ vẫn được chọn, không chấm nhầm canvas nền', () => {
   assert.match(src, /if \(isMask \? \(box\.width < 10 \|\| box\.height < 10\)/, 'không loại canvas mask vì nhỏ hơn 60/100px');
   assert.match(src, /score = isMask \? -Infinity : Math\.abs/, 'mask-canvas được ưu tiên tuyệt đối');

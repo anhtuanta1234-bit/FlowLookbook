@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.3.2 - 2026-11-27
+- Ảnh đã xóa logo giờ được ép đúng chiều rộng/cao của ảnh gốc (crop giữa theo tỷ lệ 9:16 rồi scale), không còn thấp hơn vài px như trước.
+
+
 ## v1.3.1 - 2026-11-27
 ## v1.2.10 - 2026-11-27
 - Khung chiếu giờ chụp ĐÚNG tab Firefly của từng cảnh (không vớt tab Firefly gốc), poll 500ms/cache 180ms để xem từ đầu đến cuối mượt hơn.
@@ -9,6 +13,7 @@
 - Thêm ô thứ 3 “Ảnh đã xóa logo” ngay cạnh khung chiếu trực tiếp: Firefly xong là ảnh sạch hiện ra để so sánh với ảnh gốc, nếu ổn mới bấm “Ổn” (không tải lại lần 2).
 - Bước 3 không còn nút/badge/banner hay thông báo nào về xóa logo: “Ổn”, “Đổi Gmail”, “Làm lại xóa logo”, thư mục ảnh sạch chỉ còn ở Bước 4.
 - Ảnh đã xóa logo dùng chung khung 9:16 với ảnh gốc (2 cột cùng cố định 210px): mọi cảnh cùng chiều rộng, cùng chiều cao, không còn ảnh sạch cao hơn ảnh gốc.
+- Nút “Ổn”, “Làm lại”, “Đổi Gmail…” giờ nằm ngay dưới ảnh đã xóa logo; bỏ hết chữ “chưa có ảnh sạch / sẵn sàng — nếu ổn hãy bấm Ổn”.
 
 
 ## v1.2.9 - 2026-11-27

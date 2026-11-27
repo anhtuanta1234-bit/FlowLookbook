@@ -736,7 +736,37 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
   });
 }
 
-async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCanceled }) {
+// Ảnh Firefly tải về thường thấp hơn ảnh 2K gốc vài px. Ép đúng chiều rộng/cao của ảnh gốc
+// bằng canvas trên chính tab Firefly: crop giữa theo tỷ lệ gốc rồi scale, không làm méo ảnh.
+// Trả về null thì giữ nguyên ảnh đã tải (không làm hỏng cả lượt xóa logo).
+async function fitImageToSize(page, file, size) {
+  try {
+    if (!size?.width || !size?.height) return null;
+    const b64 = fs.readFileSync(file).toString('base64');
+    const out = await page.evaluate(async ({ b64, w, h }) => {
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const bmp = await createImageBitmap(new Blob([u8]));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      const scale = Math.max(w / bmp.width, h / bmp.height);
+      const sw = w / scale, sh = h / scale;
+      g.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
+      if (bmp.close) bmp.close();
+      return c.toDataURL('image/png').split(',')[1];
+    }, { b64, w: size.width, h: size.height });
+    const buf = Buffer.from(out || '', 'base64');
+    return buf.length > 1024 ? buf : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function downloadPrepared({ projectId, sceneId, targetPath, matchSize, onPhase, isCanceled }) {
   return lock.run(async () => {
     const key = `${projectId}:${sceneId}`;
     const pr = tabs.get(key);
@@ -762,8 +792,22 @@ async function downloadPrepared({ projectId, sceneId, targetPath, onPhase, isCan
       const final = targetPath.replace(/\.[^.\\/]+$/, '') + finalExt;
       fs.rmSync(final, { force: true });
       fs.renameSync(tmp, final);
+      let outSize = size;
+      // Chiều rộng/cao của file sạch phải BẰNG file gốc để so sánh 1-1 trong Bước 4.
+      if (matchSize?.width && matchSize?.height && (size.width !== matchSize.width || size.height !== matchSize.height)) {
+        onPhase?.('Đang chỉnh ảnh sạch đúng kích thước ảnh gốc…');
+        const png = await fitImageToSize(p, final, matchSize);
+        if (png) {
+          const targetPng = /\.png$/i.test(targetPath) ? targetPath : targetPath.replace(/\.[^.\\/]+$/, '') + '.png';
+          fs.rmSync(targetPng, { force: true });
+          fs.writeFileSync(targetPng, png);
+          if (final !== targetPng) fs.rmSync(final, { force: true });
+          final = targetPng;
+          outSize = { width: matchSize.width, height: matchSize.height };
+        }
+      }
       onPhase?.('Đã tải ảnh sạch về máy.');
-      return { ok: true, file: final, width: size.width, height: size.height };
+      return { ok: true, file: final, width: outSize.width, height: outSize.height };
     } catch (e) {
       fs.rmSync(tmp, { force: true });
       // Lỗi / hết lượt / tạm dừng: đóng tab Firefly ngay, không giữ process Chrome ăn RAM.

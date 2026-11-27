@@ -1008,12 +1008,11 @@ function logoSceneHtml(s, i) {
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
       </div>
       <div class="logocell clean">
-        <div class="logocell-lab">Ảnh đã xóa logo <span>${cleanReady ? 'so sánh với ảnh gốc' : 'chờ Firefly xong'}</span></div>
-        <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}"` : ''} data-zoom="${cleanSrc}" alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
-        <div class="logocell-foot"><span class="badge${cleanReady ? ' ok' : ''}" data-clean-status="${s.id}">${cleanReady ? 'sẵn sàng — nếu ổn hãy bấm “Ổn”' : 'chưa có ảnh sạch'}</span></div>
+        <div class="logocell-lab">Ảnh đã xóa logo <span>${cleanReady ? 'so sánh với ảnh gốc' : ''}</span></div>
+        <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}" data-zoom="${cleanSrc}"` : ''} alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
+        <div class="scene-actions">${actions}</div>
       </div>
     </div>
-    <div class="scene-actions">${actions || '<span class="hint">Chờ đến lượt xóa logo.</span>'}</div>
   </div>`;
 }
 

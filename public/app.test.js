@@ -240,7 +240,8 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /class="logocell clean"/, 'Có thêm ô ảnh đã xóa logo');
   assert.match(scene, /data-clean-sid="\$\{s\.id\}"/, 'Ô ảnh sạch cập nhật theo từng cảnh');
   assert.match(scene, /Ảnh đã xóa logo <span>/, 'Ô thứ 3 có nhãn rõ ràng');
-  assert.match(scene, /sẵn sàng — nếu ổn hãy bấm “Ổn”/, 'Có ảnh sạch thì nhắc bấm Ổn');
+  assert.match(scene, /class="logocell clean">[\s\S]{0,700}<div class="scene-actions">\$\{actions\}<\/div>/, 'Ổn / Làm lại nằm ngay dưới ảnh đã xóa logo');
+  assert.ok(!/chưa có ảnh sạch|sẵn sàng — nếu ổn|data-clean-status/.test(scene), 'bỏ hết chữ trạng thái ảnh sạch');
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
   assert.match(scene, /data-preview-sid=/, 'Ô 2 chiếu ảnh Firefly');
   assert.ok(!/data-live-dot=/.test(scene), 'Không còn chấm/nút riêng ở góc ô Firefly');
@@ -288,7 +289,7 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="logoresume"/.test(ctl), 'thanh điều khiển không còn nút tiếp tục trùng');
   assert.match(ctl, /<details class="lite-details">/, 'hướng dẫn dài được gập lại');
   assert.match(ctl, /data-act="fireflyreveal"[\s\S]{0,160}>Kết nối Firefly<\/button>/, 'nút Firefly ghi rõ “Kết nối Firefly”');
-  assert.match(scene, /<div class="scene-actions">\$\{actions \|\|/, 'các nút nằm chung một hàng ngang');
+  assert.match(scene, /class="logocell clean">[\s\S]{0,700}<div class="scene-actions">\$\{actions\}<\/div>/, 'các nút nằm chung hàng ngay dưới ảnh sạch');
   assert.match(scene, /data-act="logook"[\s\S]{0,180}>Ổn<\/button>/, 'nút chính là Ổn');
   assert.ok(scene.includes("'Làm lại'"), 'có nút Làm lại');
   assert.match(scene, /data-act="logoretry"[\s\S]{0,160}>Thử lại<\/button>/, 'có nút Thử lại');
@@ -320,6 +321,7 @@ test('Bước 4: ảnh chiếu chạm mép khung, rộng 100% ô, tự co theo t
   assert.match(css, /\.logocell\.clean img\{[^}]*max-width:var\(--shot-w\);margin-inline:auto;height:auto;aspect-ratio:9\/16;object-fit:cover\}/, 'ảnh sạch cùng chiều rộng/cao 9:16 với ảnh gốc');
   assert.match(css, /grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, '2 cột ảnh cố định 210px → mọi cảnh cùng kích thước');
   assert.ok(!/\.logocell\.clean img\{[^}]*max-width:none/.test(css), 'không để ảnh sạch rộng/cao hơn ảnh gốc');
+  assert.match(css, /\.logocell\.clean \.scene-actions\{[^}]*margin:0;[^}]*border-top:1px solid var\(--line\)/, 'hàng nút nằm sát dưới ảnh sạch, không còn hàng riêng');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
