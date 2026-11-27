@@ -89,6 +89,20 @@ test('Firefly free tối đa 3 ảnh/ngày: đạt giới hạn thì dừng, bá
   assert.match(src, /fireflyDaily: cfg\.fireflyDailyFree\(\)/, 'status phải trả số lượt đã dùng cho UI');
 });
 
+test('Firefly xong là tự tải ảnh sạch để có ô so sánh; bấm Ổn chỉ duyệt, không tải lại', () => {
+  const prepare = slice('async function prepareLogoRemoval(', 'async function downloadLogoRemoval(');
+  assert.match(prepare, /const cleanTarget = cur \? logoCleanTargetPath\(cur, sceneId\) : ''/, 'lấy đúng đường dẫn ảnh sạch của cảnh');
+  assert.match(prepare, /autoClean = await firefly\.downloadPrepared\(/, 'vừa tạo xong thì tự bấm Tải xuống trên cùng tab Firefly');
+  assert.match(prepare, /sc\.logoRemoval\.cleanFile = autoClean\?\.file \|\| ''/, 'lưu ảnh sạch vào trạng thái để app hiện ngay');
+  assert.match(prepare, /Ảnh sạch đã sẵn sàng ở ô bên cạnh/, 'nhắc người dùng so sánh rồi bấm Ổn');
+  assert.match(prepare, /await firefly\.closeIdleNow\(\)/, 'hết lượt thì đóng Chrome ngay');
+
+  const download = slice('async function downloadLogoRemoval(', 'async function save2k(');
+  assert.match(download, /if \(sc\.logoRemoval\.cleanFile && fs\.existsSync\(sc\.logoRemoval\.cleanFile\)\)/, 'đã có ảnh sạch thì không tải lần 2');
+  assert.match(download, /sc\.logoRemoval\.status = 'approved'/, 'bấm Ổn chỉ duyệt ảnh sạch');
+  assert.match(download, /cleanupLogoOriginalsIfComplete\(p\)/, 'duyệt xong vẫn dọn ảnh gốc khi mọi cảnh xong');
+});
+
 test('nút Chạy tất cả: xếp mọi ảnh chưa xong theo thứ tự, không đụng ảnh cũ và không reset lượt free', () => {
   const all = slice("app.post('/api/projects/:id/logo-remove/run-all'", "app.post('/api/projects/:id/logo-remove/retry'");
   assert.match(all, /shouldStartLogoRemoval\(p\)/, 'phải xong Bước 3 mới chạy');

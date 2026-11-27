@@ -1690,6 +1690,8 @@ async function prepareLogoRemoval(projectId, sceneId) {
     return { imagePath: sc.chosen.target };
   });
   if (!prep) { releaseLogoJob(projectId, sceneId); return; }
+  const cur = store.load(projectId);
+  const cleanTarget = cur ? logoCleanTargetPath(cur, sceneId) : '';
   try {
     await firefly.prepareScene({
       projectId, sceneId, imagePath: prep.imagePath,
@@ -1701,13 +1703,31 @@ async function prepareLogoRemoval(projectId, sceneId) {
         sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
     });
+    // Tự tải ảnh sạch NGAY để có ô thứ 3 để bạn so sánh với ảnh gốc TRƯỚC khi bấm “Ổn”.
+    // Không tiêu thêm lượt free: chỉ bấm nút Tải xuống trên chính tab Firefly vừa tạo.
+    let autoClean = null;
+    if (cleanTarget) {
+      autoClean = await firefly.downloadPrepared({
+        projectId, sceneId, targetPath: cleanTarget,
+        isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
+        onPhase: (note) => writeLock.run(() => {
+          const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+          if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
+          sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
+          sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+        }).catch(() => {}),
+      });
+    }
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
       sc.logoRemoval.status = 'waiting_ok';
       // Mốc ảnh ĐÃ tạo xong: nếu tải bị hết lượt thì đổi Gmail chỉ tải lại, không tạo lại.
       sc.logoRemoval.generated = true;
-      sc.logoRemoval.note = 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
+      sc.logoRemoval.cleanFile = autoClean?.file || '';
+      sc.logoRemoval.note = autoClean?.file
+        ? 'Ảnh sạch đã sẵn sàng ở ô bên cạnh. So sánh với ảnh gốc rồi bấm “Ổn”.'
+        : 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
@@ -1741,6 +1761,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
     if (quota) {
       // Giữ hàng đợi lại, không bỏ cảnh của dự án khác; chỉ tạm dừng cho đến khi user đổi tài khoản.
       logoRemovePausedQuota = { at: Date.now(), message: 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' };
+      await firefly.closeIdleNow().catch(() => {}); // hết lượt thì đóng Chrome ngay, không chờ hẹn ấm máy
     }
     // Lỗi/hết lượt là trạng thái cuối của ảnh này: nhả khóa để không chặn vĩnh viễn hàng đợi.
     releaseLogoJob(projectId, sceneId);
@@ -1753,6 +1774,18 @@ async function downloadLogoRemoval(projectId, sceneId) {
     const sc = p.s3.scenes.find((s) => s.id === sceneId);
     if (!sc?.logoRemoval) return { code: 400, error: 'Cảnh này chưa có trạng thái xóa logo.' };
     if (sc.logoRemoval.status !== 'waiting_ok') return { code: 400, error: 'Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Ổn”.' };
+    // Ảnh sạch đã tự tải xong lúc Firefly tạo ảnh: bấm Ổn chỉ duyệt, không tải lại lần 2.
+    if (sc.logoRemoval.cleanFile && fs.existsSync(sc.logoRemoval.cleanFile)) {
+      sc.logoRemoval.status = 'approved';
+      sc.logoRemoval.code = '';
+      sc.logoRemoval.error = '';
+      sc.logoRemoval.note = 'Bạn đã bấm “Ổn”: ảnh sạch được giữ trong anhdaxoalogo.';
+      appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
+      sc.logoRemoval.updatedAt = Date.now();
+      cleanupLogoOriginalsIfComplete(p);
+      pushProject(p);
+      return { ready: true };
+    }
     const target = logoCleanTargetPath(p, sceneId);
     const oldClean = sc.logoRemoval.cleanFile;
     sc.logoRemoval.status = 'downloading';
@@ -1765,6 +1798,11 @@ async function downloadLogoRemoval(projectId, sceneId) {
     return { target, source: sc.chosen?.target, oldClean };
   });
   if (prep.code) return prep;
+  if (prep.ready) {
+    await firefly.discardScene({ projectId, sceneId }).catch(() => {});
+    releaseLogoJob(projectId, sceneId);
+    return { ok: true };
+  }
   try {
     const result = await firefly.downloadPrepared({
       projectId, sceneId, targetPath: prep.target,
@@ -1829,7 +1867,10 @@ async function downloadLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.updatedAt = Date.now();
       pushProject(p);
     });
-    if (quota) logoRemovePausedQuota = { at: Date.now(), message: 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' };
+    if (quota) {
+      logoRemovePausedQuota = { at: Date.now(), message: 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục.' };
+      await firefly.closeIdleNow().catch(() => {});
+    }
     releaseLogoJob(projectId, sceneId);
     return { code: 400, error: e?.message || 'Lỗi tải ảnh sạch.' };
   }

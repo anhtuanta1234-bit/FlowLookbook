@@ -100,16 +100,30 @@ test('xóa dự án báo rõ thư mục output bị xóa, không còn nói giữ
 
 test('Bước 3 có nút tải hết ảnh về & dọn dẹp, xong mới sang Bước 4', () => {
   assert.match(src, /data-act="cleanall"[\s\S]{0,260}📥 Tải hết ảnh về & Dọn dẹp/, 'phải có nút tải hết ảnh về');
-  assert.match(src, /r\.startLogo\?\.length/, 'toast phải báo Bước 4 vừa bắt đầu');
-  assert.match(src, /JSON\.stringify\(\[!!S\.cfg\?\.removeLogoEnabled, !!p\.cleaned,/, 'phải render lại khi trạng thái đã tải/dọn thay đổi');
+  const cleanall = src.slice(src.indexOf("  if (a === 'cleanall') {"), src.indexOf("  if (a === 'dismisspause')"));
+  assert.ok(!/logo|Logo|Firefly/.test(cleanall), 'confirm/toast của Bước 3 không nhắc xóa logo');
+  assert.match(src, /JSON\.stringify\(\[!!p\.cleaned,/, 'phải render lại khi trạng thái đã tải/dọn thay đổi');
   assert.match(src, /Đã tải hết ảnh 2K, thư mục chỉ còn ảnh đã chọn/, 'trạng thái sau dọn phải rõ ràng');
+});
+
+test('Bước 3 sạch nút/badge xóa logo: mọi thao tác logo chỉ có ở Bước 4', () => {
+  const scene = src.slice(src.indexOf('function sceneHtml('), src.indexOf('function sceneMoreMenu('));
+  const results = src.slice(src.indexOf('function renderResults()'), src.indexOf('function morph('));
+  const sig = src.slice(src.indexOf('function resultsSig('), src.indexOf('function patchProgress()'));
+  const notify = src.slice(src.indexOf('  // Bước 4: báo từng mốc'), src.indexOf('// Chip Firefly được tạo lại'));
+  assert.ok(!/logoRemoval|Firefly/.test(scene), 'thẻ cảnh Bước 3 không đọc trạng thái xóa logo');
+  assert.ok(!/data-act="(?:logook|logoretry|logoskip|logoresume|gmailchange|openclean|fireflyreveal|openlogoout)"/.test(scene), 'thẻ cảnh Bước 3 không có nút xóa logo');
+  assert.ok(!/logoArea|quotaScene|Firefly/.test(results), 'khung kết quả Bước 3 không có thư mục/banner xóa logo');
+  const step3Sig = sig.slice(sig.indexOf('if (S.stage === 3)'), sig.indexOf('const st = p[PK[S.stage]]'));
+  assert.ok(!/logo/.test(step3Sig), 'đổi trạng thái logo không làm vẽ lại Bước 3');
+  assert.match(notify, /if \(S\.stage === 4\)/, 'thông báo xóa logo chỉ bật khi đang ở Bước 4');
 });
 
 test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo không làm lại ảnh cũ', () => {
   assert.match(src, /Firefly hết lượt free ở <b>/, 'phải báo tên ảnh đang bị chặn');
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'phải nói rõ giới hạn free hàng ngày');
   assert.match(src, /không làm lại ảnh cũ/);
-  assert.match(src, /data-act="gmailchange" data-sid="\$\{quotaScene\.id\}">Đổi Gmail khác để tiếp tục/, 'phải có nút mở Firefly để đăng nhập mail khác');
+  assert.match(src, /data-act="gmailchange" data-sid="\$\{s\.id\}"[\s\S]{0,180}>Đổi Gmail khác để tiếp tục/, 'nút đổi Gmail nằm trên thẻ ảnh Bước 4');
   assert.match(src, /tab đã đóng, chờ Gmail mới/, 'ảnh bị chặn phải báo tab đã đóng, sẽ tạo lại bằng Gmail mới');
   assert.ok(!src.includes('ảnh đã tạo, chờ tải lại'), 'không còn hứa tải lại ảnh cũ khi tab đã đóng');
 });
@@ -222,7 +236,11 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(ctl, /<summary>Hướng dẫn<\/summary>/, 'Giữ mục Hướng dẫn trong khung trái');
   assert.ok(!/Ảnh Bước 4/.test(ctl), 'Bỏ ô ảnh thừa bên dưới Hướng dẫn trong khung trái');
   assert.ok(!/logoQueueHtml\(p\)/.test(results), 'Khung phải không còn hàng chờ trùng');
-  assert.match(scene, /class="logosplit"/, 'Mỗi cảnh chia 2 ô');
+  assert.match(scene, /class="logosplit"/, 'Mỗi cảnh chia ô ảnh');
+  assert.match(scene, /class="logocell clean"/, 'Có thêm ô ảnh đã xóa logo');
+  assert.match(scene, /data-clean-sid="\$\{s\.id\}"/, 'Ô ảnh sạch cập nhật theo từng cảnh');
+  assert.match(scene, /Ảnh đã xóa logo <span>/, 'Ô thứ 3 có nhãn rõ ràng');
+  assert.match(scene, /sẵn sàng — nếu ổn hãy bấm “Ổn”/, 'Có ảnh sạch thì nhắc bấm Ổn');
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
   assert.match(scene, /data-preview-sid=/, 'Ô 2 chiếu ảnh Firefly');
   assert.ok(!/data-live-dot=/.test(scene), 'Không còn chấm/nút riêng ở góc ô Firefly');
@@ -241,7 +259,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(scene, /waiting_ok: 'đã xóa xong logo'/, 'Xong thì báo đã xóa xong logo');
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');
   assert.match(src, /function patchFireflyPreviews\(\)/, 'Ảnh Firefly được làm mới định kỳ');
-  assert.match(src, /setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 650\)/, 'Poll 650ms để chiếu trực tiếp mượt, không delay');
+  assert.match(src, /setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 500\)/, 'Poll 500ms để chiếu trực tiếp mượt, không delay');
   assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\); continue; \}/, 'Xong mà chưa bấm Ổn thì đóng băng khung hình, không chụp lại gây nháy');
   assert.match(src, /Firefly hết lượt free ở <b>\$\{esc\(quotaScene\.label \|\| `Cảnh \$\{quotaIndex \+ 1\}`\)\}<\/b>/, 'Banner phải nói tên ảnh hết lượt');
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'Banner phải nói rõ giới hạn 3 ảnh/ngày');
@@ -295,10 +313,11 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
 
 test('Bước 4: ảnh chiếu chạm mép khung, rộng 100% ô, tự co theo tab Chrome, không cắt/kéo giãn', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, 'ô ảnh gốc giữ khung 9:16');
+  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,1fr\)/, '3 ô: gốc / chiếu trực tiếp / đã xóa logo');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
   assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng chạm mép khung, cao tự theo tỷ lệ tab, không thanh đen');
   assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:(fill|cover)/.test(css), 'không kéo giãn/cắt canvas Firefly');
+  assert.match(css, /\.logocell\.clean img\{[^}]*object-fit:contain;aspect-ratio:9\/16;height:auto\}/, 'ảnh sạch cùng khung 9:16 để so sánh với ảnh gốc');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
@@ -321,7 +340,7 @@ test('chiếu từ lúc tạo tab tới lúc Firefly báo xong, ảnh mới gi�
   assert.match(src, /async function paintPreview\(sid, el, data\)/);
   assert.match(src, /const im = new Image\(\);\s*im\.src = data;\s*try \{ await im\.decode\(\); \}/, 'giải mã khung mới trước khi gán vào ô chiếu');
   assert.match(src, /await paintPreview\(s\.id, el, out\.data\)/);
-  assert.match(src, /fireflyPreviewTimer = setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 650\)/);
+  assert.match(src, /fireflyPreviewTimer = setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 500\)/);
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {
@@ -385,9 +404,9 @@ test('nút Xóa logo bật/tắt cùng kiểu nút Tự động và bật xong l
   assert.match(src, /await api\('PATCH', `\/api\/projects\/\$\{S\.p\.id\}`/, 'cập nhật stage đúng dự án đang mở');
 });
 
-test('nút thư mục ảnh đã xóa logo dùng chung kiểu với Mở thư mục kết quả', () => {
+test('nút thư mục ảnh đã xóa logo chỉ có ở Bước 4, cùng kiểu với Mở thư mục kết quả', () => {
   const folderBtn = /class="btn sm" data-act="openlogoout"[\s\S]{0,180}>\$\{I\.folder\} Thư mục ảnh đã xóa logo<\/button>/g;
-  assert.equal((src.match(folderBtn) || []).length, 2, 'Bước 3 và Bước 4 đều dùng nút cùng kiểu, cùng tên');
+  assert.equal((src.match(folderBtn) || []).length, 1, 'chỉ Bước 4 có nút thư mục ảnh đã xóa logo');
   assert.match(src, /class="btn sm" data-act="openout"[^>]*>\$\{I\.folder\} Mở thư mục kết quả<\/button>/);
 });
 

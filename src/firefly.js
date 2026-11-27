@@ -290,6 +290,7 @@ async function background() {
 async function getTab(key) {
   const existing = tabs.get(key);
   if (existing) return existing;
+  cancelIdleClose(); // ảnh kế tiếp dùng lại Chrome đang ấm, không khởi động lại từ đầu
   const pr = (async () => {
     const page = await chrome.newBackgroundPage();
     const t = { key, page, users: 1 };
@@ -304,10 +305,20 @@ async function getTab(key) {
   return pr;
 }
 
-// Hết tab Firefly (xong / lỗi / hết lượt / tạm dừng) thì tắt luôn process Chrome riêng để nhẹ RAM.
-// Chỉ giữ lại khi người dùng đang mở cửa sổ để đổi Gmail (loginKeepAlive).
+// Giữ process Chrome ấm GIỮA Hai ảnh kế tiếp: đóng ngay thì ảnh sau phải khởi động lại Chrome
+// (chậm, khung chiếu mất trắng 1 lúc). Hết hạn mới đóng để nhẹ RAM; có tab mới là hủy hẹn.
+let idleCloseTimer = null;
+function cancelIdleClose() {
+  if (idleCloseTimer) { clearTimeout(idleCloseTimer); idleCloseTimer = null; }
+}
 async function closeIfIdle() {
   if (tabs.size || loginKeepAlive) return;
+  cancelIdleClose();
+  idleCloseTimer = setTimeout(() => { idleCloseTimer = null; chrome.close().catch(() => {}); }, 300000);
+}
+// Lỗi / hết lượt / tạm dừng / tắt tool thì đóng ngay, không chờ hẹn.
+async function closeIdleNow() {
+  cancelIdleClose();
   await chrome.close().catch(() => {});
 }
 
@@ -776,6 +787,7 @@ async function discardScene({ projectId, sceneId }) {
 // Đóng toàn bộ Chrome Firefly khi tắt tool (không đụng Chrome đang chạy Flow).
 async function closeAll() {
   return lock.run(async () => {
+    cancelIdleClose();
     loginKeepAlive = false;
     for (const [key, pr] of [...tabs]) {
       tabs.delete(key);
@@ -804,9 +816,11 @@ async function preview({ projectId, sceneId } = {}) {
   const tab = await pr.catch(() => null);
   const page = tab?.page;
   if (!page || page.isClosed()) return { ok: false };
+  // Chỉ chiếu đúng tab /image-editor CỦA CẢNH NÀY — không vớt tab Firefly gốc/trang chủ.
+  if (!/image-editor/i.test(page.url())) return { ok: false };
   const now = Date.now();
-  // Cache ngắn để app poll 650ms mượt, không tạo lại session CDP mỗi lần.
-  if (previewCache.key === key && now - previewCache.at < 250) return { ok: true, data: previewCache.data };
+  // Cache rất ngắn để app poll 500ms mượt, không tạo lại session CDP mỗi lần.
+  if (previewCache.key === key && now - previewCache.at < 180) return { ok: true, data: previewCache.data };
   const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('preview timeout')), ms);
     Promise.resolve(promise).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
@@ -820,7 +834,7 @@ async function preview({ projectId, sceneId } = {}) {
     }
     // Không truyền vùng cắt — CDP chụp đúng viewport tab (ổn định, không nhảy theo box canvas).
     const shot = await withTimeout(tab.cdp.send('Page.captureScreenshot', {
-      format: 'jpeg', quality: 88, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,
+      format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,
     }), 2500);
     const data = shot?.data || '';
     if (!data) { await detachPreview(tab); return { ok: false }; }
@@ -832,6 +846,6 @@ async function preview({ projectId, sceneId } = {}) {
 module.exports = {
   status, open, reveal, background, preview,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
-  closeProjectTabs, closeAll,
+  closeProjectTabs, closeAll, closeIdleNow,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },
 };

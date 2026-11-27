@@ -126,8 +126,8 @@ test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗ
   assert.ok(ui.includes('await window.flowBridge.installUpdate(file, info.version)'), 'phải chờ cài đến khi Electron trả kết quả');
   assert.ok(ui.includes("btn.textContent = pct >= 0 ? `Đang tải… ${pct}%`"), 'phải giữ thông báo tiến độ trong lúc tải');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('/style.css?v=20261127-firefly-ui-9'), 'phải bump cache-buster CSS khi ảnh chiếu chạm mép khung');
-  assert.ok(html.includes('/app.js?v=20261127-firefly-ui-9'), 'phải bump cache-buster JS khi đổi luồng chiếu Firefly');
+  assert.ok(html.includes('/style.css?v=20261127-firefly-ui-11'), 'phải bump cache-buster CSS khi dọn nút xóa logo khỏi Bước 3');
+  assert.ok(html.includes('/app.js?v=20261127-firefly-ui-11'), 'phải bump cache-buster JS khi dọn nút xóa logo khỏi Bước 3');
 });
 
 test('xác nhận helper bằng file ready, không tin câu log ghi trước khi kiểm tra lock', () => {

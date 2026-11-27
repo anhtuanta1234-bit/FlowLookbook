@@ -113,12 +113,15 @@ test('banner hết lượt không làm mất ảnh đã tạo: có nút Tải xu
 test('lỗi / hết lượt / tạm dừng thì đóng ngay tab Firefly để nhẹ RAM', () => {
   assert.match(src, /require\('\.\/chrome-firefly'\)/, 'Firefly phải dùng Chrome riêng, không chung profile với Flow');
   assert.ok(!src.includes('keepTabOnQuota'), 'không còn giữ tab khi Firefly chặn tải');
-  assert.match(src, /async function closeIfIdle\(\)[\s\S]*?if \(tabs\.size \|\| loginKeepAlive\) return;[\s\S]*?await chrome\.close\(\)/);
-  assert.match(src, /async function releaseTab\(key\)[\s\S]*?await closeIfIdle\(\)/, 'xong / lỗi thì đóng tab và process Chrome nếu hết việc');
+  assert.match(src, /async function closeIfIdle\(\)[\s\S]*?if \(tabs\.size \|\| loginKeepAlive\) return;[\s\S]*?setTimeout\(\(\) => \{ idleCloseTimer = null; chrome\.close\(\)\.catch\(\(\) => \{\}\); \}, 300000\)/, 'giữa 2 ảnh giữ Chrome ấm 5 phút, không tắt rồi bật lại');
+  assert.match(src, /function cancelIdleClose\(\)[\s\S]*?clearTimeout\(idleCloseTimer\)/, 'có tab mới thì hủy hẹn tắt Chrome');
+  assert.match(src, /async function getTab\(key\)[\s\S]*?cancelIdleClose\(\)/, 'ảnh kế tiếp dùng lại Chrome đang ấm');
+  assert.match(src, /async function closeIdleNow\(\)[\s\S]*?await chrome\.close\(\)/, 'lỗi/quota đóng ngay khi cần');
+  assert.match(src, /async function releaseTab\(key\)[\s\S]*?await closeIfIdle\(\)/, 'xong / lỗi thì đóng tab và hẹn tắt process Chrome');
   assert.match(src, /async function downloadPrepared\([\s\S]*?finally \{\s*await releaseTab\(key\);\s*\}/, 'tải lỗi cũng đóng tab ngay');
   assert.ok(!src.includes('quotaBlocked'), 'không giữ cửa sổ Firefly chờ đổi Gmail');
   assert.match(src, /e\?\.code === 'FIREFLY_QUOTA'\) await open\(\)/, 'hết lượt lúc tạo vẫn mở cửa sổ để đổi Gmail');
-  assert.match(src, /closeProjectTabs, closeAll/, 'tắt tool phải đóng luôn Chrome Firefly');
+  assert.match(src, /closeProjectTabs, closeAll, closeIdleNow/, 'tắt tool / hết lượt phải đóng luôn Chrome Firefly');
 });
 
 test('canvas mask dù bị thu nhỏ vẫn được chọn, không chấm nhầm canvas nền', () => {
@@ -140,8 +143,9 @@ test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, 
   assert.match(src, /Chiếu TRỰC TIẾP nguyên tab Chrome/);
   assert.ok(!/findCanvas\(page, \{ prefer9x16: true \}\)\)\.box/.test(previewFn), 'không còn chụp riêng vùng canvas để rồi phóng to');
   assert.ok(!/scale: 2|clip:/.test(previewFn), 'không scale, không truyền clip: giữ đúng viewport tab');
-  assert.match(previewFn, /Page\.captureScreenshot', \{\s*format: 'jpeg', quality: 88, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,\s*\}/, 'chụp nguyên tab ở nền, nhanh');
-  assert.match(previewFn, /now - previewCache\.at < 250/, 'cache ngắn để poll nhanh nhưng vẫn cập nhật');
+  assert.match(previewFn, /Page\.captureScreenshot', \{\s*format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,\s*\}/, 'chụp nguyên tab ở nền, nhanh');
+  assert.match(previewFn, /now - previewCache\.at < 180/, 'cache ngắn để poll 500ms nhưng vẫn cập nhật');
+  assert.match(previewFn, /if \(!\/image-editor\/i\.test\(page\.url\(\)\)\) return \{ ok: false \}/, 'chỉ chiếu đúng tab editor của cảnh, không lấy tab Firefly gốc');
   assert.match(previewFn, /const pr = tabs\.get\(key\);/, 'chiếu đúng tab của cảnh đó, không lấy nhầm tab cảnh khác');
   assert.ok(!/\.\.\.tabs\.entries\(\)/.test(previewFn), 'bỏ dự phòng vớt tab cùng dự án');
   assert.match(previewFn, /if \(!tab\.cdp\) \{[\s\S]*?Emulation\.setFocusEmulationEnabled', \{ enabled: true \}/, 'giữ focus trang để minimize không làm đứng/đen khung chiếu');
