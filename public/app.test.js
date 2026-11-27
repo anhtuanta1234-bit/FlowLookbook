@@ -73,7 +73,7 @@ test('Bước 4 có nút bật/tắt ngoài Cài đặt, mặc định TẮT, ch
   for (const id of ['fBrush', 'fMaskX', 'fMaskY', 'fMaskW', 'fMaskH']) assert.match(src, new RegExp(`id="${id}"`), `Phải có ô chỉnh ${id}`);
   assert.match(src, /data-act="savefireflycfg"/, 'Cỡ cọ/mask có nút Lưu riêng');
   assert.match(src, /logoRemoveMask: \{ xPct: val\('fMaskX'/, 'Mask phải được lưu cùng cỡ cọ');
-  assert.match(src, /data-act="logook"/, 'Phải có nút Ổn trước khi tải ảnh sạch');
+  assert.match(src, /data-act="logook"/, 'Phải có nút Chọn trước khi lưu ảnh sạch');
   assert.match(src, /data-act="fireflyreveal"/, 'Phải có nút hiện Firefly để kiểm tra kết quả');
   assert.match(src, /fireflyQuotaPaused/, 'Phải hiện trạng thái Firefly hết lượt trên thanh trạng thái');
   assert.match(src, /data-act="logoresume"/, 'Phải có nút tiếp tục sau khi đổi Gmail');
@@ -123,7 +123,7 @@ test('hết lượt Firefly: banner mở Firefly để đổi Gmail và báo kh�
   assert.match(src, /Firefly hết lượt free ở <b>/, 'phải báo tên ảnh đang bị chặn');
   assert.match(src, /tối đa \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} ảnh\/ngày/, 'phải nói rõ giới hạn free hàng ngày');
   assert.match(src, /không làm lại ảnh cũ/);
-  assert.match(src, /data-act="gmailchange" data-sid="\$\{s\.id\}"[\s\S]{0,180}>Đổi Gmail khác để tiếp tục/, 'nút đổi Gmail nằm trên thẻ ảnh Bước 4');
+  assert.match(src, /data-act="gmailchange" data-sid="\$\{s\.id\}"[\s\S]{0,180}>Đổi Gmail<\/span><\/button>/, 'nút đổi Gmail nằm trên thẻ ảnh Bước 4, cùng kiểu .tb');
   assert.match(src, /tab đã đóng, chờ Gmail mới/, 'ảnh bị chặn phải báo tab đã đóng, sẽ tạo lại bằng Gmail mới');
   assert.ok(!src.includes('ảnh đã tạo, chờ tải lại'), 'không còn hứa tải lại ảnh cũ khi tab đã đóng');
 });
@@ -221,7 +221,7 @@ test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật k
   assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
   assert.match(src, /\(lr\.phases \|\| \[\]\)\.slice\(-1\)\[0\]/, 'Mỗi cảnh chỉ hiện 1 bước mới nhất');
   assert.match(src, /<div class="phaselist" data-phase-sid="\$\{s\.id\}">\$\{phase\}<\/div>/, 'Tiến trình nằm trong ô Firefly, không còn dưới cả 2 ô');
-  assert.match(src, /data-act="logook"[\s\S]{0,180}>Ổn<\/button>/, 'Bấm Ổn mới tải ảnh sạch');
+  assert.match(src, /data-act="logook"[\s\S]{0,180}>Chọn<\/span><\/button>/, 'Bấm Chọn mới lưu ảnh sạch');
   assert.match(src, /data-act="savefireflycfg"/, 'Bước 4 phải có nút Lưu cọ/mask ngay trong bước');
 });
 
@@ -237,10 +237,10 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.ok(!/Ảnh Bước 4/.test(ctl), 'Bỏ ô ảnh thừa bên dưới Hướng dẫn trong khung trái');
   assert.ok(!/logoQueueHtml\(p\)/.test(results), 'Khung phải không còn hàng chờ trùng');
   assert.match(scene, /class="logosplit"/, 'Mỗi cảnh chia ô ảnh');
-  assert.match(scene, /class="logocell clean"/, 'Có thêm ô ảnh đã xóa logo');
+  assert.match(scene, /class="logocell clean/, 'Có thêm ô ảnh đã xóa logo');
   assert.match(scene, /data-clean-sid="\$\{s\.id\}"/, 'Ô ảnh sạch cập nhật theo từng cảnh');
   assert.match(scene, /Ảnh đã xóa logo <span>/, 'Ô thứ 3 có nhãn rõ ràng');
-  assert.match(scene, /class="logocell clean">[\s\S]{0,700}<div class="scene-actions">\$\{actions\}<\/div>/, 'Ổn / Làm lại nằm ngay dưới ảnh đã xóa logo');
+  assert.match(scene, /class="logocell clean[^"]*"[^>]*>[\s\S]{0,900}\$\{actions\}/, '2 nút “Làm lại / Chọn” nằm ngay dưới ảnh đã xóa logo');
   assert.ok(!/chưa có ảnh sạch|sẵn sàng — nếu ổn|data-clean-status/.test(scene), 'bỏ hết chữ trạng thái ảnh sạch');
   assert.match(scene, /Ảnh gốc <span>chưa xóa logo<\/span>/, 'Ô 1 là ảnh gốc chưa xóa logo');
   assert.match(scene, /data-preview-sid=/, 'Ô 2 chiếu ảnh Firefly');
@@ -281,7 +281,7 @@ test('hàng chờ Bước 4 hiện đúng số ảnh 01, 02, 03 đã đặt từ
   assert.match(src, /ảnh số <b>\$\{String\(quotaNo\)\.padStart\(2, '0'\)\}<\/b>/, 'banner hết lượt nói rõ đang chặn ảnh số mấy');
 });
 
-test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, không nút trùng', () => {
+test('Bước 4 gọn hơn: đúng 2 nút .tb “Làm lại / Chọn” giống Bước 1-3, không nút trùng', () => {
   const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
   const scene = src.slice(src.indexOf('const LOGO_LIVE_STATUS ='), src.indexOf('function logoResultsHtml('));
   const results = src.slice(src.indexOf('function logoResultsHtml('), src.indexOf('const runSig'));
@@ -289,13 +289,16 @@ test('Bước 4 gọn hơn: Ổn / Làm lại / Thử lại cùng một hàng, k
   assert.ok(!/data-act="logoresume"/.test(ctl), 'thanh điều khiển không còn nút tiếp tục trùng');
   assert.match(ctl, /<details class="lite-details">/, 'hướng dẫn dài được gập lại');
   assert.match(ctl, /data-act="fireflyreveal"[\s\S]{0,160}>Kết nối Firefly<\/button>/, 'nút Firefly ghi rõ “Kết nối Firefly”');
-  assert.match(scene, /class="logocell clean">[\s\S]{0,700}<div class="scene-actions">\$\{actions\}<\/div>/, 'các nút nằm chung hàng ngay dưới ảnh sạch');
-  assert.match(scene, /data-act="logook"[\s\S]{0,180}>Ổn<\/button>/, 'nút chính là Ổn');
-  assert.ok(scene.includes("'Làm lại'"), 'có nút Làm lại');
-  assert.match(scene, /data-act="logoretry"[\s\S]{0,160}>Thử lại<\/button>/, 'có nút Thử lại');
-  assert.match(scene, /data-act="gmailchange"[\s\S]{0,160}>Đổi Gmail khác để tiếp tục<\/button>/, 'lúc hết lượt hiện nút Đổi Gmail khác để tiếp tục');
-  assert.match(scene, /data-act="logoresume"[\s\S]{0,160}>Đã đổi Gmail, tiếp tục<\/button>/, 'sau khi đổi Gmail thì nút thành Đã đổi Gmail, tiếp tục');
-  assert.ok(!/Ổn — tải ảnh sạch/.test(scene), 'không còn chuỗi nút dài');
+  assert.match(scene, /class="logocell clean[^"]*"[^>]*>[\s\S]{0,900}\$\{actions\}/, 'nút nằm chung hàng ngay dưới ảnh sạch');
+  assert.match(scene, /<div class="rc-act clean-act">\$\{redoBtn\}\$\{chooseBtn\}<\/div>/, 'dùng chung .rc-act với Bước 1-3');
+  assert.match(scene, /data-act="logook"[\s\S]{0,180}>Chọn<\/span><\/button>/, 'nút chính là Chọn');
+  assert.match(scene, /data-act="logoretry"[\s\S]{0,180}>Làm lại<\/span><\/button>/, 'nút bên trái là Làm lại, cùng .tb');
+  assert.match(scene, /class="tb ok on" aria-pressed="true"[\s\S]{0,180}>Đã chọn<\/span><\/button>/, 'đã duyệt thì hiện Đã chọn như Bước 1-3');
+  assert.match(scene, /data-act="gmailchange"[\s\S]{0,180}>Đổi Gmail<\/span><\/button>/, 'lúc hết lượt nút trái thành Đổi Gmail');
+  assert.match(scene, /data-act="logoresume"[\s\S]{0,180}>Tiếp tục<\/span><\/button>/, 'sau khi đổi Gmail thì nút thành Tiếp tục');
+  assert.match(scene, /class="tb extra" data-act="fireflyreveal"/, 'Xem Firefly dời xuống chân ô, không nằm trong hàng 2 nút');
+  assert.match(scene, /class="tb extra" data-act="logoskip"/, 'Bỏ qua dời xuống chân ô, không nằm trong hàng 2 nút');
+  assert.ok(!/class="btn sm primary"/.test(scene), 'không còn nút btn sm primary kiểu cũ dưới ảnh sạch');
   assert.ok(!/data-act="fireflyopen"/.test(results), 'kết quả Bước 4 không còn nút mở Firefly trùng');
   assert.ok(!/data-act="fireflyreveal"[\s\S]{0,160}>Firefly<\/button>/.test(results), 'kết quả Bước 4 không còn nút Firefly trùng');
 });
@@ -312,16 +315,17 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
 });
 
-test('Bước 4: ảnh chiếu chạm mép khung, rộng 100% ô, tự co theo tab Chrome, không cắt/kéo giãn', () => {
+test('Bước 4: ảnh chiếu cao bằng ảnh gốc, nguyên tab không cắt/kéo giãn', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, 'ảnh gốc và ảnh sạch 2 cột cùng 210px, Firefly chiếm giữa');
+  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(\(var\(--shot-w\) - 2px\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, 'ảnh gốc và ảnh sạch 2 cột cùng 210px, Firefly chiếm giữa');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
-  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng chạm mép khung, cao tự theo tỷ lệ tab, không thanh đen');
+  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:var\(--shot-h\);aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab nhưng CAO BẰNG ảnh gốc, contain nên không cắt/kéo giãn');
+  assert.match(css, /--shot-h:calc\(\(var\(--shot-w\) - 2px\) \* 16 \/ 9\)/, '--shot-h trừ 2px viền → cao bằng đúng ảnh gốc');
   assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:(fill|cover)/.test(css), 'không kéo giãn/cắt canvas Firefly');
   assert.match(css, /\.logocell\.clean img\{[^}]*max-width:var\(--shot-w\);margin-inline:auto;height:auto;aspect-ratio:9\/16;object-fit:cover\}/, 'ảnh sạch cùng chiều rộng/cao 9:16 với ảnh gốc');
   assert.match(css, /grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, '2 cột ảnh cố định 210px → mọi cảnh cùng kích thước');
   assert.ok(!/\.logocell\.clean img\{[^}]*max-width:none/.test(css), 'không để ảnh sạch rộng/cao hơn ảnh gốc');
-  assert.match(css, /\.logocell\.clean \.scene-actions\{[^}]*margin:0;[^}]*border-top:1px solid var\(--line\)/, 'hàng nút nằm sát dưới ảnh sạch, không còn hàng riêng');
+  assert.match(css, /\.logocell\.clean \.rc-act\{[^}]*margin:0;[^}]*border-top:1px solid var\(--line\)/, 'hàng nút dùng chung .rc-act, nằm sát dưới ảnh sạch');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');

@@ -1,5 +1,5 @@
 {
-  "version": "1.3.2",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.2/Flow.Lookbook.Setup.1.3.2.exe",
-  "notes": "- Ảnh đã xóa logo giờ được ép đúng chiều rộng/cao của ảnh gốc (crop giữa theo tỷ lệ 9:16 rồi scale), không còn thấp hơn vài px như trước."
+  "version": "1.3.3",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.3/Flow.Lookbook.Setup.1.3.3.exe",
+  "notes": "- Bước 4 dùng chung kiểu nút với Bước 1-3: dưới ảnh sạch chỉ còn đúng 2 nút “Làm lại / Chọn” (đã chọn thì hiện “Đã chọn” + mác xanh), các thao tác hiếm dời xuống chân ô Firefly.\n- Khung chiếu trực tiếp Firefly giờ cao bằng ảnh gốc; nguyên tab vẫn hiện trọn (contain), không cắt canvas, không kéo giãn."
 }

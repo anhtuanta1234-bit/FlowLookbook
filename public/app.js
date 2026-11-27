@@ -978,17 +978,30 @@ function logoSceneHtml(s, i) {
     : st === 'skipped' ? '<span class="badge">đã bỏ qua</span>' : '';
   const live = LOGO_LIVE_STATUS[st] || 'chờ đến lượt xóa logo';
   const previewSrc = S.preview.get(s.id) || '';
-  const actions = [
-    st === 'waiting_ok' ? `<button class="btn sm primary" data-act="logook" data-sid="${s.id}" data-tip="Firefly đã xong: tải ảnh sạch về anhdaxoalogo">Ổn</button>` : '',
-    st === 'quota_blocked' ? (gmailReady(s.id)
-      ? `<button class="btn sm primary" data-act="logoresume" data-sid="${s.id}" data-tip="Làm tiếp đúng ảnh này bằng Gmail mới, không làm lại ảnh cũ">Đã đổi Gmail, tiếp tục</button>`
-      : `<button class="btn sm primary" data-act="gmailchange" data-sid="${s.id}" data-tip="Mở Firefly để đăng nhập Gmail khác">Đổi Gmail khác để tiếp tục</button>`) : '',
-    st === 'error' ? `<button class="btn sm primary" data-act="logoretry" data-sid="${s.id}">${lr.code === 'FIREFLY_LOGIN' ? 'Kết nối lại Firefly' : 'Làm lại'}</button>` : '',
-    st === 'skipped' ? `<button class="btn sm primary" data-act="logoretry" data-sid="${s.id}">Thử lại</button>` : '',
-    st === 'approved' ? `<button class="btn sm" data-act="openclean" data-sid="${s.id}">Xem ảnh sạch</button>` : '',
-    st === 'waiting_ok' ? '<button class="btn sm" data-act="fireflyreveal" data-tip="Mở cửa sổ Firefly để kiểm tra ảnh">Xem trên Firefly</button>' : '',
-    st === 'waiting_ok' ? `<button class="btn sm ghost" data-act="logoskip" data-sid="${s.id}">Bỏ qua</button>` : '',
-  ].filter(Boolean).join('');
+  const approved = st === 'approved';
+  const canChoose = cleanReady && st === 'waiting_ok';
+  const busy = st === 'preparing' || st === 'downloading' || st === 'queued';
+  const quota = st === 'quota_blocked';
+  // Dùng CHUNG .rc-act/.tb với ô kết quả Bước 1-3: đúng 2 nút “Làm lại” + “Chọn” trên cùng một hàng.
+  const redoDisabled = busy || approved
+    ? ` disabled title="${approved ? 'Cảnh này đã có ảnh sạch được chọn' : 'Đang xóa logo, đợi xong đã'}"`
+    : ' data-tip="Làm lại: tạo lại ảnh sạch cho cảnh này"';
+  const chooseDisabled = canChoose
+    ? ' aria-pressed="false" data-tip="Chọn ảnh sạch này để hoàn tất cảnh" aria-label="Chọn ảnh sạch"'
+    : ' disabled title="Ảnh sạch chưa sẵn sàng"';
+  const redoBtn = quota
+    ? (gmailReady(s.id)
+      ? `<button class="tb" data-act="logoresume" data-sid="${s.id}" data-tip="Làm tiếp đúng ảnh này bằng Gmail mới, không làm lại ảnh cũ">${I.redo}<span>Tiếp tục</span></button>`
+      : `<button class="tb" data-act="gmailchange" data-sid="${s.id}" data-tip="Mở Firefly để đăng nhập Gmail khác rồi tiếp tục">${I.redo}<span>Đổi Gmail</span></button>`)
+    : `<button class="tb" data-act="logoretry" data-sid="${s.id}"${redoDisabled}>${I.redo}<span>Làm lại</span></button>`;
+  const chooseBtn = approved
+    ? `<button class="tb ok on" aria-pressed="true" data-tip="Đã chọn ảnh sạch của cảnh này" aria-label="Đã chọn ảnh sạch">${I.checkFill}<span>Đã chọn</span></button>`
+    : `<button class="tb ok" data-act="logook" data-sid="${s.id}"${chooseDisabled}>${I.circle}<span>Chọn</span></button>`;
+  const actions = `<div class="rc-act clean-act">${redoBtn}${chooseBtn}</div>`;
+  // Thao tác hiếm dùng nằm ở chân ô Firefly, giống kiểu “Mở Flow / Thử lại lượt” của Bước 3.
+  const extra = st === 'waiting_ok'
+    ? `<button class="tb extra" data-act="fireflyreveal" data-tip="Mở cửa sổ Firefly để kiểm tra ảnh">Xem Firefly</button><button class="tb extra" data-act="logoskip" data-sid="${s.id}" data-tip="Giữ lại ảnh có logo, không xóa nữa">Bỏ qua</button>`
+    : approved ? `<button class="tb extra" data-act="openclean" data-sid="${s.id}" data-tip="Mở ảnh sạch đã lưu">Xem sạch</button>` : '';
   // Tiến trình nằm trong ô Firefly: chỉ hiện 1 bước mới nhất, đổi theo thời gian thực.
   const lastPhase = (lr.phases || []).slice(-1)[0];
   const phase = lastPhase
@@ -1004,13 +1017,16 @@ function logoSceneHtml(s, i) {
       <div class="logocell firefly">
         <div class="logocell-lab">Firefly <span class="chip livechip${S.liveDot?.has(s.id) ? ' on' : ''}" data-live-chip="${s.id}" title="Chấm xanh nhấp nháy: Firefly đang chiếu thật">chiếu trực tiếp</span></div>
         <img class="firefly-shot" data-preview-sid="${s.id}"${previewSrc ? ` src="${previewSrc}"` : ''} alt="Firefly của ảnh ${esc(s.label || i + 1)}">
-        <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span></div>
+        <div class="logocell-foot"><span class="badge warn" data-live-status="${s.id}">${live}</span><span class="grow"></span>${extra}</div>
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
       </div>
-      <div class="logocell clean">
+      <div class="logocell clean${approved ? ' chosen' : ''}">
         <div class="logocell-lab">Ảnh đã xóa logo <span>${cleanReady ? 'so sánh với ảnh gốc' : ''}</span></div>
-        <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}" data-zoom="${cleanSrc}"` : ''} alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
-        <div class="scene-actions">${actions}</div>
+        <div class="clean-wrap">
+          <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}" data-zoom="${cleanSrc}"` : ''} alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
+          ${approved ? `<span class="tag">${I.check}Đã chọn</span>` : ''}
+        </div>
+        ${actions}
       </div>
     </div>
   </div>`;

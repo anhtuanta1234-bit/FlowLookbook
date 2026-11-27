@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.3.3 - 2026-11-27
+- Bước 4 dùng chung kiểu nút với Bước 1-3: dưới ảnh sạch chỉ còn đúng 2 nút “Làm lại / Chọn” (đã chọn thì hiện “Đã chọn” + mác xanh), các thao tác hiếm dời xuống chân ô Firefly.
+- Khung chiếu trực tiếp Firefly giờ cao bằng ảnh gốc; nguyên tab vẫn hiện trọn (contain), không cắt canvas, không kéo giãn.
+
+
 ## v1.3.2 - 2026-11-27
 - Ảnh đã xóa logo giờ được ép đúng chiều rộng/cao của ảnh gốc (crop giữa theo tỷ lệ 9:16 rồi scale), không còn thấp hơn vài px như trước.
 

@@ -259,7 +259,8 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .scene-menu .btn{justify-content:flex-start}
 /* Thiết kế mới Bước 4: mỗi cảnh 2 ô ảnh — gốc / Firefly chiếu trực tiếp */
 .scene.logoscene{grid-template-columns:minmax(0,1fr);display:grid}
-.logosplit{--shot-w:210px;--shot-h:calc(var(--shot-w) * 16 / 9);display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) minmax(0,210px);gap:10px;align-items:start}
+/* --shot-h tính theo phần NỘI dung (210px trừ 2px viền) để bằng đúng chiều cao ảnh gốc. */
+.logosplit{--shot-w:210px;--shot-h:calc((var(--shot-w) - 2px) * 16 / 9);display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) minmax(0,210px);gap:10px;align-items:start}
 .logocell{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
@@ -272,17 +273,24 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .logocell-lab .livechip.on::before{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent);animation:livedot-blink 1.1s ease-in-out infinite}
 /* Bước 4: ô gốc giữ gọn khung 9:16 (căn tọa độ chấm logo); ảnh gốc khít viền, không bị cắt. */
 .logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:var(--shot-w);margin-inline:auto}
-/* Ô chiếu: RỘNG 100% khung Firefly, chiều CAO tự theo đúng tỷ lệ tab Chrome.
-   Ảnh chạm ĐẸT 2 mép ngang, hết thanh đen; không cắt canvas, không kéo giãn, khung không nhảy
-   (kích thước tab cố định nên chiều cao cũng cố định). */
-.logocell.firefly img{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
+/* Ô chiếu: CAO BẰNG ảnh gốc (--shot-h), nguyên tab Firefly vẫn hiện trọn nhờ contain.
+   Không cắt canvas, không kéo giãn; tab được thu nhỏ vừa khung, căn giữa 2 bên. */
+.logocell.firefly img{display:block;width:100%;max-width:none;height:var(--shot-h);aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
 /* Ô thứ 3: ảnh sạch đã xóa logo — dùng CHUNG --shot-w với ảnh gốc (max-width:none cũ làm ảnh rộng/cao hơn).
    Mọi cảnh: cùng chiều rộng, cùng chiều cao, đúng tỷ lệ 9:16 để so sánh trực tiếp. */
 .logocell.clean img{width:100%;max-width:var(--shot-w);margin-inline:auto;height:auto;aspect-ratio:9/16;object-fit:cover}
 .logocell.clean img:not([src]){opacity:.25}
-/* Nút Ổn / Làm lại / Đổi Gmail nằm ngay dưới ảnh đã xóa logo, không còn hàng nút riêng bên dưới cả thẻ. */
-.logocell.clean .scene-actions{margin:0;padding:6px 8px;min-height:29px;border-top:1px solid var(--line)}
+/* Bước 4 dùng CHUNG kiểu nút của Bước 1-3 (.rc-act + .tb): đúng 2 nút “Làm lại / Chọn” dưới ảnh sạch. */
+.logocell.clean .rc-act{margin:0;border-top:1px solid var(--line)}
+.tb:disabled{opacity:.45;cursor:not-allowed}
+.logocell.clean .clean-wrap{position:relative}
+.logocell.clean.chosen{border-color:var(--ok)}
+.logocell.clean .tag{position:absolute;left:8px;top:8px;display:inline-flex;align-items:center;gap:4px;padding:2px 10px 2px 7px;background:var(--ok);color:#fff;font-size:11.5px;font-weight:600;border-radius:99px;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:2}
+.logocell.clean .tag svg{width:12px;height:12px;stroke-width:3}
+/* Thao tác hiếm dùng ở chân ô Firefly, cùng kiểu .tb của các bước trước. */
+.logocell-foot{gap:6px}
+.logocell-foot .tb.extra{min-height:22px;font-size:11px;padding:2px 4px;flex:none}
 /* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
 .logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}
 .logocell.firefly .phase{background:transparent;border:0;padding:0}
