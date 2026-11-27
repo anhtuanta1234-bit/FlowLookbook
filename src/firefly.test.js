@@ -18,7 +18,7 @@ test('vùng xóa logo luôn nằm trọn trong khung ảnh', () => {
 });
 
 test('mask mặc định đúng vùng logo ảnh mẫu 768x1376', () => {
-  assert.deepEqual(_test.normalizeMask(undefined), { xPct: 89.94, yPct: 94.329, wPct: 6.12, hPct: 3.343 });
+  assert.deepEqual(_test.normalizeMask(undefined), { xPct: 89.94, yPct: 94.352, wPct: 6.12, hPct: 3.343 });
   assert.match(_test.fireflyHome(), /^https:\/\/firefly\.adobe\.com(?:\/|$)/);
 });
 
@@ -169,7 +169,8 @@ test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, 
   assert.match(src, /Chiếu TRỰC TIẾP nguyên tab Chrome/);
   assert.ok(!/findCanvas\(page, \{ prefer9x16: true \}\)\)\.box/.test(previewFn), 'không còn chụp riêng vùng canvas để rồi phóng to');
   assert.ok(!/scale: 2|clip:/.test(previewFn), 'không scale, không truyền clip: giữ đúng viewport tab');
-  assert.match(previewFn, /Page\.captureScreenshot', \{\s*format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,\s*\}/, 'chụp nguyên tab ở nền, nhanh');
+  assert.match(previewFn, /Page\.captureScreenshot', \{\s*format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: true, captureBeyondViewport: false,\s*\}/, 'chụp từ surface: cửa sổ bị dời ra ngoài màn hình vẫn có khung, không chờ 4s');
+  assert.match(previewFn, /4063ms[\s\S]{0,120}509ms/, 'có đo lường thực tế làm căn cứ');
   assert.match(previewFn, /now - previewCache\.at < 180/, 'cache ngắn để poll 500ms nhưng vẫn cập nhật');
   assert.match(previewFn, /if \(!\/image-editor\/i\.test\(page\.url\(\)\)\) return \{ ok: false \}/, 'chỉ chiếu đúng tab editor của cảnh, không lấy tab Firefly gốc');
   assert.match(previewFn, /const pr = tabs\.get\(key\);/, 'chiếu đúng tab của cảnh đó, không lấy nhầm tab cảnh khác');
@@ -231,7 +232,7 @@ test('chọn cỡ cọ thật trong hộp Cài đặt cọ vẽ, rồi chấm đ
   assert.match(src, /await waitForMaskCanvas\(page\)\)\.box/, 'Chấm trên canvas mask thật');
   assert.match(src, /await page\.mouse\.move\(cx, cy\);[\s\S]*?await page\.mouse\.down\(\);[\s\S]*?await page\.mouse\.up\(\);/, 'Chấm tại tâm logo (có thử lại nếu Firefly chưa nhận)');
   assert.ok(!src.includes('strokes.push'), 'Không quét nhiều nét làm sai thao tác người dùng');
-  assert.match(src, /cfg\.get\(\)\.logoBrushSize/, 'Cỡ cọ lấy từ cài đặt, mặc định 14');
+  assert.match(src, /cfg\.get\(\)\.logoBrushSize/, 'Cỡ cọ lấy từ cài đặt, mặc định 16');
 });
 
 test('chờ đúng câu Firefly báo hoàn tất tạo sinh trước khi tải', () => {

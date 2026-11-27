@@ -157,7 +157,7 @@ app.post('/api/config', (req, res) => {
   if (typeof req.body.fastMode === 'boolean') patch.fastMode = req.body.fastMode;
   if (typeof req.body.autoCleanOldInstallers === 'boolean') patch.autoCleanOldInstallers = req.body.autoCleanOldInstallers;
   if (typeof req.body.removeLogoEnabled === 'boolean') patch.removeLogoEnabled = req.body.removeLogoEnabled;
-  if (req.body.logoBrushSize !== undefined) patch.logoBrushSize = Math.min(128, Math.max(5, Math.round(Number(req.body.logoBrushSize) || 14)));
+  if (req.body.logoBrushSize !== undefined) patch.logoBrushSize = Math.min(128, Math.max(5, Math.round(Number(req.body.logoBrushSize) || 16)));
   if (typeof req.body.fireflyHomeUrl === 'string' && req.body.fireflyHomeUrl.trim()) patch.fireflyHomeUrl = req.body.fireflyHomeUrl.trim();
   if (req.body.logoRemoveMask && typeof req.body.logoRemoveMask === 'object') {
     const m = req.body.logoRemoveMask;
@@ -166,7 +166,7 @@ app.post('/api/config', (req, res) => {
     patch.logoRemoveMask = {
       // Tọa độ chốt: tâm (93%, 96%) = trái 2%, xuống 4% từ (95%, 92%).
       xPct: Math.min(100, Math.max(0, num(m.xPct, cur.xPct ?? 89.940))),
-      yPct: Math.min(100, Math.max(0, num(m.yPct, cur.yPct ?? 94.329))),
+      yPct: Math.min(100, Math.max(0, num(m.yPct, cur.yPct ?? 94.352))),
       wPct: Math.min(100, Math.max(0.1, num(m.wPct, cur.wPct ?? 6.12))),
       hPct: Math.min(100, Math.max(0.1, num(m.hPct, cur.hPct ?? 3.343))),
     };

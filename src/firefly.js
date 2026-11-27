@@ -480,7 +480,7 @@ async function selectAspect916(page) {
 function normalizeMask(mask) {
   const n = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
   const xPct = Math.min(99, Math.max(0, n(mask?.xPct, 89.940)));
-  const yPct = Math.min(99, Math.max(0, n(mask?.yPct, 94.329)));
+  const yPct = Math.min(99, Math.max(0, n(mask?.yPct, 94.352))); // tọa độ đã chốt: tâm (93%, 96,02%)
   return {
     xPct, yPct,
     wPct: Math.max(0.1, Math.min(100 - xPct, n(mask?.wPct, 6.12))),
@@ -537,7 +537,7 @@ async function waitForMaskCanvas(page, timeoutMs = 30000) {
 // Cỡ cọ nằm trong hộp “Cài đặt cọ vẽ: 64px”. Web component <sp-slider> có input[type=range]
 // bên trong shadow root; gán .value bằng JS KHÔNG cập nhật state, phải dùng bàn phím như người thật.
 async function setBrushSize(page, size) {
-  const target = Math.min(128, Math.max(5, Math.round(Number(size) || 14)));
+  const target = Math.min(128, Math.max(5, Math.round(Number(size) || 16)));
   await clickEnabledAny(page, [L.brushSettings], { timeout: 10000, label: 'nút Cài đặt cọ vẽ' });
   let range = L.brushSizeRange(page);
   if (!(await waitUntil(async () => (await range.count().catch(() => 0)) > 0, 2500, null, 100).catch(() => false))) {
@@ -912,8 +912,11 @@ async function preview({ projectId, sceneId } = {}) {
       await tab.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
     }
     // Không truyền vùng cắt — CDP chụp đúng viewport tab (ổn định, không nhảy theo box canvas).
+    // fromSurface:true bắt buộc: lúc tool chạy, cửa sổ Firefly bị dời ra ngoài màn hình;
+    // fromSurface:false khi đó chờ surface ~4s (đụng timeout 2500ms → ô chiếu mất hình, giật, delay).
+    // Đo trên máy thật: false ≈ 4063ms/khung, true ≈ 509ms/khung sau khi ổn định.
     const shot = await withTimeout(tab.cdp.send('Page.captureScreenshot', {
-      format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,
+      format: 'jpeg', quality: 82, optimizeForSpeed: true, fromSurface: true, captureBeyondViewport: false,
     }), 2500);
     const data = shot?.data || '';
     if (!data) { await detachPreview(tab); return { ok: false }; }

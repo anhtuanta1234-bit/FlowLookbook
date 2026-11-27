@@ -43,9 +43,10 @@ const defaults = {
   // Bước 4 (tùy chọn): xóa logo bằng Adobe Firefly. Tắt mặc định, không ảnh hưởng Bước 1-3.
   removeLogoEnabled: false,
   fireflyHomeUrl: 'https://firefly.adobe.com/',
-  // Tâm vùng chấm = (93%, 96%) trên ảnh tham chiếu 2K (trái 2%, xuống 4% so với điểm cũ 95%,92%).
-  logoRemoveMask: { xPct: 89.940, yPct: 94.329, wPct: 6.120, hPct: 3.343 },
-  logoBrushSize: 14, // cỡ cọ Firefly: mức 14 như thao tác thật trên ảnh mẫu
+  // TỌA ĐỘ ĐÃ CHỐT CỨNG sau khi test thật trên Chrome: tâm (93%, 96,02%) — sát mép phải dưới.
+  // Ảnh tham chiếu 2K: đen_6d8f95f5_2K.jpg. Không đổi các số này khi chưa có xác nhận mới.
+  logoRemoveMask: { xPct: 89.940, yPct: 94.352, wPct: 6.120, hPct: 3.343 },
+  logoBrushSize: 16, // cỡ cọ đã chốt: mức 16 để phủ kín vùng logo
   // Firefly free hiện chỉ cho 3 ảnh/ngày cho mỗi tài khoản; vượt quá thì nhắc đổi mail.
   fireflyDailyFreeLimit: 3,
   fireflyDailyUsed: { date: '', count: 0 },
@@ -73,7 +74,7 @@ function set(patch) {
   if (patch.logoRemoveMask) {
     const n = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
     const x = Math.min(99, Math.max(0, n(patch.logoRemoveMask.xPct, 89.940)));
-    const y = Math.min(99, Math.max(0, n(patch.logoRemoveMask.yPct, 94.329)));
+    const y = Math.min(99, Math.max(0, n(patch.logoRemoveMask.yPct, 94.352)));
     next.logoRemoveMask = {
       xPct: x, yPct: y,
       wPct: Math.max(0.1, Math.min(100 - x, n(patch.logoRemoveMask.wPct, 6.12))),
@@ -82,7 +83,7 @@ function set(patch) {
   }
   if (patch.logoBrushSize !== undefined) {
     const b = Number(patch.logoBrushSize);
-    next.logoBrushSize = Number.isFinite(b) ? Math.min(128, Math.max(5, Math.round(b))) : 14;
+    next.logoBrushSize = Number.isFinite(b) ? Math.min(128, Math.max(5, Math.round(b))) : 16;
   }
   if (fixedOutputRoot) next.outputRoot = fixedOutputRoot; // khóa cứng, lưu cài đặt cũng không đổi được
   cache = next;

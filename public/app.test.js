@@ -290,7 +290,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /Free \$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}/, 'Bước 4 phải hiện số lượt đã dùng');
   assert.match(src, /Firefly: hết \$\{limit\} lượt free\/ngày — đổi mail/, 'Chip Firefly phải nhắc đổi mail khi hết lượt');
   assert.match(src, /id="fBrush"[^>]*min="5"[^>]*max="128"/, 'Bước 4 phải có ô cỡ cọ');
-  assert.match(src, /logoBrushSize: val\('fBrush', 14\)/, 'Cỡ cọ phải được lưu qua /api/config');
+  assert.match(src, /logoBrushSize: val\('fBrush', 16\)/, 'Cỡ cọ phải được lưu qua /api/config');
 });
 
 test('hàng chờ Bước 4 hiện đúng số ảnh 01, 02, 03 đã đặt từ Bước 3', () => {

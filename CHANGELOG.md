@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.3.9 - 2026-11-27
+- Ô chiếu Firefly giờ chụp từ surface của tab: khi tool dời cửa sổ ra ngoài màn hình, khung vẫn lên đều (~0,5s thay vì ~4s), không còn mất hình hay giật/delay.
+- Chốt cứng tọa độ xóa logo sau khi test thật trên Chrome: tâm (93%, 96,02%), sát mép phải dưới của ảnh 2K.
+- Cỡ cọ xóa logo tăng từ 14 lên 16 để phủ kín vùng logo.
+- Đồng bộ tọa độ/cỡ cọ đã chốt vào mọi giá trị dự phòng (server, giao diện cài đặt và Firefly) để không bao giờ tụt lại bản cũ.
+
+
 ## v1.3.8 - 2026-11-27
 - Dấu × của banner hết lượt và banner tạm dừng giờ nằm sát mép bên phải của dòng thông báo, không dính ngay sau chữ.
 - Bấm “Kết nối Firefly” giờ đọc trực tiếp trang Firefly để check lượt free của Gmail hiện tại — kể cả Gmail đã dùng hết 3 lượt ở nơi khác trong khi bộ đếm của tool vẫn hiện 0/3. Không tạo ảnh, không tốn lượt.

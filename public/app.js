@@ -820,19 +820,19 @@ function buildLogoCtl(p) {
       </div>
       <div class="logo-runrow"><button class="btn primary" data-act="logoall" data-tip="Xếp mọi ảnh chưa xong vào hàng chờ; tool mở từng tab Firefly một, xong ảnh 1 mới mở ảnh 2. Tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh cho mỗi Gmail. Hết lượt thì đổi Gmail: làm lại đúng ảnh chưa bấm Chọn, ảnh đã Chọn giữ nguyên">Chạy tất cả</button></div>
       <details class="lite-details"><summary>Tùy chỉnh Firefly</summary>
-        <label class="lbl" for="fBrush" style="margin:0">Cỡ cọ (mặc định 14)</label>
-        <input id="fBrush" type="number" min="5" max="128" step="1" value="${+(S.cfg?.logoBrushSize || 14)}">
+        <label class="lbl" for="fBrush" style="margin:0">Cỡ cọ (mặc định 16)</label>
+        <input id="fBrush" type="number" min="5" max="128" step="1" value="${+(S.cfg?.logoBrushSize || 16)}">
         <div class="hint" style="margin-top:6px">Vùng logo (phần trăm khung ảnh)</div>
         <div class="mini-grid">
           <label class="lbl" for="fMaskX">X<input id="fMaskX" type="number" min="0" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.xPct ?? 89.940)}"></label>
-          <label class="lbl" for="fMaskY">Y<input id="fMaskY" type="number" min="0" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.yPct ?? 94.329)}"></label>
+          <label class="lbl" for="fMaskY">Y<input id="fMaskY" type="number" min="0" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.yPct ?? 94.352)}"></label>
           <label class="lbl" for="fMaskW">Rộng<input id="fMaskW" type="number" min="0.1" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.wPct ?? 6.12)}"></label>
           <label class="lbl" for="fMaskH">Cao<input id="fMaskH" type="number" min="0.1" max="100" step="0.001" value="${+(S.cfg?.logoRemoveMask?.hPct ?? 3.343)}"></label>
         </div>
         <div class="mini-actions"><button class="btn sm primary" data-act="savefireflycfg" data-tip="Lưu cỡ cọ và vùng logo, áp dụng cho ảnh chưa xóa">Lưu</button></div>
       </details>
       <details class="lite-details"><summary>Hướng dẫn</summary>
-        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>, bạn bấm <b>Chọn</b> để lưu.</div>
+        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 16)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>, bạn bấm <b>Chọn</b> để lưu.</div>
       </details>
     </div>`;
   syncFireflyChip(); // vẽ lại chip đúng trạng thái hiện tại, không để chữ “đang kiểm tra…” kẹt lại
@@ -1337,8 +1337,8 @@ async function act(b) {
   if (a === 'savefireflycfg') {
     const val = (id, def) => { const el = $('#' + id); return el ? +el.value : def; };
     await api('POST', '/api/config', {
-      logoBrushSize: val('fBrush', 14),
-      logoRemoveMask: { xPct: val('fMaskX', 89.940), yPct: val('fMaskY', 94.329), wPct: val('fMaskW', 6.12), hPct: val('fMaskH', 3.343) },
+      logoBrushSize: val('fBrush', 16),
+      logoRemoveMask: { xPct: val('fMaskX', 89.940), yPct: val('fMaskY', 94.352), wPct: val('fMaskW', 6.12), hPct: val('fMaskH', 3.343) },
     });
     S.cfg = await api('GET', '/api/config');
     syncLogoToggle();
