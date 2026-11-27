@@ -1,5 +1,5 @@
 {
-  "version": "1.2.4",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.4/Flow.Lookbook.Setup.1.2.4.exe",
-  "notes": "- Sidebar thu gọn giờ hiện **đúng tên dự án** (dự án tên DA2 thì hiện DA2), bỏ hẳn vòng tròn bên trong, chỉ giữ khung ngoài; dự án đang mở có khung sáng.\n- Dòng xóa logo đứng sau ghép ảnh thật: chỉ ghi **Xóa logo**, bỏ số 4.\n- Khung chiếu trực tiếp chiếu nguyên tab Chrome đang xóa (không phóng to/cắt ảnh gốc), rộng 100% ô, cao bằng ảnh gốc; ảnh mới giải mã xong mới thay nên không bị giật.\n- Bắt đầu chiếu ngay từ lúc tạo tab/chờ xử lý và đóng băng đúng lúc Firefly báo đã hoàn tất thao tác tạo sinh.\n- Khi bấm chạy xóa logo, Chrome giữ ở nền, không nổi lên màn hình; chỉ nút Kết nối/Đổi Gmail mới mở cửa sổ để đăng nhập."
+  "version": "1.2.5",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.5/Flow.Lookbook.Setup.1.2.5.exe",
+  "notes": "- Sidebar thu gọn: tên “dự án 2” giờ rút gọn thành **DA2** nằm trọn trong khung; chữ dài không còn tràn ra ngoài.\n- Thanh bước **Xóa logo** dùng chung kiểu với **Ghép cảnh thật** (cùng vòng số, cùng màu), chỉ khác chữ."
 }

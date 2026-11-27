@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v1.2.5 - 2026-11-27
+- Sidebar thu gọn: tên “dự án 2” giờ rút gọn thành **DA2** nằm trọn trong khung; chữ dài không còn tràn ra ngoài.
+- Thanh bước **Xóa logo** dùng chung kiểu với **Ghép cảnh thật** (cùng vòng số, cùng màu), chỉ khác chữ.
+
+
 ## v1.2.4 - 2026-11-27
 - Sidebar thu gọn giờ hiện **đúng tên dự án** (dự án tên DA2 thì hiện DA2), bỏ hẳn vòng tròn bên trong, chỉ giữ khung ngoài; dự án đang mở có khung sáng.
 - Dòng xóa logo đứng sau ghép ảnh thật: chỉ ghi **Xóa logo**, bỏ số 4.

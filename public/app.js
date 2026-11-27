@@ -404,6 +404,16 @@ function renderProjectActions() {
   deleteSelected.title = selectedBusy ? 'Các dự án đang chạy sẽ được bỏ qua' : 'Xóa các dự án đã chọn';
   deleteAll.title = anyBusy ? 'Xóa dự án đang rảnh; tự động bỏ qua dự án đang chạy hoặc tải 2K' : 'Xóa tất cả dự án';
 }
+// Tên ngắn cho ô thu gọn: “dự án 2” / “DA2” → “DA2”, các tên khác lấy chữ cái đầu (tối đa 4).
+// Nhờ đó chữ luôn nằm gọn trong khung 62px, không tràn ra ngoài.
+function shortProjectName(name = '') {
+  const raw = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, '');
+  const m = raw.match(/^(?:DUAN|DA)(\d+)$/);
+  if (m) return `DA${m[1]}`;
+  const initials = String(name || '').trim().split(/\s+/).filter(Boolean)
+    .map((w) => w[0]).join('').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return (initials || '?').slice(0, 4);
+}
 function renderSidebar() {
   const projectIds = new Set(S.projects.map((p) => p.id));
   for (const id of S.selectedProjectIds) if (!projectIds.has(id)) S.selectedProjectIds.delete(id);
@@ -412,7 +422,7 @@ function renderSidebar() {
     const checked = S.selectedProjectIds.has(p.id);
     return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án: ${esc(p.name)}" data-tip="${esc(p.name)}">
       <input class="project-select" type="checkbox" data-pid="${p.id}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Chọn dự án ${esc(p.name)} để xóa" title="${busy ? 'Đang xử lý; chưa thể xóa' : 'Chọn để xóa nhiều dự án cùng lúc'}">
-      <div class="pav" aria-hidden="true"><span class="pav-letter">${esc((p.name.trim()[0] || '?').toUpperCase())}</span><span class="pav-name">${esc(p.name || '?')}</span></div>
+      <div class="pav" aria-hidden="true"><span class="pav-letter">${esc((p.name.trim()[0] || '?').toUpperCase())}</span><span class="pav-name">${esc(shortProjectName(p.name))}</span></div>
       <div class="ptxt"><div class="nm">${esc(p.name)}</div><div class="sub">${projectSummary(p)}</div></div>
       <button class="project-delete" type="button" data-pid="${p.id}" aria-label="Xóa dự án ${esc(p.name)}" title="${busy ? 'Đang xử lý; chưa thể xóa' : `Xóa dự án ${esc(p.name)}`}" ${busy ? 'disabled' : ''}>${I.trash}</button>
     </div>`;
@@ -565,10 +575,10 @@ function refresh() {
   morph($('#steps'), visibleSteps().map((s) => {
     const locked = s.n > maxStage, done = stageDone(s.n);
     const tip = locked ? `Chưa mở: hoàn tất bước ${s.n - 1} rồi bấm “Sang bước ${s.n}” để mở bước này` : s.tip;
-    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : '', s.n === 4 ? 'nonum' : ''].join(' ');
+    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : ''].join(' ');
     const go = locked ? 'aria-disabled="true"' : `data-act="goto" data-stage="${s.n}"`;
-    // Dòng xóa logo làm sau ghép ảnh thật: chỉ ghi chữ “Xóa logo”, không hiện số 4 hay vòng tròn số.
-    const num = s.n === 4 ? '' : `<span class="n">${locked ? I.lock : done ? '✓' : s.n}</span>`;
+    // Mọi bước, kể cả “Xóa logo”, dùng chung một kiểu thanh: vòng số + chữ.
+    const num = `<span class="n">${locked ? I.lock : done ? '✓' : s.n}</span>`;
     return `<div class="${cls}" ${go} data-tip="${esc(tip)}" role="tab" tabindex="${locked ? -1 : 0}" aria-selected="${S.stage === s.n}">${num}<span class="t">${s.t}</span></div>`;
   }).join(''));
   renderSlots(); renderResults(); patchLogoPhases();

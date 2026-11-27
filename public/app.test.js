@@ -305,12 +305,12 @@ test('Bước 4: chiếu NGUYÊN tab Chrome, rộng 100% ô, cao bằng ảnh g�
   assert.ok(!/\.livedot\b/.test(css), 'không còn chấm/nút riêng ở góc ô Firefly');
 });
 
-test('dòng xóa logo làm sau ghép ảnh thật: chỉ ghi “Xóa logo”, không có số 4', () => {
+test('thanh “Xóa logo” giống hệt “Ghép cảnh thật”: cùng vòng số, chỉ khác chữ', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(src, /\{ n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật/);
-  assert.match(src, /s\.n === 4 \? 'nonum' : ''/);
-  assert.match(src, /const num = s\.n === 4 \? '' :/);
-  assert.match(css, /\.step\.nonum\{padding-left:40px\}/);
+  assert.match(src, /const num = `<span class="n">\$\{locked \? I\.lock : done \? '✓' : s\.n\}<\/span>`/);
+  assert.ok(!/s\.n === 4 \? 'nonum'/.test(src), 'không còn kiểu riêng cho bước 4');
+  assert.ok(!/\.step\.nonum/.test(css), 'CSS không còn nhánh nonum');
 });
 
 test('chiếu từ lúc tạo tab tới lúc Firefly báo xong, ảnh mới giải mã xong mới thay để không giật', () => {
@@ -389,16 +389,18 @@ test('nút thư mục ảnh đã xóa logo dùng chung kiểu với Mở thư m�
   assert.match(src, /class="btn sm" data-act="openout"[^>]*>\$\{I\.folder\} Mở thư mục kết quả<\/button>/);
 });
 
-test('sidebar thu gọn: ĐÚNG tên dự án (DA2 chứ không phải DA1), chỉ khung ngoài, không vòng tròn', () => {
+test('sidebar thu gọn: “dự án 2” rút thành DA2, nằm gọn trong khung, không tràn ra ngoài', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(src, /<span class="pav-letter">\$\{esc\(\(p\.name\.trim\(\)\[0\] \|\| '\?'\)\.toUpperCase\(\)\)\}<\/span><span class="pav-name">\$\{esc\(p\.name \|\| '\?'\)\}<\/span>/, 'thu gọn lấy chính tên dự án, không tự sinh số');
-  assert.ok(!/DA\$\{no\}/.test(src), 'không còn nhãn tự sinh DA1/DA2');
-  assert.match(src, /aria-label="Mở dự án: \$\{esc\(p\.name\)\}"/);
-  assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'thứ tự dự án ổn định theo ngày tạo');
-  assert.match(css, /\.layout\.rail \.pav\{display:block;width:100%;height:32px;line-height:32px;border:0;border-radius:0;background:transparent/, 'bỏ hẳn hình tròn bên trong');
-  assert.match(css, /\.layout\.rail \.pav-name\{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap/, 'tên dự án hiện đúng trong khung');
-  assert.match(css, /\.layout\.rail \.pitem\{justify-content:center;padding:4px 0;margin-bottom:4px;border-radius:12px;border:1px solid var\(--line\)\}/, 'chỉ giữ khung ngoài');
+  assert.match(src, /function shortProjectName\(name = ''\)/);
+  assert.ok(src.includes(".normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')"), 'bỏ dấu để “dự án” thành DUAN');
+  assert.ok(src.includes('raw.match(/^(?:DUAN|DA)(\\d+)$/)'), '“dự án 2” và “DA2” cùng ra DA2');
+  assert.ok(src.includes('return `DA${m[1]}`'));
+  assert.ok(src.includes('<span class="pav-name">${esc(shortProjectName(p.name))}</span>'), 'ô thu gọn dùng tên rút gọn');
+  assert.ok(!src.includes('<span class="pav-name">${esc(p.name'), 'không ghi hẳn tên dài ra ngoài khung');
+  assert.match(css, /\.layout\.rail \.pav\{[^}]*min-width:0;overflow:hidden/, 'chữ dài không đẩy rộng ô');
+  assert.match(css, /\.layout\.rail \.pav-name\{[^}]*max-width:100%;overflow:hidden;text-overflow:ellipsis/);
+  assert.match(css, /\.layout\.rail \.pitem\{[^}]*min-width:0;overflow:hidden/);
   assert.match(css, /\.layout\.rail \.pitem\.active\{background:var\(--accent-soft\);border-color:var\(--accent\)/, 'dự án đang mở nhấn mạnh khung ngoài');
   assert.match(css, /\.pitem \.nm\{font-weight:600/, 'mở rộng vẫn có tên dự án');
   assert.match(css, /\.pitem \.sub\{font-size:11\.5px/, 'mở rộng vẫn có dòng trạng thái');
