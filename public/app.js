@@ -29,7 +29,7 @@ const sortedProjects = () => [...S.projects].sort((a, b) => {
 });
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 const duplicateName = (name, excludeId) => S.projects.some((p) => p.id !== excludeId && normName(p.name) === normName(name));
-// Hết lượt Firefly: bấm “Đổi Gmail…” thì nhớ lại để nút chuyển thành “Đã đổi Gmail, tiếp tục”.
+// Hết lượt Firefly: bấm “Đổi Gmail” thì nhớ lại để nút chuyển thành “Tiếp tục”.
 const gmailKey = (sid) => `flb:gmail:${S.p?.id}:${sid}`;
 function gmailReady(sid) {
   if (S.gmailOpened.has(sid)) return true;
@@ -311,7 +311,7 @@ function announceProjectCompletions(previous, current) {
       if (!now || now === before) continue;
       if (now === 'waiting_ok') toast(`${label}: ${sc.label} đã xóa logo. Bấm “Ổn” để tải ảnh sạch.`, 'ok');
       else if (now === 'approved') toast(`${label}: ${sc.label} đã lưu ảnh sạch vào anhdaxoalogo.`, 'ok');
-      else if (now === 'quota_blocked') toast(`${label}: Firefly hết lượt ở ${sc.label}. Bấm “Đổi Gmail khác để tiếp tục”, đổi xong bấm “Đã đổi Gmail, tiếp tục”.`, 'err');
+      else if (now === 'quota_blocked') toast(`${label}: Firefly hết lượt ở ${sc.label}. Đổi Gmail rồi bấm “Tiếp tục”.`, 'err');
     }
   }
 }
@@ -323,11 +323,17 @@ function syncFireflyChip() {
   if (!ff) return;
   const fs = S.flow.fireflyStatus || {};
   const connected = !!(fs.browser && fs.loggedIn);
-  ff.className = connected ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
-  ff.textContent = connected ? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối';
-  ff.dataset.tip = connected
-    ? 'Đã đăng nhập Adobe Firefly — có thể xóa logo. Chấm xanh nhấp nháy là đang kết nối.'
-    : 'Chưa đăng nhập Adobe Firefly. Bấm nút “Kết nối Firefly” ngay cạnh đây.';
+  // Hết lượt free là chuyện của FIREFLY: báo ngay tại chip Firefly, không dán vào chip Flow ở header.
+  const quota = !!S.flow.fireflyQuotaPaused;
+  ff.className = connected && !quota ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
+  ff.textContent = quota
+    ? `Firefly: hết ${+(S.flow.fireflyDaily?.limit || 3)} lượt free/ngày — đổi mail`
+    : connected ? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối';
+  ff.dataset.tip = quota
+    ? 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục. Bấm “Kết nối Firefly” ngay cạnh đây để đăng nhập Gmail mới.'
+    : connected
+      ? 'Đã đăng nhập Adobe Firefly — có thể xóa logo. Chấm xanh nhấp nháy là đang kết nối.'
+      : 'Chưa đăng nhập Adobe Firefly. Bấm nút “Kết nối Firefly” ngay cạnh đây.';
 }
 // Bấm “Kết nối Firefly”: mở cửa sổ Firefly rồi hỏi lại trạng thái vài giây để chip
 // chuyển xanh + chấm nhấp nháy NGAY, không phải đợi vòng poll 6 giây.
@@ -353,7 +359,7 @@ async function refreshFlow() {
   if (!S.flow.browser) { el.className = 'chip warn'; el.textContent = 'Flow: hãy kết nối với Flow'; }
   else if (S.flow.loggedIn) { el.className = 'chip ok'; el.textContent = 'Flow: đã kết nối · chạy nền'; }
   else { el.className = 'chip warn'; el.textContent = 'Flow: chưa đăng nhập'; }
-  if (S.flow.fireflyQuotaPaused) { el.className = 'chip warn'; el.textContent += ` · Firefly hết ${S.flow.fireflyDaily?.limit || 3} lượt free/ngày — đổi mail`; }
+  // Chip Flow chỉ nói chuyện Flow. Firefly hết lượt do syncFireflyChip() báo ở chip Firefly.
   syncFireflyChip();
   const ob = $('#btnOpenFlow');
   if (ob) {
@@ -967,7 +973,7 @@ function logoSceneHtml(s, i) {
   const st = lr.status || '';
   const clean = st === 'approved' && lr.cleanFile;
   const src = s.chosen?.status === 'saved' ? `/files/saved/${S.p.id}/${s.id}${clean ? '?clean=1' : ''}` : imgUrl(s.file);
-  // Ô thứ 3: ảnh sạch đã được tự tải xong → hiện ngay để so sánh với ảnh gốc trước khi bấm Ổn.
+  // Ô thứ 3: ảnh sạch đã được tự tải xong → hiện ngay bên cạnh ảnh gốc để bạn tự so sánh rồi bấm Chọn.
   const cleanReady = (st === 'waiting_ok' || st === 'approved') && !!lr.cleanFile;
   const cleanSrc = cleanReady ? `/files/saved/${S.p.id}/${s.id}?clean=1&t=${lr.updatedAt || Date.now()}` : '';
   const badge = st === 'approved' ? '<span class="badge ok">đã lưu ảnh sạch</span>'
@@ -1021,7 +1027,7 @@ function logoSceneHtml(s, i) {
         <div class="phaselist" data-phase-sid="${s.id}">${phase}</div>
       </div>
       <div class="logocell clean${approved ? ' chosen' : ''}">
-        <div class="logocell-lab">Ảnh đã xóa logo <span>${cleanReady ? 'so sánh với ảnh gốc' : ''}</span></div>
+        <div class="logocell-lab">Ảnh đã xóa logo</div>
         <div class="clean-wrap">
           <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}" data-zoom="${cleanSrc}"` : ''} alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
           ${approved ? `<span class="tag">${I.check}Đã chọn</span>` : ''}
@@ -1090,8 +1096,8 @@ function logoResultsHtml(p) {
   const quotaIndex = scenes.findIndex((s) => s.logoRemoval?.status === 'quota_blocked');
   const quotaScene = scenes[quotaIndex];
   const quotaNo = +(quotaScene?.order || quotaIndex + 1);
-  if (quotaScene) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết lượt free ở <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> — ảnh số <b>${String(quotaNo).padStart(2, '0')}</b> (tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh/ngày), tab đã đóng, chờ Gmail mới. Bấm “Đổi Gmail khác để tiếp tục”, đổi xong bấm “Đã đổi Gmail, tiếp tục” — tool làm tiếp ảnh kế tiếp, không làm lại ảnh cũ.</div>`;
-  else if (S.flow?.fireflyQuotaPaused) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt free hôm nay. Bấm “Đổi Gmail khác để tiếp tục”, rồi bấm “Đã đổi Gmail, tiếp tục”.</div>`;
+  if (quotaScene) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — chỉ làm ảnh còn lại, không làm lại ảnh cũ.</div>`;
+  else if (S.flow?.fireflyQuotaPaused) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm tiếp ảnh còn lại.</div>`;
   h += scenes.map(logoSceneHtml).join('') || `<div class="drop" data-act="goto" data-stage="3" role="button" tabindex="0">Chưa có cảnh nào. Về Bước 3 thêm ảnh cảnh người thật.</div>`;
   return h;
 }
@@ -1278,7 +1284,7 @@ async function act(b) {
   if (a === 'gmailchange') {
     markGmailChanged(b.dataset.sid);
     await connectFirefly('reveal'); // mở Firefly cho bạn đăng nhập Gmail khác, cập nhật chip luôn
-    return refresh(); // nút đổi thành “Đã đổi Gmail, tiếp tục”
+    return refresh(); // nút đổi thành “Tiếp tục”
   }
   if (a === 'logoresume') {
     clearGmailChanged(b.dataset.sid);

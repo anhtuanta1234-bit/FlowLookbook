@@ -6,7 +6,7 @@ const path = require('node:path');
 const src = fs.readFileSync(path.join(__dirname, 'chrome.js'), 'utf8');
 
 test('Flow và Firefly dùng 2 cổng CDP + 2 profile Chrome riêng biệt', () => {
-  assert.match(src, /function createChrome\(\{ getPort, profileName, startUrl, seedFrom, minWindow \}\)/, 'phải tạo được các bộ Chrome độc lập');
+  assert.match(src, /function createChrome\(\{ getPort, profileName, startUrl, seedFrom, minWindow, maximized \}\)/, 'phải tạo được các bộ Chrome độc lập');
   assert.match(src, /profileName: 'chrome-profile'/, 'Flow giữ profile cũ');
   assert.match(src, /profileName: 'chrome-firefly-profile'/, 'Firefly có profile riêng');
   assert.match(src, /startUrl: FLOW_HOME/);
@@ -24,11 +24,14 @@ test('lần đầu tách Firefly kế thừa đăng nhập từ profile cũ', ()
   assert.match(src, /seedProfile\(dir, seedFrom\); \/\/ copy profile cũ trước khi Chrome khởi động/);
 });
 
-test('showWindow giữ Firefly cỡ vừa phải, lệch góc, vẫn đủ lớn cho canvas', () => {
-  assert.match(src, /minWindow: \{ left: 60, top: 60, width: 1000, height: 700 \}/);
-  assert.match(src, /if \(minWindow\) \{[\s\S]*?Browser\.getWindowBounds[\s\S]*?Browser\.setWindowBounds[\s\S]*?minWindow\.width[\s\S]*?minWindow\.height/);
-  assert.match(src, /left: minWindow\.left \?\? cur\.left,\s*top: minWindow\.top \?\? cur\.top/, 'cửa sổ không phủ kín màn hình');
-  assert.match(src, /'--window-position=60,60', '--window-size=1000,700'/, 'Chrome mở cỡ vừa phải, vẫn có thanh tab');
+test('Firefly luôn full màn hình, kể cả khi chạy ngầm; Flow giữ cỡ cũ', () => {
+  assert.match(src, /profileName: 'chrome-firefly-profile',[\s\S]*?maximized: true,/, 'Firefly bật chế độ full màn hình');
+  assert.match(src, /maximized \? \['--start-maximized'\] : \['--window-position=60,60', '--window-size=1000,700'\]/, 'mở sẵn maximized, Flow vẫn cỡ cũ');
+  assert.match(src, /if \(!visible && !maximized\) args\.push\('--start-minimized'\)/, 'bộ maximized không bao giờ nhận --start-minimized');
+  assert.match(src, /async function setMaximized\(\)[\s\S]*?Browser\.getWindowBounds[\s\S]*?cur\.windowState !== 'maximized'[\s\S]*?Browser\.setWindowBounds/, 'chỉ đổi bounds khi cửa sổ chưa full màn hình');
+  assert.match(src, /const hideWindow = \(\) => \(maximized \? setMaximized\(\) : setWindowState\('minimized'\)\)/, 'chạy ngầm không thu nhỏ Firefly');
+  assert.match(src, /if \(maximized\) await setMaximized\(\);\s*else await setWindowState\('normal'\)/, 'showWindow cũng giữ Firefly full màn hình');
+  assert.ok(!/minWindow: \{ left: 60, top: 60, width: 1000, height: 700 \}/.test(src), 'bỏ cỡ 1000x700 cũ');
   assert.match(src, /'--disable-fre', '--disable-search-engine-choice-screen'/, 'không hiện màn hình chào lần đầu');
 });
 

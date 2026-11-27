@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.3.4 - 2026-11-27
+- Chrome Firefly giờ luôn mở full màn hình, kể cả khi chạy ngầm; không còn thu nhỏ hay ép cỡ 1000×700 làm canvas co và chấm lệch logo.
+- Chuyển thông báo “Firefly hết lượt free/ngày — đổi mail” từ chip Flow sang chip Firefly; chip “Flow: đã kết nối” chỉ còn nói chuyện Flow.
+- Bỏ chữ “so sánh với ảnh gốc” ở ô “Ảnh đã xóa logo” cho gọn; ảnh vẫn nằm cạnh ảnh gốc để bạn tự so sánh.
+- Gọn banner hết lượt Firefly: còn tên cảnh, số ảnh, giới hạn/ngày và “Đổi Gmail rồi bấm Tiếp tục”, bỏ đoạn dài cũ về tab đã đóng.
+
+
 ## v1.3.3 - 2026-11-27
 - Bước 4 dùng chung kiểu nút với Bước 1-3: dưới ảnh sạch chỉ còn đúng 2 nút “Làm lại / Chọn” (đã chọn thì hiện “Đã chọn” + mác xanh), các thao tác hiếm dời xuống chân ô Firefly.
 - Khung chiếu trực tiếp Firefly giờ cao bằng ảnh gốc; nguyên tab vẫn hiện trọn (contain), không cắt canvas, không kéo giãn.

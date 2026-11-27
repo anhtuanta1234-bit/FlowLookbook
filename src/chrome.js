@@ -52,7 +52,7 @@ function seedProfile(dir, seedFrom) {
 }
 
 // Tạo một bộ Chrome độc lập. Flow và Firefly truyền cổng/profile/trang mở đầu khác nhau.
-function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
+function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow, maximized }) {
   let browser = null;
   let starting = null;
   let chromePid = null; // PID của process Chrome mà bộ này đã spawn
@@ -60,7 +60,8 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
   const port = () => Math.max(1, Number(getPort()) || 9333);
   const profile = () => path.join(cfg.dataDir, profileName);
 
-  // visible=true chỉ khi người dùng chủ động mở để đăng nhập; còn lại Chrome khởi động thu nhỏ.
+  // visible=true chỉ khi người dùng chủ động mở để đăng nhập. Bộ maximized (Firefly) luôn full màn hình,
+  // kể cả khi chạy ngầm — chỉ khác là không đẩy cửa sổ lên trước app.
   function ensureBrowser({ visible = false } = {}) {
     if (browser && browser.isConnected()) return Promise.resolve(browser);
     if (starting) return starting;
@@ -76,12 +77,14 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
           `--remote-debugging-port=${p}`,
           `--user-data-dir=${dir}`,
           '--no-first-run', '--no-default-browser-check', '--disable-fre', '--disable-search-engine-choice-screen',
-          '--window-position=60,60', '--window-size=1000,700',
-          // giữ trang chạy bình thường khi cửa sổ bị thu nhỏ / che khuất (nếu không Chrome sẽ làm chậm trang ẩn)
+          // Firefly mở sẵn full màn hình để canvas không co, chấm logo không lệch. Flow giữ cỡ cũ.
+          ...(maximized ? ['--start-maximized'] : ['--window-position=60,60', '--window-size=1000,700']),
+          // giữ trang chạy bình thường khi cửa sổ bị che khuất (nếu không Chrome sẽ làm chậm trang ẩn)
           '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
           '--disable-features=CalculateNativeWinOcclusion',
         ];
-        if (!visible) args.push('--start-minimized');
+        // Chạy ngầm = không đẩy cửa sổ lên, KHÔNG thu nhỏ (thu nhỏ làm canvas Firefly co lại).
+        if (!visible && !maximized) args.push('--start-minimized');
         args.push(startUrl);
         const child = spawn(exe, args, { detached: true, stdio: 'ignore' });
         chromePid = child.pid;
@@ -115,11 +118,31 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow }) {
       return ids.size;
     } finally { await s.detach().catch(() => {}); }
   }
-  const hideWindow = () => setWindowState('minimized');
+  // Firefly: đưa mọi cửa sổ về MAXIMIZED nhưng KHÔNG bringToFront — chạy ngầm sau lưng app.
+  // Chỉ gửi lệnh khi cửa sổ chưa full màn hình để không xáo trộn z-order lúc automation đang chạy.
+  async function setMaximized() {
+    const b = await ensureBrowser();
+    const targets = ((await httpJson(port(), '/json/list')) || []).filter((t) => t.type === 'page');
+    const s = await b.newBrowserCDPSession();
+    try {
+      const ids = new Set();
+      for (const t of targets) { try { ids.add((await s.send('Browser.getWindowForTarget', { targetId: t.id })).windowId); } catch (_) {} }
+      for (const windowId of ids) {
+        try {
+          const cur = (await s.send('Browser.getWindowBounds', { windowId })).bounds || {};
+          if (cur.windowState !== 'maximized') await s.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'maximized' } });
+        } catch (_) {}
+      }
+      return ids.size;
+    } finally { await s.detach().catch(() => {}); }
+  }
+  // “Ẩn” với Firefly = giữ nguyên full màn hình, chỉ là không đẩy lên trước; Flow vẫn thu nhỏ như cũ.
+  const hideWindow = () => (maximized ? setMaximized() : setWindowState('minimized'));
   async function showWindow() {
-    await setWindowState('normal');
+    if (maximized) await setMaximized();
+    else await setWindowState('normal');
     // Firefly cần cửa sổ đủ lớn: bị thu nhỏ thì canvas mask co lại, dễ chấm nhầm canvas nền.
-    if (minWindow) {
+    if (minWindow && !maximized) {
       try {
         const b = await ensureBrowser();
         const targets = ((await httpJson(port(), '/json/list')) || []).filter((t) => t.type === 'page');
@@ -238,8 +261,9 @@ const fireflyChrome = createChrome({
   profileName: 'chrome-firefly-profile',
   startUrl: FIREFLY_HOME,
   seedFrom: 'chrome-profile', // giữ đăng nhập Firefly sau khi tách Chrome
-  // Cửa sổ Firefly hiện vừa phải, lệch góc trên để không phủ kín màn hình; vẫn đủ lớn cho canvas mask.
-  minWindow: { left: 60, top: 60, width: 1000, height: 700 },
+  // LUÔN full màn hình (kể cả lúc chạy ngầm) để canvas mask to, chấm logo đúng chỗ.
+  // “Ngầm” ở đây = không bringToFront, không che app đang dùng.
+  maximized: true,
 });
 
 module.exports = {

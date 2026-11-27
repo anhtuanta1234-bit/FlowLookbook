@@ -664,7 +664,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
     const key = `${projectId}:${sceneId}`;
     assertNotCanceled(isCanceled);
     loginKeepAlive = false; // đã bắt đầu xóa logo: không giữ cửa sổ đăng nhập cũ
-    await chrome.hideWindow().catch(() => {}); // gập cửa sổ Firefly đã mở lúc đăng nhập, không nổi lên lúc chạy
+    await chrome.hideWindow().catch(() => {}); // đưa cửa sổ Firefly về nền (vẫn full màn hình), không nổi lên lúc chạy
     await releaseTab(key); // clean old session
     const t = await getTab(key);
     const p = t.page;
