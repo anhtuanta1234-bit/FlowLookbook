@@ -202,8 +202,8 @@ test('báo rõ từng thao tác Firefly trên Bước 4, có xác nhận cắt v
   assert.ok(src.includes('Đang mở Cài đặt cọ, chọn cỡ ${cfg.get().logoBrushSize}…'));
   assert.ok(src.includes('Đang chấm vào đúng vùng logo trên ảnh 9:16…'));
   assert.ok(src.includes('Đang bấm Xóa để Firefly xóa logo…'));
-  assert.ok(src.includes('Chờ bạn bấm “Ổn” để tải xuống'));
-  assert.ok(src.includes('Đang bấm nút Tải xuống trên Firefly…'), 'Sau khi bấm Ổn thì tool bấm Tải xuống');
+  assert.ok(src.includes('Bấm “Chọn” để lưu ảnh sạch'));
+  assert.ok(src.includes('Đang bấm nút Tải xuống trên Firefly…'), 'Tool tự bấm Tải xuống trước khi bạn bấm Chọn');
 });
 
 test('chọn cỡ cọ thật trong hộp Cài đặt cọ vẽ, rồi chấm đúng 1 lần vào canvas mask', () => {

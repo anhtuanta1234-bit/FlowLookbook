@@ -89,12 +89,13 @@ test('Bước 4 chỉ sẵn sàng sau khi đã tải hết ảnh Bước 3, khô
   assert.equal(step3ReadyForLogo({ cleaned: Date.now(), s3: { scenes: [{ chosen: { status: 'saved' } }] } }), false);
 });
 
-test('đổi Gmail xong chỉ tiếp tục ảnh bị chặn, không làm lại ảnh đã xong', () => {
-  assert.equal(logoResumeStatus({ status: 'approved', generated: true }, true), null, 'ảnh đã xong không bao giờ vào lại hàng đợi');
-  assert.equal(logoResumeStatus({ status: 'queued' }, true), null, 'ảnh đang chạy không bị đẩy lại');
-  assert.equal(logoResumeStatus({ status: 'quota_blocked' }, true), 'queued', 'chưa tạo được thì tạo tiếp');
-  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, false), 'queued', 'mất tab thì phải tạo lại');
-  assert.equal(logoResumeStatus({ status: 'quota_blocked', generated: true }, true), 'queued', 'tab đã đóng nên tạo lại bằng Gmail mới');
+test('đổi Gmail xong làm lại đúng ảnh chưa Chọn, ảnh đã Chọn giữ nguyên', () => {
+  assert.equal(logoResumeStatus({ status: 'approved', generated: true }), null, 'ảnh đã Chọn không bao giờ vào lại hàng đợi');
+  assert.equal(logoResumeStatus({ status: 'skipped' }), null, 'ảnh đã bỏ qua cũng giữ nguyên');
+  assert.equal(logoResumeStatus({ status: 'queued' }), null, 'ảnh đang chờ/chạy không bị đẩy lại');
+  assert.equal(logoResumeStatus({ status: 'preparing' }), null, 'ảnh đang chạy thật không bị làm lại');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked' }), 'queued', 'hết lượt thì tạo tiếp bằng Gmail mới');
+  assert.equal(logoResumeStatus({ status: 'waiting_ok', generated: true }), 'queued', 'đã tạo nhưng chưa bấm Chọn thì làm lại chính ảnh đó');
 });
 
 test('disconnect drops empty queued runs and keeps finished, failed, and in-flight runs', () => {

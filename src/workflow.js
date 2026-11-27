@@ -116,11 +116,11 @@ function step3ReadyForLogo(project) {
     && scenes.every((s) => s.chosen?.status === 'saved' && s.chosen?.target);
 }
 
-// Firefly giờ đóng tab ngay khi lỗi/hết lượt/tạm dừng để nhẹ RAM, nên không còn ảnh "chờ Ổn" sau quota.
-// Ảnh bị chặn được tạo lại bằng Gmail mới — chỉ đúng ảnh số kế tiếp. Cảnh đã xong
-// (approved/skipped) trả null để không bao giờ đưa lại vào hàng đợi.
+// Đổi Gmail thì tạo lại đúng ảnh đầu tiên CHƯA bấm “Chọn”: ảnh hết lượt (quota_blocked)
+// và ảnh đã tạo nhưng còn chờ Chọn (waiting_ok) đều về queued để làm lại bằng mail mới.
+// Ảnh đã Chọn/bỏ qua hoặc đang chạy thật thì trả null, không đẩy lại vào hàng đợi.
 function logoResumeStatus(lr) {
-  if (lr?.status !== 'quota_blocked') return null;
+  if (!['quota_blocked', 'waiting_ok'].includes(lr?.status)) return null;
   return 'queued';
 }
 

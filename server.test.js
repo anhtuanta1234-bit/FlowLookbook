@@ -49,7 +49,7 @@ test('Bước 4 bị khóa khi chưa tải hết ảnh, kể cả bấm làm l�
   assert.match(resume, /if \(!shouldStartLogoRemoval\(p\)\) return false;/);
 });
 
-test('hết lượt Firefly rồi đổi Gmail: tiếp tục từ ảnh bị chặn, không làm lại ảnh đã xong', () => {
+test('hết lượt Firefly rồi đổi Gmail: làm lại đúng ảnh chưa Chọn, không đụng ảnh đã Chọn', () => {
   const prepare = slice('async function prepareLogoRemoval(', 'async function downloadLogoRemoval(');
   assert.match(prepare, /sc\.logoRemoval\.generated = false/, 'mỗi lần tạo mới phải reset mốc ảnh đã tạo');
   assert.match(prepare, /sc\.logoRemoval\.generated = true/, 'tạo xong thì đánh dấu có ảnh trên Firefly');
@@ -59,8 +59,8 @@ test('hết lượt Firefly rồi đổi Gmail: tiếp tục từ ảnh bị ch�
   assert.match(download, /sc\.logoRemoval\.generated = false/, 'tab đã đóng nên không còn ảnh để tải lại');
 
   const resume = slice("app.post('/api/projects/:id/logo-remove/resume'", 'app.post(\'/api/projects/:id/open-logo-output\'');
-  assert.match(resume, /if \(lr\?\.status !== 'quota_blocked'\) continue/, 'không đụng ảnh đã xong / đang chờ Ổn');
-  assert.match(resume, /logoResumeStatus\(lr, firefly\.hasSceneTab\(req\.params\.id, sc\.id\)\)/, 'chỉ xử lý đúng ảnh bị chặn');
+  assert.match(resume, /if \(!\['quota_blocked', 'waiting_ok'\]\.includes\(lr\?\.status\)\) continue/, 'ảnh hết lượt hoặc chưa Chọn đều làm lại');
+  assert.match(resume, /logoResumeStatus\(lr\)/, 'chỉ xử lý đúng ảnh chưa Chọn');
   assert.match(resume, /lr\.status = next/);
 });
 
@@ -89,19 +89,19 @@ test('Firefly free tối đa 3 ảnh/ngày: đạt giới hạn thì dừng, bá
   assert.match(src, /fireflyDaily: cfg\.fireflyDailyFree\(\)/, 'status phải trả số lượt đã dùng cho UI');
 });
 
-test('Firefly xong là tự tải ảnh sạch để có ô so sánh; bấm Ổn chỉ duyệt, không tải lại', () => {
+test('Firefly xong là tự tải ảnh sạch; bấm Chọn chỉ duyệt, không tải lại', () => {
   const prepare = slice('async function prepareLogoRemoval(', 'async function downloadLogoRemoval(');
   assert.match(prepare, /const cleanTarget = cur \? logoCleanTargetPath\(cur, sceneId\) : ''/, 'lấy đúng đường dẫn ảnh sạch của cảnh');
   assert.match(prepare, /autoClean = await firefly\.downloadPrepared\(/, 'vừa tạo xong thì tự bấm Tải xuống trên cùng tab Firefly');
   assert.match(prepare, /matchSize: prep\.imagePath && fs\.existsSync\(prep\.imagePath\) \? imageDimensions\(prep\.imagePath\) : null/, 'ảnh tự tải cũng ép đúng kích thước ảnh gốc');
   assert.match(prepare, /sc\.logoRemoval\.cleanFile = autoClean\?\.file \|\| ''/, 'lưu ảnh sạch vào trạng thái để app hiện ngay');
-  assert.match(prepare, /Ảnh sạch đã sẵn sàng ở ô bên cạnh/, 'nhắc người dùng so sánh rồi bấm Ổn');
+  assert.match(prepare, /Ảnh sạch đã sẵn sàng ở ô bên cạnh/, 'nhắc người dùng bấm Chọn');
   assert.match(prepare, /await firefly\.closeIdleNow\(\)/, 'hết lượt thì đóng Chrome ngay');
 
   const download = slice('async function downloadLogoRemoval(', 'async function save2k(');
-  assert.match(download, /matchSize: srcSizeForMatch/, 'bấm Ổn tải lại cũng ép đúng kích thước ảnh gốc');
+  assert.match(download, /matchSize: srcSizeForMatch/, 'bấm Chọn tải lại cũng ép đúng kích thước ảnh gốc');
   assert.match(download, /if \(sc\.logoRemoval\.cleanFile && fs\.existsSync\(sc\.logoRemoval\.cleanFile\)\)/, 'đã có ảnh sạch thì không tải lần 2');
-  assert.match(download, /sc\.logoRemoval\.status = 'approved'/, 'bấm Ổn chỉ duyệt ảnh sạch');
+  assert.match(download, /sc\.logoRemoval\.status = 'approved'/, 'bấm Chọn chỉ duyệt ảnh sạch');
   assert.match(download, /cleanupLogoOriginalsIfComplete\(p\)/, 'duyệt xong vẫn dọn ảnh gốc khi mọi cảnh xong');
 });
 
@@ -128,7 +128,7 @@ test('ảnh Firefly tải về lưu đúng vào output/<dự án>/anhdaxoalogo',
   assert.match(src, /Đã lưu ảnh sạch vào thư mục anhdaxoalogo/);
 });
 
-test('Bước 3 và 4 chung số thứ tự ảnh; đổi Gmail chỉ lấy ảnh kế tiếp, không làm lại ảnh cũ', () => {
+test('Bước 3 và 4 chung số thứ tự ảnh; đổi Gmail lấy đúng ảnh đầu chưa Chọn', () => {
   assert.match(src, /require\('\.\/src\/logo-order'\)/, 'dùng chung module thứ tự ảnh');
   assert.match(src, /function sceneTargetPath\(p, sceneId\)[\s\S]*?sceneFileBase\(p, sceneId\)/, 'ảnh Bước 3 dùng tên có số thứ tự');
   assert.match(src, /function logoCleanTargetPath\(p, sceneId\)[\s\S]*?sceneFileBase\(p, sceneId\)/, 'ảnh sạch Bước 4 giữ cùng số');
@@ -140,17 +140,17 @@ test('Bước 3 và 4 chung số thứ tự ảnh; đổi Gmail chỉ lấy ản
   assert.match(daily, /sort\(\(a, b\) => sceneNo\(p, a\.id\) - sceneNo\(p, b\.id\)\)/, 'ảnh bị chặn là ảnh số kế tiếp');
 
   const resume = slice("app.post('/api/projects/:id/logo-remove/resume'", "app.post('/api/projects/:id/open-logo-output'");
-  assert.match(resume, /const resumeScene = nextLogoScene\(p, true\)/, 'chỉ lấy đúng ảnh số kế tiếp chưa có ảnh sạch');
-  assert.match(resume, /if \(logoSceneDone\(p, sc\)\) continue/, 'ảnh đã xong thì bỏ qua, dù trạng thái cũ còn sót');
-  assert.match(resume, /if \(sc\.id !== resumeScene\?\.id\) continue/, 'không đụng ảnh đã xong / đang chờ Ổn');
+  assert.match(resume, /const resumeScene = nextLogoScene\(p, true\)/, 'chỉ lấy đúng ảnh đầu tiên chưa bấm Chọn');
+  assert.match(resume, /if \(logoSceneDone\(p, sc\)\) continue/, 'ảnh đã Chọn/bỏ qua thì bỏ qua');
+  assert.match(resume, /if \(sc\.id !== resumeScene\?\.id\) continue/, 'không đụng ảnh đã Chọn hoặc đang chạy thật');
 });
 
-test('khởi động lại tool không giữ ảnh chờ Ổn làm kẹt hàng chờ Bước 4', () => {
-  assert.match(src, /\['queued', 'preparing', 'waiting_ok', 'downloading'\]\.includes\(sc\.logoRemoval\?\.status\)/, 'Ảnh chờ Ổn cũng phải reset khi mất tab Firefly sau restart');
+test('khởi động lại tool không giữ ảnh chờ Chọn làm kẹt hàng chờ Bước 4', () => {
+  assert.match(src, /\['queued', 'preparing', 'waiting_ok', 'downloading'\]\.includes\(sc\.logoRemoval\?\.status\)/, 'Ảnh chờ Chọn cũng phải reset khi mất tab Firefly sau restart');
 });
 
-test('xóa logo tuần tự từng ảnh một: ảnh chờ Ổn giữ khóa, không mở ảnh kế tiếp cùng lúc', () => {
-  assert.match(src, /function anyLogoJobWaiting\(\)[\s\S]*?'preparing', 'downloading', 'waiting_ok'/, 'ảnh đang xóa / chờ Ổn phải chặn ảnh kế tiếp');
+test('xóa logo tuần tự từng ảnh một: ảnh chờ Chọn giữ khóa, không mở ảnh kế tiếp cùng lúc', () => {
+  assert.match(src, /function anyLogoJobWaiting\(\)[\s\S]*?'preparing', 'downloading', 'waiting_ok'/, 'ảnh đang xóa / chờ Chọn phải chặn ảnh kế tiếp');
   assert.match(src, /if \(logoRemoveActive \|\| logoRemovePausedQuota \|\| anyLogoJobWaiting\(\)\) return;/);
   assert.match(src, /function releaseLogoJob\(projectId, sceneId, pump = true\)/);
 
@@ -165,7 +165,7 @@ test('xóa logo tuần tự từng ảnh một: ảnh chờ Ổn giữ khóa, kh
   assert.match(retry, /releaseLogoJob\(req\.params\.id, sceneId, false\)/, 'làm lại từ waiting_ok phải nhả khóa cũ');
 
   const skip = slice("app.post('/api/projects/:id/logo-remove/skip'", "app.post('/api/projects/:id/logo-remove/resume'");
-  assert.match(skip, /releaseLogoJob\(req\.params\.id, sceneId\)/, 'bỏ qua ảnh đang chờ Ổn thì chạy ảnh kế');
+  assert.match(skip, /releaseLogoJob\(req\.params\.id, sceneId\)/, 'bỏ qua ảnh đang chờ Chọn thì chạy ảnh kế');
 
   assert.match(src, /releaseLogoJobForProject\(projectId\)/, 'xóa dự án đang chạy cũng phải nhả khóa hàng đợi');
 });
@@ -200,9 +200,9 @@ test('ảnh sạch sau khi cắt 9:16 thấp hơn ảnh gốc vẫn được ch�
   assert.ok(!/const okSize = !srcSize \|\| \(result\.width === srcSize\.width && result\.height === srcSize\.height\);/.test(dl));
 });
 
-test('chỉ tải ảnh khi đã chờ Ổn, xong ảnh mới mở ảnh kế tiếp', () => {
+test('chỉ tải ảnh khi đã chờ Chọn, xong ảnh mới mở ảnh kế tiếp', () => {
   const dl = slice('async function downloadLogoRemoval(', 'async function save2k(');
-  assert.match(dl, /status !== 'waiting_ok'.*Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Ổn”/, 'không có Ổn thì không tải');
+  assert.match(dl, /status !== 'waiting_ok'.*Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Chọn”/, 'không có Chọn thì không tải');
   assert.match(dl, /Ảnh này đã xong: mới được mở ảnh kế tiếp trong hàng đợi[\s\S]*?releaseLogoJob\(projectId, sceneId\)/, 'xong ảnh mới nhả khóa hàng đợi');
-  assert.match(src, /\['preparing', 'downloading', 'waiting_ok'\]/, 'ảnh đang ở Firefly hoặc chờ Ổn vẫn giữ khóa');
+  assert.match(src, /\['preparing', 'downloading', 'waiting_ok'\]/, 'ảnh đang ở Firefly hoặc chờ Chọn vẫn giữ khóa');
 });

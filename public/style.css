@@ -75,7 +75,7 @@ a{color:var(--accent)}
 .chip.warn{color:var(--warn)}.chip.warn::before{background:var(--warn)}
 .chip.err{color:var(--err)}.chip.err::before{background:var(--err)}
 @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent);opacity:1}70%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ok) 0%,transparent);opacity:.55}100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 0%,transparent);opacity:1}}
-@media (prefers-reduced-motion: reduce){.chip.ok::before{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}}
+@media (prefers-reduced-motion: reduce){.chip.ok::before,.logocell-lab .livechip.on::before{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}}
 
 /* ===== bố cục ===== */
 .layout{flex:1;min-height:0;display:grid;grid-template-columns:clamp(180px,20vw,232px) minmax(0,1fr)}
@@ -241,9 +241,9 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 /* Thanh công cụ gọn: vừa đủ Firefly / tiếp tục / cài đặt */
 .logo-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px}
 .logo-toolbar .chip{border-radius:8px}
-/* Nút “Kết nối Firefly” đứng ngay cạnh chip trạng thái; chip chuyển xanh + chấm nhấp nháy khi đã đăng nhập. */
+/* Nút “Kết nối Firefly” đứng ngay cạnh chip trạng thái; chip chuyển xanh + chấm nhấp nháy như chip Flow. */
 #fireflyStatus.chip{min-height:31px}
-#fireflyStatus.chip.ok::before{background:var(--ok);animation:livedot-blink 1.1s ease-in-out infinite}
+#fireflyStatus.chip.ok::before{background:var(--ok);animation:pulse 1.6s ease-out infinite}
 /* Chạy tất cả: nằm chính giữa, to hơn các nút thường một chút. */
 .logo-runrow{display:flex;justify-content:center;margin-top:11px}
 .logo-runrow .btn.primary{min-width:168px;min-height:38px;padding:8px 18px;border-radius:11px;font-size:13px;font-weight:600}
@@ -265,12 +265,11 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
 /* Chấm nằm NGAY TRONG chữ “chiếu trực tiếp” (chip::before) — không có nút/chấm riêng ở góc ô.
-   Dừng/chờ: chấm xám. Đang chiếu thật: chấm xanh nhấp nháy, chữ chuyển xanh. */
-@keyframes livedot-blink{50%{opacity:.25}}
+   Dừng/chờ: chấm xám. Đang chiếu thật: chấm xanh nhấp nháy Y HỆT chip “Flow: đã kết nối”. */
 .logocell-lab .livechip{color:var(--muted)}
 .logocell-lab .livechip::before{background:var(--faint)}
 .logocell-lab .livechip.on{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 42%,transparent)}
-.logocell-lab .livechip.on::before{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent);animation:livedot-blink 1.1s ease-in-out infinite}
+.logocell-lab .livechip.on::before{background:var(--ok);animation:pulse 1.6s ease-out infinite}
 /* Bước 4: ô gốc giữ gọn khung 9:16 (căn tọa độ chấm logo); ảnh gốc khít viền, không bị cắt. */
 .logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:var(--shot-w);margin-inline:auto}
 /* Ô chiếu: CAO BẰNG ảnh gốc (--shot-h), nguyên tab Firefly vẫn hiện trọn nhờ contain.

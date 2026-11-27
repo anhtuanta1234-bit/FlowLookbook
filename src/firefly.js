@@ -720,7 +720,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
       await waitForRemovalComplete(p);
       assertNotCanceled(isCanceled);
 
-      onPhase?.('Đã xóa logo trên Firefly. Chờ bạn bấm “Ổn” để tải xuống.');
+      onPhase?.('Đã xóa logo trên Firefly. Bấm “Chọn” để lưu ảnh sạch.');
       return { ok: true, key };
     } catch (e) {
       if (process.env.FLOW_FIREFLY_DEBUG) {

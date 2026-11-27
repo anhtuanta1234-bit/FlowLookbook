@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.3.6 - 2026-11-27
+- Banner hết lượt Firefly có thêm dấu × để tắt; tắt xong không hiện lại khi app tự làm mới.
+- Đổi Gmail giờ làm lại đúng ảnh đầu tiên CHƯA bấm Chọn (kể cả ảnh vừa hết lượt giữa chừng); ảnh đã Chọn giữ nguyên, không nhảy sang ảnh kế.
+- Chấm xanh nhấp nháy của chip Firefly và chữ “chiếu trực tiếp” đổi thành đúng kiểu pulse của chip “Flow: đã kết nối”.
+- Bỏ hết chữ “bấm Ổn” trong giao diện và nhật ký: dùng “Chọn”, sửa lại các câu cho đúng luồng tool tự tải ảnh trước khi bạn duyệt.
+
+
 ## v1.3.5 - 2026-11-27
 - Bấm Chạy tất cả/xóa logo thì cửa sổ Firefly bị dời ra ngoài màn hình ngay từ lúc khởi động, chỉ thấy màn hình app; vẫn giữ đúng kích thước full màn hình nên canvas không co. Bấm Kết nối/Xem trên Firefly mới hiện lại.
 

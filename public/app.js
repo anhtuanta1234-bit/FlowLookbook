@@ -14,7 +14,7 @@ const compareVer = (a, b) => {
   }
   return 0;
 };
-const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
+const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), quotaHidden: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 // Xếp dự án theo ĐÚNG số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…).
 // Dự án không có số thì xếp sau, giữ thứ tự tạo để không nhảy lung tung.
@@ -309,7 +309,7 @@ function announceProjectCompletions(previous, current) {
       const before = oldScenes.get(sc.id)?.logoRemoval?.status;
       const now = sc.logoRemoval?.status;
       if (!now || now === before) continue;
-      if (now === 'waiting_ok') toast(`${label}: ${sc.label} đã xóa logo. Bấm “Ổn” để tải ảnh sạch.`, 'ok');
+      if (now === 'waiting_ok') toast(`${label}: ${sc.label} đã xóa logo. Bấm “Chọn” để lưu ảnh sạch.`, 'ok');
       else if (now === 'approved') toast(`${label}: ${sc.label} đã lưu ảnh sạch vào anhdaxoalogo.`, 'ok');
       else if (now === 'quota_blocked') toast(`${label}: Firefly hết lượt ở ${sc.label}. Đổi Gmail rồi bấm “Tiếp tục”.`, 'err');
     }
@@ -540,7 +540,7 @@ const STEPS = [
   { n: 1, t: 'Tách trang phục', tip: 'Bước 1: tách trang phục khỏi người, đặt trên nền trắng' },
   { n: 2, t: 'Ghép KOC', tip: 'Bước 2: cho KOC mặc trang phục đã tách' },
   { n: 3, t: 'Ghép cảnh thật', tip: 'Bước 3: ghép KOC vào nhiều cảnh người thật cùng lúc' },
-  { n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật: Firefly Chấm sửa và xóa, bạn bấm Ổn rồi tool tải ảnh sạch' },
+  { n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật: Firefly Chấm sửa và xóa, tool tải ảnh sạch rồi bạn bấm Chọn' },
 ];
 // Tắt “Xóa logo” thì Bước 4 biến mất hoàn toàn khỏi thanh các bước, chỉ còn 1-2-3.
 const visibleSteps = () => (S.cfg?.removeLogoEnabled ? STEPS : STEPS.filter((s) => s.n !== 4));
@@ -663,12 +663,12 @@ const LOGO_FLOW_STEPS = [
   'Mở “Cài đặt cọ”, chọn cỡ 14',
   'Chấm đúng 1 lần vào vùng logo',
   'Bấm “Xóa” trên Firefly',
-  'Bạn bấm “Ổn” → tool bấm “Tải xuống”',
+  'Tool bấm “Tải xuống”, bạn bấm “Chọn”',
 ];
 function logoFlowIndex(lr) {
   const text = (lr?.phases || []).map((x) => x.note || '').join(' | ') + ' ' + (lr?.note || '');
-  if (/lưu ảnh sạch|đã bấm Tải xuống/i.test(text)) return LOGO_FLOW_STEPS.length;
-  if (/Ổn|Tải xuống/i.test(text)) return 6;
+  if (/Bạn đã bấm “Chọn”|đã lưu ảnh sạch/i.test(text)) return LOGO_FLOW_STEPS.length;
+  if (/bấm “Chọn”|Tải xuống/i.test(text)) return 6;
   if (/bấm Xóa|Xóa để Firefly/i.test(text)) return 5;
   if (/chấm vào đúng vùng logo/i.test(text)) return 4;
   if (/Cài đặt cọ|cỡ cọ/i.test(text)) return 3;
@@ -697,7 +697,7 @@ function logoQueueState(lr) {
   const st = lr?.status || '';
   if (st === 'preparing') return { text: 'đang xóa', cls: 'warn' };
   if (st === 'downloading') return { text: 'đang tải ảnh sạch', cls: 'warn' };
-  if (st === 'waiting_ok') return { text: 'chờ bạn bấm Ổn', cls: 'warn' };
+  if (st === 'waiting_ok') return { text: 'chờ bạn bấm Chọn', cls: 'warn' };
   if (st === 'queued') return { text: 'trong hàng chờ', cls: '' };
   if (st === 'quota_blocked') return { text: 'hết lượt Firefly', cls: 'err' };
   if (st === 'error') return { text: 'lỗi, chờ làm lại', cls: 'err' };
@@ -784,7 +784,7 @@ function buildLogoCtl(p) {
         <span id="fireflyStatus" class="chip" role="status" aria-live="polite" data-tip="Trạng thái kết nối Adobe Firefly — dùng để xóa logo">Firefly: đang kiểm tra…</span>
         <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện Firefly để đăng nhập / đổi Gmail hoặc kiểm tra ảnh">Kết nối Firefly</button>
       </div>
-      <div class="logo-runrow"><button class="btn primary" data-act="logoall" data-tip="Xếp mọi ảnh chưa xong vào hàng chờ; tool mở từng tab Firefly một, xong ảnh 1 mới mở ảnh 2. Tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh cho mỗi Gmail. Hết lượt sẽ nhắc đổi Gmail rồi làm tiếp ảnh kế tiếp, không làm lại ảnh cũ">Chạy tất cả</button></div>
+      <div class="logo-runrow"><button class="btn primary" data-act="logoall" data-tip="Xếp mọi ảnh chưa xong vào hàng chờ; tool mở từng tab Firefly một, xong ảnh 1 mới mở ảnh 2. Tối đa ${+(S.flow?.fireflyDaily?.limit || 3)} ảnh cho mỗi Gmail. Hết lượt thì đổi Gmail: làm lại đúng ảnh chưa bấm Chọn, ảnh đã Chọn giữ nguyên">Chạy tất cả</button></div>
       <details class="lite-details"><summary>Tùy chỉnh Firefly</summary>
         <label class="lbl" for="fBrush" style="margin:0">Cỡ cọ (mặc định 14)</label>
         <input id="fBrush" type="number" min="5" max="128" step="1" value="${+(S.cfg?.logoBrushSize || 14)}">
@@ -798,7 +798,7 @@ function buildLogoCtl(p) {
         <div class="mini-actions"><button class="btn sm primary" data-act="savefireflycfg" data-tip="Lưu cỡ cọ và vùng logo, áp dụng cho ảnh chưa xóa">Lưu</button></div>
       </details>
       <details class="lite-details"><summary>Hướng dẫn</summary>
-        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, bạn bấm <b>Ổn</b>; tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
+        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 14)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>, bạn bấm <b>Chọn</b> để lưu.</div>
       </details>
     </div>`;
   syncFireflyChip(); // vẽ lại chip đúng trạng thái hiện tại, không để chữ “đang kiểm tra…” kẹt lại
@@ -977,7 +977,7 @@ function logoSceneHtml(s, i) {
   const cleanReady = (st === 'waiting_ok' || st === 'approved') && !!lr.cleanFile;
   const cleanSrc = cleanReady ? `/files/saved/${S.p.id}/${s.id}?clean=1&t=${lr.updatedAt || Date.now()}` : '';
   const badge = st === 'approved' ? '<span class="badge ok">đã lưu ảnh sạch</span>'
-    : st === 'waiting_ok' ? '<span class="badge warn">chờ bạn bấm Ổn</span>'
+    : st === 'waiting_ok' ? '<span class="badge warn">chờ bạn bấm Chọn</span>'
     : (st === 'preparing' || st === 'downloading') ? '<span class="badge warn">đang chạy</span>'
     : st === 'quota_blocked' ? '<span class="badge err">hết lượt free</span>'
     : st === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi</span>`
@@ -997,7 +997,7 @@ function logoSceneHtml(s, i) {
     : ' disabled title="Ảnh sạch chưa sẵn sàng"';
   const redoBtn = quota
     ? (gmailReady(s.id)
-      ? `<button class="tb" data-act="logoresume" data-sid="${s.id}" data-tip="Làm tiếp đúng ảnh này bằng Gmail mới, không làm lại ảnh cũ">${I.redo}<span>Tiếp tục</span></button>`
+      ? `<button class="tb" data-act="logoresume" data-sid="${s.id}" data-tip="Tạo lại đúng ảnh này bằng Gmail mới; ảnh đã bấm Chọn giữ nguyên">${I.redo}<span>Tiếp tục</span></button>`
       : `<button class="tb" data-act="gmailchange" data-sid="${s.id}" data-tip="Mở Firefly để đăng nhập Gmail khác rồi tiếp tục">${I.redo}<span>Đổi Gmail</span></button>`)
     : `<button class="tb" data-act="logoretry" data-sid="${s.id}"${redoDisabled}>${I.redo}<span>Làm lại</span></button>`;
   const chooseBtn = approved
@@ -1066,7 +1066,7 @@ async function patchFireflyPreviews() {
   const scenes = (S.p.s3?.scenes || []).filter((s) => ['queued', 'preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
   const active = new Set();
   for (const s of scenes) {
-    // Firefly đã báo xong mà người dùng CHƯA bấm Ổn: đóng băng khung hình cuối,
+    // Firefly đã báo xong mà người dùng CHƯA bấm Chọn: đóng băng khung hình cuối,
     // không chụp lại nữa để ô chiếu không bật lên tắt xuống / nháy liên tục.
     if (s.logoRemoval?.status === 'waiting_ok' && S.preview.has(s.id)) { setLiveDot(s.id, false); continue; }
     let out;
@@ -1096,15 +1096,19 @@ function logoResultsHtml(p) {
   const quotaIndex = scenes.findIndex((s) => s.logoRemoval?.status === 'quota_blocked');
   const quotaScene = scenes[quotaIndex];
   const quotaNo = +(quotaScene?.order || quotaIndex + 1);
-  if (quotaScene) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — chỉ làm ảnh còn lại, không làm lại ảnh cũ.</div>`;
-  else if (S.flow?.fireflyQuotaPaused) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm tiếp ảnh còn lại.</div>`;
+  const quotaKey = quotaScene
+    ? `${quotaScene.id}:${quotaScene.logoRemoval.updatedAt || ''}`
+    : (S.flow?.fireflyQuotaPaused?.at ? `flow:${S.flow.fireflyQuotaPaused.at}` : '');
+  const closeQuota = `<button class="tclose" data-act="dismissquota" data-key="${esc(quotaKey)}" aria-label="Tắt thông báo" data-tip="Tắt">×</button>`;
+  if (quotaScene && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên.${closeQuota}</div>`;
+  else if (!quotaScene && S.flow?.fireflyQuotaPaused && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm lại ảnh chưa Chọn.${closeQuota}</div>`;
   h += scenes.map(logoSceneHtml).join('') || `<div class="drop" data-act="goto" data-stage="3" role="button" tabindex="0">Chưa có cảnh nào. Về Bước 3 thêm ảnh cảnh người thật.</div>`;
   return h;
 }
 
 const runSig = (r) => [r.note, r.inputNote, r.id, r.status, r.images.map((i) => i.file).join(), r.chosen, r.error, r.errorCode, r.abuseReopens, !!S.flow.paused, S.dismissed.has(r.id), r.rerunOf, r.upgrading, JSON.stringify(r.upgradeProgress || null), r.upgradeError];
 function resultsSig(p) {
-  if (S.stage === 4) return JSON.stringify(['step4', !!S.cfg?.removeLogoEnabled, !!p.cleaned, p.s3.scenes.map((s) => [s.id, s.label, s.chosen?.status, s.logoRemoval])]);
+  if (S.stage === 4) return JSON.stringify(['step4', !!S.cfg?.removeLogoEnabled, !!p.cleaned, [...S.quotaHidden].join(','), p.s3.scenes.map((s) => [s.id, s.label, s.chosen?.status, s.logoRemoval])]);
   if (S.stage === 3) return JSON.stringify([!!p.cleaned, p.s3.scenes.map((s) => [s.id, s.file, s.label, s.chosen, s.runs.slice(0, 6).map(runSig)])]);
   const st = p[PK[S.stage]];
   return JSON.stringify([st.approved, st.hq, p.s1.approved, st.runs.slice(0, 6).map(runSig)]);
@@ -1231,6 +1235,7 @@ async function act(b) {
     return showStep4IfReady();
   }
   if (a === 'dismisspause') { S.hidePause = S.flow.paused?.at; return refreshFlow(); }
+  if (a === 'dismissquota') { S.quotaHidden.add(b.dataset.key); refresh(); return; }
   if (a === 'dismisserr') { S.dismissed.add(b.dataset.run); refresh(); return void api('DELETE', `/api/projects/${p.id}/runs/${b.dataset.run}`).catch(() => {}); }
   if (a === 'revealflow') { const st = +b.dataset.stage || null; return void await api('POST', '/api/flow/reveal', p && st ? { projectId: p.id, stage: st, sceneId: b.dataset.sid } : {}); }
   if (a === 'resume') { await api('POST', '/api/flow/resume'); return refreshFlow(); }

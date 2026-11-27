@@ -1600,7 +1600,7 @@ function blockNextQueuedForDaily(p, doneSceneId) {
   return setDailyQuotaOn(next?.logoRemoval);
 }
 
-// Một thời điểm chỉ có ĐÚNG 1 cảnh được mở trên Firefly. Ảnh đang chờ bấm Ổn / đang tải
+// Một thời điểm chỉ có ĐÚNG 1 cảnh được mở trên Firefly. Ảnh đang chờ bấm Chọn / đang tải
 // vẫn giữ khóa: không được mở ảnh kế tiếp làm cùng lúc 3 tab Firefly.
 function anyLogoJobWaiting() {
   for (const meta of store.list()) {
@@ -1632,7 +1632,7 @@ function logoQueuePump() {
     logoRemoveActive = true;
     logoRemoveActiveKey = logoJobKey(next.projectId, next.sceneId);
     // prepareLogoRemoval() chỉ nhả khóa khi lỗi / hết lượt. Khi ảnh đã tạo xong nó đứng ở
-    // waiting_ok và GIỮ khóa cho đến khi người dùng bấm Ổn (hoặc Bỏ qua / Làm lại).
+    // waiting_ok và GIỮ khóa cho đến khi người dùng bấm Chọn (hoặc Bỏ qua / Làm lại).
     prepareLogoRemoval(next.projectId, next.sceneId)
       .catch((e) => appendLog('logo remove prepare err: ' + (e?.message || e)));
     return;
@@ -1703,7 +1703,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
         sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
     });
-    // Tự tải ảnh sạch NGAY để có ô thứ 3 để bạn so sánh với ảnh gốc TRƯỚC khi bấm “Ổn”.
+    // Tự tải ảnh sạch NGAY để có ô thứ 3 để bạn so sánh với ảnh gốc TRƯỚC khi bấm “Chọn”.
     // Không tiêu thêm lượt free: chỉ bấm nút Tải xuống trên chính tab Firefly vừa tạo.
     let autoClean = null;
     if (cleanTarget) {
@@ -1728,8 +1728,8 @@ async function prepareLogoRemoval(projectId, sceneId) {
       sc.logoRemoval.generated = true;
       sc.logoRemoval.cleanFile = autoClean?.file || '';
       sc.logoRemoval.note = autoClean?.file
-        ? 'Ảnh sạch đã sẵn sàng ở ô bên cạnh. So sánh với ảnh gốc rồi bấm “Ổn”.'
-        : 'Đã xóa logo trên Firefly. Hãy kiểm tra rồi bấm “Ổn” để tải xuống.';
+        ? 'Ảnh sạch đã sẵn sàng ở ô bên cạnh. Bấm “Chọn” để lưu.'
+        : 'Đã xóa logo trên Firefly. Bấm “Chọn” để lưu ảnh sạch.';
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
@@ -1775,13 +1775,13 @@ async function downloadLogoRemoval(projectId, sceneId) {
     const p = store.load(projectId); if (!p) return { code: 404 };
     const sc = p.s3.scenes.find((s) => s.id === sceneId);
     if (!sc?.logoRemoval) return { code: 400, error: 'Cảnh này chưa có trạng thái xóa logo.' };
-    if (sc.logoRemoval.status !== 'waiting_ok') return { code: 400, error: 'Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Ổn”.' };
-    // Ảnh sạch đã tự tải xong lúc Firefly tạo ảnh: bấm Ổn chỉ duyệt, không tải lại lần 2.
+    if (sc.logoRemoval.status !== 'waiting_ok') return { code: 400, error: 'Chỉ có thể tải xuống khi cảnh đang chờ bạn bấm “Chọn”.' };
+    // Ảnh sạch đã tự tải xong lúc Firefly tạo ảnh: bấm Chọn chỉ duyệt, không tải lại lần 2.
     if (sc.logoRemoval.cleanFile && fs.existsSync(sc.logoRemoval.cleanFile)) {
       sc.logoRemoval.status = 'approved';
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
-      sc.logoRemoval.note = 'Bạn đã bấm “Ổn”: ảnh sạch được giữ trong anhdaxoalogo.';
+      sc.logoRemoval.note = 'Bạn đã bấm “Chọn”: ảnh sạch được giữ trong anhdaxoalogo.';
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.updatedAt = Date.now();
       cleanupLogoOriginalsIfComplete(p);
@@ -2044,7 +2044,7 @@ app.post('/api/projects/:id/logo-remove/skip', async (req, res) => {
       return { ok: true };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
-    // Bỏ qua ảnh đang chờ Ổn thì mới được mở ảnh kế tiếp.
+    // Bỏ qua ảnh đang chờ Chọn thì mới được mở ảnh kế tiếp.
     releaseLogoJob(req.params.id, sceneId);
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -2058,30 +2058,28 @@ app.post('/api/projects/:id/logo-remove/resume', async (req, res) => {
     const allowed = await writeLock.run(() => {
       const p = store.load(req.params.id); if (!p) return false;
       if (!shouldStartLogoRemoval(p)) return false;
-      // Đổi Gmail chỉ mở lại ĐÚNG ảnh số kế tiếp chưa có ảnh sạch (01 → 02 → 03 → 04…).
-      // Ảnh đã xong / đang chờ Ổn bị bỏ qua, nên 3 ảnh đầu không bao giờ bị làm lại.
+      // Đổi Gmail chỉ mở lại ĐÚNG ảnh đầu tiên CHƯA bấm “Chọn” (01 → 02 → 03…).
+      // Ảnh đã Chọn/bỏ qua giữ nguyên; ảnh chờ Chọn làm lại chính nó, không nhảy ảnh kế.
       const resumeScene = nextLogoScene(p, true);
       let changed = false;
       for (const sc of p.s3.scenes) {
         const lr = sc.logoRemoval;
-        // Có file ảnh sạch theo số thứ tự thì coi như đã xong, dù trạng thái cũ còn sót lại.
+        // Đã bấm Chọn / bỏ qua thì coi như xong, dù còn file sạch cũ hoặc trạng thái sót.
         if (logoSceneDone(p, sc)) continue;
-        // Không đụng ảnh đang chạy / chờ bấm Ổn; chỉ xét đúng ảnh kế tiếp.
+        // Không đụng ảnh đang chạy thật; chỉ xét đúng ảnh đầu tiên chưa Chọn.
         if (sc.id !== resumeScene?.id) continue;
-        // Chỉ xử lý cảnh bị hết lượt. Ảnh đã xóa xong / đang chờ Ổn giữ nguyên,
-        // không đưa lại vào hàng đợi (không làm lại ảnh đã làm).
-        if (lr?.status !== 'quota_blocked') continue;
-        // Ảnh đã tạo xong mà chỉ tải bị chặn → về waiting_ok để bấm Ổn tải lại.
-        // Ảnh chưa tạo được → về queued để tạo tiếp (ảnh kế tiếp, không làm lại ảnh cũ).
-        const next = logoResumeStatus(lr, firefly.hasSceneTab(req.params.id, sc.id));
+        // Hết lượt hoặc đã tạo xong nhưng CHƯA bấm Chọn → đều tạo lại bằng Gmail mới.
+        if (!['quota_blocked', 'waiting_ok'].includes(lr?.status)) continue;
+        const next = logoResumeStatus(lr);
+        if (!next) continue;
         lr.status = next;
         // Ảnh này sẽ tạo lại bằng Gmail mới → phải được tính vào lượt free mới.
         lr.fireflyCountedOn = '';
+        lr.cleanFile = ''; // bỏ ảnh sạch cũ để không hiện nhầm ảnh đã xong lúc đang làm lại
+        lr.generated = false;
         lr.code = '';
         lr.error = '';
-        lr.note = next === 'waiting_ok'
-          ? 'Ảnh đã tạo trên Firefly. Bấm “Ổn” để tải lại; tool không tạo lại ảnh.'
-          : 'Firefly đã đóng tab lỗi để nhẹ RAM. Ảnh này sẽ được tạo lại bằng Gmail mới; ảnh cũ không bị làm lại.';
+        lr.note = 'Ảnh chưa bấm Chọn sẽ được tạo lại bằng Gmail mới; ảnh đã Chọn giữ nguyên.';
         lr.updatedAt = Date.now();
         changed = true;
       }
@@ -2192,7 +2190,7 @@ function recoverInterruptedRuns() {
     }
     for (const sc of p.s3.scenes) if (sc.chosen?.status === 'saving') { sc.chosen.status = 'error'; sc.chosen.error = 'Bị gián đoạn khi lưu 2K. Bấm “Lưu lại”.'; n++; }
     // waiting_ok cũng phải đưa về error: tool mất bộ nhớ tab Firefly sau khi khởi động lại,
-    // nếu cứ giữ trạng thái chờ Ổn thì hàng đợi Bước 4 bị kẹt vĩnh viễn (kể cả dự án khác).
+    // nếu cứ giữ trạng thái chờ Chọn thì hàng đợi Bước 4 bị kẹt vĩnh viễn (kể cả dự án khác).
     for (const sc of p.s3.scenes) if (['queued', 'preparing', 'waiting_ok', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
     if (n) { store.save(p); removeStaleTemp(store.outputDirFor(p)); interruptedCount += n; }
   }

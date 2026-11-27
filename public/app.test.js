@@ -119,9 +119,13 @@ test('Bước 3 sạch nút/badge xóa logo: mọi thao tác logo chỉ có ở 
   assert.match(notify, /if \(S\.stage === 4\)/, 'thông báo xóa logo chỉ bật khi đang ở Bước 4');
 });
 
-test('hết lượt Firefly: banner gọn, đổi Gmail rồi tiếp tục, không làm lại ảnh cũ', () => {
+test('hết lượt Firefly: banner gọn, có nút × tắt, đổi Gmail làm lại đúng ảnh chưa Chọn', () => {
   assert.match(src, /Firefly hết \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} lượt\/ngày tại <b>/, 'phải báo tên ảnh đang bị chặn');
-  assert.match(src, /không làm lại ảnh cũ/);
+  assert.match(src, /làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên/);
+  assert.ok(src.includes('data-act="dismissquota" data-key="${esc(quotaKey)}"') && src.includes('aria-label="Tắt thông báo" data-tip="Tắt">×</button>'), 'banner có dấu × để tắt');
+  assert.match(src, /if \(a === 'dismissquota'\) \{ S\.quotaHidden\.add\(b\.dataset\.key\); refresh\(\); return; \}/, 'tắt xong không hiện lại khi poll');
+  assert.match(src, /quotaHidden: new Set\(\)/, 'có bộ nhớ các banner đã tắt');
+  assert.match(src, /if \(S\.stage === 4\) return JSON\.stringify\(\[[\s\S]{0,200}\[\.\.\.S\.quotaHidden\]\.join\(','\)/, 'signature Bước 4 đổi khi tắt banner');
   assert.match(src, /data-act="gmailchange" data-sid="\$\{s\.id\}"[\s\S]{0,180}>Đổi Gmail<\/span><\/button>/, 'nút đổi Gmail nằm trên thẻ ảnh Bước 4, cùng kiểu .tb');
   assert.ok(!src.includes('ảnh đã tạo, chờ tải lại'), 'không hứa tải lại ảnh cũ');
 });
@@ -213,7 +217,7 @@ test('thanh bước có Bước 4 nối ngay sau Bước 3 và chỉ xong khi �
 });
 
 test('giao diện Bước 4 hiện đúng chuỗi thao tác Firefly và nhật ký theo thời gian thực', () => {
-  assert.match(src, /const LOGO_FLOW_STEPS = \[[\s\S]*?Cắt ảnh về khung 9:16[\s\S]*?Chấm sửa và xóa[\s\S]*?Mở “Cài đặt cọ”, chọn cỡ 14[\s\S]*?Chấm đúng 1 lần vào vùng logo[\s\S]*?Bấm “Xóa” trên Firefly[\s\S]*?tool bấm “Tải xuống”/);
+  assert.match(src, /const LOGO_FLOW_STEPS = \[[\s\S]*?Cắt ảnh về khung 9:16[\s\S]*?Chấm sửa và xóa[\s\S]*?Mở “Cài đặt cọ”, chọn cỡ 14[\s\S]*?Chấm đúng 1 lần vào vùng logo[\s\S]*?Bấm “Xóa” trên Firefly[\s\S]*?Tool bấm “Tải xuống”, bạn bấm “Chọn”/);
   assert.match(src, /id="logoPhaseList"/, 'Phải có danh sách tiến trình Firefly');
   assert.match(src, /id="logoNow"/, 'Phải hiện thao tác đang chạy');
   assert.match(src, /function patchLogoPhases\(\)/, 'Tiến trình phải cập nhật khi server gửi phase mới');
@@ -250,7 +254,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /\[data-live-chip="\$\{id\}"\]/, 'Chữ chip bật/tắt cùng chấm');
   assert.match(src, /setLiveDot\(s\.id, true\)/, 'Đang chiếu thì chấm xanh');
   assert.match(src, /setLiveDot\(s\.id, false\)/, 'Dừng chiếu thì chấm tắt');
-  assert.match(src, /S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\)/, 'Chờ Ổn thì đóng băng và tắt chấm');
+  assert.match(src, /S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\)/, 'Chờ Chọn thì đóng băng và tắt chấm');
   assert.match(scene, /data-live-status=/, 'Có dòng trạng thái trực tiếp');
   assert.ok(!/live-note/.test(scene), 'Bỏ dòng note/error dài (kiểu hết lượt free) bên dưới 2 khung');
   assert.match(scene, /<div class="meta">[\s\S]*?<span class="grow"><\/span><button class="btn sm xs danger" data-act="rmscene" data-sid="\$\{s\.id\}"/, 'Nút Xóa nằm góc phải trên cùng của mỗi cảnh');
@@ -260,10 +264,10 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');
   assert.match(src, /function patchFireflyPreviews\(\)/, 'Ảnh Firefly được làm mới định kỳ');
   assert.match(src, /setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 500\)/, 'Poll 500ms để chiếu trực tiếp mượt, không delay');
-  assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\); continue; \}/, 'Xong mà chưa bấm Ổn thì đóng băng khung hình, không chụp lại gây nháy');
+  assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)\) \{ setLiveDot\(s\.id, false\); continue; \}/, 'Xong mà chưa bấm Chọn thì đóng băng khung hình, không chụp lại gây nháy');
   assert.match(src, /Firefly hết \$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\} lượt\/ngày tại <b>\$\{esc\(quotaScene\.label \|\| `Cảnh \$\{quotaIndex \+ 1\}`\)\}<\/b>/, 'Banner gọn nhưng vẫn nói tên ảnh hết lượt');
   assert.match(src, /ảnh \$\{String\(quotaNo\)\.padStart\(2, '0'\)\}/, 'Banner giữ số ảnh để biết đang chỗ nào');
-  assert.match(src, /Đổi Gmail rồi bấm “Tiếp tục”[\s\S]{0,80}chỉ làm ảnh còn lại, không làm lại ảnh cũ/, 'Banner hướng dẫn đúng 2 nút mới và không làm lại ảnh cũ');
+  assert.match(src, /Đổi Gmail rồi bấm “Tiếp tục”[\s\S]{0,80}làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên/, 'Banner hướng dẫn đúng 2 nút mới và làm lại đúng ảnh chưa Chọn');
   assert.ok(!/tab đã đóng, chờ Gmail mới/.test(src), 'Bỏ đoạn dài về tab đã đóng');
   assert.ok(!/Đổi Gmail khác để tiếp tục/.test(src), 'Bỏ nhãn nút cũ trong banner');
   assert.match(src, /Free \$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}/, 'Bước 4 phải hiện số lượt đã dùng');
@@ -308,7 +312,7 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
   assert.match(ctl, /data-act="logoall"/, 'Bước 4 có nút Chạy tất cả');
   assert.match(ctl, />Chạy tất cả<\/button>/, 'Nút ghi đúng chữ Chạy tất cả');
-  assert.match(ctl, /mở từng tab Firefly một, xong ảnh 1 mới mở ảnh 2[\s\S]{0,260}không làm lại ảnh cũ/, 'tip nói rõ mở từng tab một, 3 ảnh/mail và không làm lại ảnh cũ');
+  assert.match(ctl, /mở từng tab Firefly một, xong ảnh 1 mới mở ảnh 2[\s\S]{0,260}làm lại đúng ảnh chưa bấm Chọn, ảnh đã Chọn giữ nguyên/, 'tip nói rõ mở từng tab một, 3 ảnh/mail và làm lại đúng ảnh chưa Chọn');
   assert.match(ctl, /id="fireflyStatus"/, 'Khung trái có chip trạng thái Firefly');
   assert.match(src, /a === 'logoall'/, 'Có handler cho nút Chạy tất cả');
   assert.match(src, /\/logo-remove\/run-all/, 'Gọi đúng endpoint xếp hàng tất cả');
@@ -328,7 +332,7 @@ test('Bước 4: ảnh chiếu cao bằng ảnh gốc, nguyên tab không cắt/
   assert.ok(!/\.logocell\.clean img\{[^}]*max-width:none/.test(css), 'không để ảnh sạch rộng/cao hơn ảnh gốc');
   assert.match(css, /\.logocell\.clean \.rc-act\{[^}]*margin:0;[^}]*border-top:1px solid var\(--line\)/, 'hàng nút dùng chung .rc-act, nằm sát dưới ảnh sạch');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
-  assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
+  assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:pulse 1\.6s ease-out infinite/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh y hệt chip Flow');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
   assert.ok(!/\.livedot\b/.test(css), 'không còn chấm/nút riêng ở góc ô Firefly');
 });
@@ -382,7 +386,7 @@ test('chip Firefly: bấm Kết nối là cập nhật ngay, chưa kết nối �
   assert.match(src, /for \(let i = 0; i < 12; i\+\+\)[\s\S]{0,220}await refreshFlow\(\)/, 'chờ tối đa ~12s cho chip lên xanh');
   assert.match(ffSrc, /port: c\.fireflyCdpPort/, 'Firefly status phải đọc cổng 9334 riêng');
   assert.ok(!/port: c\.cdpPort/.test(ffSrc), 'không đọc nhầm cổng Flow 9333');
-  assert.match(css, /#fireflyStatus\.chip\.ok::before\{background:var\(--ok\);animation:livedot-blink/);
+  assert.match(css, /#fireflyStatus\.chip\.ok::before\{background:var\(--ok\);animation:pulse 1\.6s ease-out infinite\}/, 'chấm Firefly cũng nhấp nháy kiểu pulse như chip Flow');
   const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
   assert.match(ctl, /id="fireflyStatus"[\s\S]{0,260}data-act="fireflyreveal"/, 'chip và nút Kết nối Firefly nằm cạnh nhau');
 });
@@ -405,7 +409,7 @@ test('Chạy tất cả căn giữa, to hơn và vẫn mở từng tab Firefly m
   assert.match(serverSrc, /logoRemoveActiveKey = logoJobKey\(next\.projectId, next\.sceneId\)/);
 });
 
-test('hết lượt Firefly: 2 bước Đổi Gmail → Đã đổi Gmail, tiếp tục', () => {
+test('hết lượt Firefly: 2 bước Đổi Gmail → Tiếp tục', () => {
   assert.match(src, /function gmailReady\(sid\)/);
   assert.match(src, /function markGmailChanged\(sid\)/);
   assert.match(src, /function clearGmailChanged\(sid\)/);

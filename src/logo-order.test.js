@@ -39,24 +39,25 @@ test('Bước 3 và ảnh sạch Bước 4 dùng chung tên có số 01, 02, 03,
   }
 });
 
-test('có ảnh sạch trên đĩa là coi như ảnh đó đã xong, kể cả trạng thái cũ còn sót', () => {
+test('chỉ bấm Chọn/bỏ qua mới coi là xong; có file sạch mà chưa Chọn vẫn chưa xong', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flb-order-done-'));
   try {
     const p = projectWithCleanFirstThree(dir);
     assert.equal(logoSceneDone(p, p.s3.scenes.find((s) => s.id === 's1')), true);
     assert.equal(logoSceneDone(p, p.s3.scenes.find((s) => s.id === 's2')), true);
-    // Ảnh 3 đang waiting_ok nhưng đã có file sạch → vẫn coi là xong, không làm lại.
-    assert.equal(logoSceneDone(p, p.s3.scenes.find((s) => s.id === 's3')), true);
+    // Ảnh 3 có file sạch nhưng đang waiting_ok → chưa bấm Chọn thì chưa xong.
+    assert.equal(logoSceneDone(p, p.s3.scenes.find((s) => s.id === 's3')), false);
     assert.equal(logoSceneDone(p, p.s3.scenes.find((s) => s.id === 's4')), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('4 ảnh, đã xong 1-2-3 thì đổi Gmail chỉ lấy đúng ảnh 4, không làm lại ảnh cũ', () => {
+test('4 ảnh, đã Chọn 1-2-3 thì đổi Gmail chỉ lấy đúng ảnh 4, không làm lại ảnh cũ', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flb-order-next-'));
   try {
     const p = projectWithCleanFirstThree(dir);
+    p.s3.scenes.find((s) => s.id === 's3').logoRemoval.status = 'approved';
     assert.equal(nextLogoScene(p)?.id, 's4');
     assert.equal(nextLogoScene(p, true)?.id, 's4');
 
@@ -68,14 +69,21 @@ test('4 ảnh, đã xong 1-2-3 thì đổi Gmail chỉ lấy đúng ảnh 4, kh�
   }
 });
 
-test('đổi Gmail lúc ảnh 3 còn chờ Ổn: bỏ qua ảnh đó, vẫn lấy ảnh 4', () => {
+test('đổi Gmail lúc ảnh 3 chưa Chọn: làm lại đúng ảnh 3, không nhảy sang ảnh 4', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flb-order-active-'));
   try {
     const p = projectWithCleanFirstThree(dir);
-    // Ảnh 3 mất file sạch và còn chờ bấm Ổn: không được tạo lại, ảnh 4 vẫn là ảnh kế.
     const s3 = p.s3.scenes.find((s) => s.id === 's3');
     s3.logoRemoval.cleanFile = '';
     s3.logoRemoval.status = 'waiting_ok';
+    assert.equal(nextLogoScene(p, true)?.id, 's3');
+
+    // Hết lượt ngay lúc đang làm ảnh 3: đổi Gmail cũng làm lại đúng ảnh 3.
+    s3.logoRemoval.status = 'quota_blocked';
+    assert.equal(nextLogoScene(p, true)?.id, 's3');
+
+    // Chỉ bỏ qua ảnh đang chạy thật, không bỏ qua ảnh chờ Chọn.
+    s3.logoRemoval.status = 'preparing';
     assert.equal(nextLogoScene(p, true)?.id, 's4');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
