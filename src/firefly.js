@@ -279,8 +279,8 @@ async function reveal() {
   else await open();
 }
 
-// Bấm “Chạy tất cả” / bắt đầu xóa logo: đưa cửa sổ đăng nhập về nền NGAY,
-// không để Chrome nổi lên che app. Việc chiếu vẫn chạy trong tab nền.
+// Bấm “Chạy tất cả” / bắt đầu xóa logo: dời cửa sổ Firefly ra ngoài màn hình NGAY,
+// không để Chrome ló lên che app. Việc chiếu vẫn chạy trong tab nền.
 async function background() {
   loginKeepAlive = false;
   await chrome.hideWindow().catch(() => {});
@@ -664,7 +664,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
     const key = `${projectId}:${sceneId}`;
     assertNotCanceled(isCanceled);
     loginKeepAlive = false; // đã bắt đầu xóa logo: không giữ cửa sổ đăng nhập cũ
-    await chrome.hideWindow().catch(() => {}); // đưa cửa sổ Firefly về nền (vẫn full màn hình), không nổi lên lúc chạy
+    await chrome.hideWindow().catch(() => {}); // dời cửa sổ Firefly ra ngoài màn hình (vẫn full size), không ló lên lúc chạy
     await releaseTab(key); // clean old session
     const t = await getTab(key);
     const p = t.page;

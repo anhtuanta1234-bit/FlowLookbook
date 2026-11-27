@@ -1,5 +1,5 @@
 {
-  "version": "1.3.4",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.4/Flow.Lookbook.Setup.1.3.4.exe",
-  "notes": "- Chrome Firefly giờ luôn mở full màn hình, kể cả khi chạy ngầm; không còn thu nhỏ hay ép cỡ 1000×700 làm canvas co và chấm lệch logo.\n- Chuyển thông báo “Firefly hết lượt free/ngày — đổi mail” từ chip Flow sang chip Firefly; chip “Flow: đã kết nối” chỉ còn nói chuyện Flow.\n- Bỏ chữ “so sánh với ảnh gốc” ở ô “Ảnh đã xóa logo” cho gọn; ảnh vẫn nằm cạnh ảnh gốc để bạn tự so sánh.\n- Gọn banner hết lượt Firefly: còn tên cảnh, số ảnh, giới hạn/ngày và “Đổi Gmail rồi bấm Tiếp tục”, bỏ đoạn dài cũ về tab đã đóng."
+  "version": "1.3.5",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.5/Flow.Lookbook.Setup.1.3.5.exe",
+  "notes": "- Bấm Chạy tất cả/xóa logo thì cửa sổ Firefly bị dời ra ngoài màn hình ngay từ lúc khởi động, chỉ thấy màn hình app; vẫn giữ đúng kích thước full màn hình nên canvas không co. Bấm Kết nối/Xem trên Firefly mới hiện lại."
 }

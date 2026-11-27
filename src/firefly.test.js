@@ -165,7 +165,7 @@ test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, 
   assert.match(src, /await detachPreview\(t\); await t\.page\.close\(\)/, 'đóng tab thì huỷ session chụp');
   const prepare = src.slice(src.indexOf('async function prepareScene('), src.indexOf('async function downloadPrepared('));
   assert.ok(!/showWindow\(|bringToFront\(/.test(prepare), 'chạy Firefly không làm Chrome nổi lên');
-  assert.match(prepare, /await chrome\.hideWindow\(\)\.catch\(\(\) => \{\}\)/, 'bắt đầu xóa logo thì đưa cửa sổ cũ về nền (vẫn giữ full màn hình)');
+  assert.match(prepare, /await chrome\.hideWindow\(\)\.catch\(\(\) => \{\}\)/, 'bắt đầu xóa logo thì dời cửa sổ cũ ra ngoài màn hình (vẫn full size)');
   assert.match(src, /async function background\(\) \{[\s\S]*?loginKeepAlive = false;[\s\S]*?chrome\.hideWindow\(\)/, 'có hàm đưa Firefly về nền ngay khi bấm Chạy tất cả');
   assert.match(src, /status, open, reveal, background, preview,/, 'endpoint gọi được hàm đưa về nền');
 });

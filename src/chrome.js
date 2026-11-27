@@ -94,6 +94,8 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow, max
       }
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${p}`);
       browser.on('disconnected', () => { browser = null; });
+      // Firefly khởi động trong automation thì đẩy ra ngoài màn hình NGAY, không để ló lên dù 1 giây.
+      if (maximized && !visible) await setOffscreen(browser).catch(() => {});
       return browser;
     })();
     const done = () => { starting = null; };
@@ -118,7 +120,7 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow, max
       return ids.size;
     } finally { await s.detach().catch(() => {}); }
   }
-  // Firefly: đưa mọi cửa sổ về MAXIMIZED nhưng KHÔNG bringToFront — chạy ngầm sau lưng app.
+  // Firefly: đưa mọi cửa sổ về MAXIMIZED (khi người dùng chủ động mở/kiểm tra).
   // Chỉ gửi lệnh khi cửa sổ chưa full màn hình để không xáo trộn z-order lúc automation đang chạy.
   async function setMaximized() {
     const b = await ensureBrowser();
@@ -136,8 +138,42 @@ function createChrome({ getPort, profileName, startUrl, seedFrom, minWindow, max
       return ids.size;
     } finally { await s.detach().catch(() => {}); }
   }
-  // “Ẩn” với Firefly = giữ nguyên full màn hình, chỉ là không đẩy lên trước; Flow vẫn thu nhỏ như cũ.
-  const hideWindow = () => (maximized ? setMaximized() : setWindowState('minimized'));
+  // Khi chạy automation: DỜI cửa sổ Firefly RA NGOÀI màn hình, không thu nhỏ.
+  // Vẫn cấp đúng kích thước màn hình nên canvas không co, chấm logo không lệch; người dùng chỉ thấy app.
+  // Nhận browser có sẵn để gọi ngay lúc khởi động, không gọi lại ensureBrowser() (tránh chờ chính nó).
+  async function setOffscreen(b = null) {
+    b = b || await ensureBrowser();
+    const ctx = b.contexts()[0] || (await b.newContext());
+    let sw = 1920, sh = 1080;
+    try {
+      const pg = ctx.pages()[0];
+      if (pg) {
+        const dim = await pg.evaluate(() => ({ w: screen.width || 1920, h: screen.height || 1080 }));
+        sw = dim.w || sw; sh = dim.h || sh;
+      }
+    } catch (_) {}
+    const targets = ((await httpJson(port(), '/json/list')) || []).filter((t) => t.type === 'page');
+    const s = await b.newBrowserCDPSession();
+    try {
+      const ids = new Set();
+      for (const t of targets) { try { ids.add((await s.send('Browser.getWindowForTarget', { targetId: t.id })).windowId); } catch (_) {} }
+      for (const windowId of ids) {
+        try {
+          const cur = (await s.send('Browser.getWindowBounds', { windowId })).bounds || {};
+          if (cur.windowState === 'normal' && (cur.left || 0) <= -sw) continue; // đã ở ngoài màn hình
+          const width = Math.max(cur.width || 0, sw);
+          const height = Math.max(cur.height || 0, sh);
+          await s.send('Browser.setWindowBounds', {
+            windowId,
+            bounds: { windowState: 'normal', left: -width - 40, top: -height - 40, width, height },
+          });
+        } catch (_) {}
+      }
+      return ids.size;
+    } finally { await s.detach().catch(() => {}); }
+  }
+  // “Ẩn” với Firefly = dời ra ngoài màn hình (vẫn full size); Flow thì thu nhỏ như cũ.
+  const hideWindow = () => (maximized ? setOffscreen() : setWindowState('minimized'));
   async function showWindow() {
     if (maximized) await setMaximized();
     else await setWindowState('normal');

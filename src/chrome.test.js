@@ -24,13 +24,17 @@ test('lần đầu tách Firefly kế thừa đăng nhập từ profile cũ', ()
   assert.match(src, /seedProfile\(dir, seedFrom\); \/\/ copy profile cũ trước khi Chrome khởi động/);
 });
 
-test('Firefly luôn full màn hình, kể cả khi chạy ngầm; Flow giữ cỡ cũ', () => {
+test('Firefly chạy automation thì dời ra ngoài màn hình, vẫn full size; Flow giữ cỡ cũ', () => {
   assert.match(src, /profileName: 'chrome-firefly-profile',[\s\S]*?maximized: true,/, 'Firefly bật chế độ full màn hình');
   assert.match(src, /maximized \? \['--start-maximized'\] : \['--window-position=60,60', '--window-size=1000,700'\]/, 'mở sẵn maximized, Flow vẫn cỡ cũ');
   assert.match(src, /if \(!visible && !maximized\) args\.push\('--start-minimized'\)/, 'bộ maximized không bao giờ nhận --start-minimized');
-  assert.match(src, /async function setMaximized\(\)[\s\S]*?Browser\.getWindowBounds[\s\S]*?cur\.windowState !== 'maximized'[\s\S]*?Browser\.setWindowBounds/, 'chỉ đổi bounds khi cửa sổ chưa full màn hình');
-  assert.match(src, /const hideWindow = \(\) => \(maximized \? setMaximized\(\) : setWindowState\('minimized'\)\)/, 'chạy ngầm không thu nhỏ Firefly');
-  assert.match(src, /if \(maximized\) await setMaximized\(\);\s*else await setWindowState\('normal'\)/, 'showWindow cũng giữ Firefly full màn hình');
+  assert.match(src, /async function setOffscreen\(b = null\)/, 'có hàm dời cửa sổ ra ngoài màn hình');
+  assert.match(src, /screen\.width \|\| 1920, h: screen\.height \|\| 1080/, 'lấy đúng kích thước màn hình để canvas không co');
+  assert.match(src, /left: -width - 40, top: -height - 40, width, height/, 'dời ra ngoài nhưng giữ nguyên kích thước full màn hình');
+  assert.match(src, /if \(cur\.windowState === 'normal' && \(cur\.left \|\| 0\) <= -sw\) continue/, 'đã ở ngoài thì không gửi lệnh thừa');
+  assert.match(src, /if \(maximized && !visible\) await setOffscreen\(browser\)\.catch\(\(\) => \{\}\)/, 'khởi động automation là đẩy ra ngoài ngay, không ló lên');
+  assert.match(src, /const hideWindow = \(\) => \(maximized \? setOffscreen\(\) : setWindowState\('minimized'\)\)/, 'chạy ngầm không thu nhỏ Firefly mà dời ra ngoài');
+  assert.match(src, /if \(maximized\) await setMaximized\(\);\s*else await setWindowState\('normal'\)/, 'bấm Kết nối/Xem thì đưa về full màn hình');
   assert.ok(!/minWindow: \{ left: 60, top: 60, width: 1000, height: 700 \}/.test(src), 'bỏ cỡ 1000x700 cũ');
   assert.match(src, /'--disable-fre', '--disable-search-engine-choice-screen'/, 'không hiện màn hình chào lần đầu');
 });

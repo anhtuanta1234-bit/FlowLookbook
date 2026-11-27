@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.3.5 - 2026-11-27
+- Bấm Chạy tất cả/xóa logo thì cửa sổ Firefly bị dời ra ngoài màn hình ngay từ lúc khởi động, chỉ thấy màn hình app; vẫn giữ đúng kích thước full màn hình nên canvas không co. Bấm Kết nối/Xem trên Firefly mới hiện lại.
+
+
 ## v1.3.4 - 2026-11-27
 - Chrome Firefly giờ luôn mở full màn hình, kể cả khi chạy ngầm; không còn thu nhỏ hay ép cỡ 1000×700 làm canvas co và chấm lệch logo.
 - Chuyển thông báo “Firefly hết lượt free/ngày — đổi mail” từ chip Flow sang chip Firefly; chip “Flow: đã kết nối” chỉ còn nói chuyện Flow.
