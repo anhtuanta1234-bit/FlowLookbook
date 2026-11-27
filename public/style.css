@@ -259,7 +259,7 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .scene-menu .btn{justify-content:flex-start}
 /* Thiết kế mới Bước 4: mỗi cảnh 2 ô ảnh — gốc / Firefly chiếu trực tiếp */
 .scene.logoscene{grid-template-columns:minmax(0,1fr);display:grid}
-.logosplit{--shot-w:210px;--shot-h:calc(var(--shot-w) * 16 / 9);display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start}
+.logosplit{--shot-w:210px;--shot-h:calc(var(--shot-w) * 16 / 9);display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr) minmax(0,210px);gap:10px;align-items:start}
 .logocell{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--surface);border-radius:11px;overflow:hidden}
 .logocell-lab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;font-size:11.5px;font-weight:600;background:var(--surface2);border-bottom:1px solid var(--line)}
 .logocell-lab>span{font-size:11px;font-weight:500;color:var(--muted)}
@@ -277,8 +277,9 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
    (kích thước tab cố định nên chiều cao cũng cố định). */
 .logocell.firefly img{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
-/* Ô thứ 3: ảnh sạch đã xóa logo — cùng khung 9:16 với ảnh gốc để so sánh trực tiếp. */
-.logocell.clean img{max-width:none;margin:0;object-fit:contain;aspect-ratio:9/16;height:auto}
+/* Ô thứ 3: ảnh sạch đã xóa logo — dùng CHUNG --shot-w với ảnh gốc (max-width:none cũ làm ảnh rộng/cao hơn).
+   Mọi cảnh: cùng chiều rộng, cùng chiều cao, đúng tỷ lệ 9:16 để so sánh trực tiếp. */
+.logocell.clean img{width:100%;max-width:var(--shot-w);margin-inline:auto;height:auto;aspect-ratio:9/16;object-fit:cover}
 .logocell.clean img:not([src]){opacity:.25}
 /* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
 .logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}

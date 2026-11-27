@@ -313,11 +313,13 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
 
 test('Bước 4: ảnh chiếu chạm mép khung, rộng 100% ô, tự co theo tab Chrome, không cắt/kéo giãn', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,1fr\)/, '3 ô: gốc / chiếu trực tiếp / đã xóa logo');
+  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, 'ảnh gốc và ảnh sạch 2 cột cùng 210px, Firefly chiếm giữa');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
   assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng chạm mép khung, cao tự theo tỷ lệ tab, không thanh đen');
   assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:(fill|cover)/.test(css), 'không kéo giãn/cắt canvas Firefly');
-  assert.match(css, /\.logocell\.clean img\{[^}]*object-fit:contain;aspect-ratio:9\/16;height:auto\}/, 'ảnh sạch cùng khung 9:16 để so sánh với ảnh gốc');
+  assert.match(css, /\.logocell\.clean img\{[^}]*max-width:var\(--shot-w\);margin-inline:auto;height:auto;aspect-ratio:9\/16;object-fit:cover\}/, 'ảnh sạch cùng chiều rộng/cao 9:16 với ảnh gốc');
+  assert.match(css, /grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\) minmax\(0,210px\)/, '2 cột ảnh cố định 210px → mọi cảnh cùng kích thước');
+  assert.ok(!/\.logocell\.clean img\{[^}]*max-width:none/.test(css), 'không để ảnh sạch rộng/cao hơn ảnh gốc');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');

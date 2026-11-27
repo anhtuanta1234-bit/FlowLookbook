@@ -2,11 +2,13 @@
 
 ## Unreleased
 
+## v1.3.1 - 2026-11-27
 ## v1.2.10 - 2026-11-27
 - Khung chiếu giờ chụp ĐÚNG tab Firefly của từng cảnh (không vớt tab Firefly gốc), poll 500ms/cache 180ms để xem từ đầu đến cuối mượt hơn.
 - Giữ process Chrome ấm giữa các ảnh kế tiếp, không tắt rồi khởi động lại làm mất khung; hết lượt/lỗi vẫn đóng ngay.
 - Thêm ô thứ 3 “Ảnh đã xóa logo” ngay cạnh khung chiếu trực tiếp: Firefly xong là ảnh sạch hiện ra để so sánh với ảnh gốc, nếu ổn mới bấm “Ổn” (không tải lại lần 2).
 - Bước 3 không còn nút/badge/banner hay thông báo nào về xóa logo: “Ổn”, “Đổi Gmail”, “Làm lại xóa logo”, thư mục ảnh sạch chỉ còn ở Bước 4.
+- Ảnh đã xóa logo dùng chung khung 9:16 với ảnh gốc (2 cột cùng cố định 210px): mọi cảnh cùng chiều rộng, cùng chiều cao, không còn ảnh sạch cao hơn ảnh gốc.
 
 
 ## v1.2.9 - 2026-11-27
