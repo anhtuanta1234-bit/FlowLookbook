@@ -136,6 +136,8 @@ textarea{width:100%;resize:vertical;line-height:1.55}
 .step:hover{color:var(--head-fg);filter:brightness(1.03)}
 .step .n{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--step-idle-fg) 16%,transparent);font-size:11.5px;font-weight:700}
 .step .t{font-weight:600;font-size:12.5px;white-space:nowrap}
+/* “Xóa logo” đứng sau ghép ảnh thật: bỏ vòng số, giữ chữ thẳng hàng với các bước trước. */
+.step.nonum{padding-left:40px}
 .step.done:not(.active){color:color-mix(in srgb,var(--ok) 70%,var(--step-idle-fg))}
 .step.done .n{background:var(--ok);color:#fff}
 .step.active,.step.active:hover{background:var(--step-on);color:var(--step-on-fg);box-shadow:0 2px 10px rgba(40,90,200,.22),0 0 0 1.5px color-mix(in srgb,var(--accent) 35%,transparent)}
@@ -269,8 +271,8 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 /* Bước 4: ô gốc giữ gọn khung 9:16 (căn tọa độ chấm logo); ảnh gốc khít viền, không bị cắt. */
 .logocell img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:var(--bg2);max-width:var(--shot-w);margin-inline:auto}
 /* Ô chiếu: RỘNG 100% khung Firefly, CAO BẰNG ảnh gốc chưa xóa logo (--shot-h ~373px).
-   Ảnh chụp từ Chrome kéo vừa khung (fill) để lấp cả chiều rộng lẫn chiều cao, không khoảng trống. */
-.logocell.firefly img{display:block;width:100%;max-width:none;height:var(--shot-h);aspect-ratio:auto;object-fit:fill;object-position:center center;margin:0;background:var(--bg2)}
+   Chiếu NGUYÊN tab Chrome (tỷ lệ riêng), co vừa khung bằng contain — KHÔNG kéo giãn, KHÔNG phóng to/cắt. */
+.logocell.firefly img{display:block;width:100%;max-width:none;height:var(--shot-h);aspect-ratio:auto;object-fit:contain;object-position:center center;margin:0;background:var(--bg2)}
 .logocell.firefly img:not([src]){opacity:.45}
 /* Tiến trình nằm ngay trong ô Firefly, dưới ảnh: từng bước một, không còn dưới cả 2 ô. */
 .logocell.firefly .phaselist{margin-top:0;border-top:1px solid var(--line);border-radius:0;max-height:none;padding:4px 8px;gap:4px}
@@ -393,26 +395,26 @@ code{background:var(--surface3);padding:1px 6px;border-radius:6px;font-size:12px
 .scene{grid-template-columns:124px minmax(0,1fr)}
 .scene .src img{width:124px}
 
-/* ===== thanh bên trái: về kiểu bản đầu (vòng tròn chữ cái + tên + trạng thái + nút xóa) =====
-   Thu gọn: vòng tròn hiện DA1 / DA2 / DA3… thay vì chữ cái đầu. */
+/* ===== thanh bên trái: về kiểu bản đầu (tên + trạng thái + nút xóa) =====
+   Mở rộng: vòng tròn chữ cái đầu. Thu gọn: bỏ vòng tròn, chỉ khung ngoài chứa ĐÚNG tên dự án (DA2…). */
 .side-collapse{margin:6px 10px 10px;display:flex;align-items:center;justify-content:center;gap:7px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;transition:.12s}
 .side-collapse:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .rail-add{display:none}
 .pav{display:none;width:34px;height:34px;border-radius:50%;background:var(--head-bg);color:var(--head-fg);border:1px solid var(--head-line);font-weight:700;font-size:14px;place-items:center;flex:none}
-.pav-no{display:none}
+.pav-name{display:none}
 .pitem{display:flex;align-items:center;gap:10px}
 .ptxt{min-width:0}
 .layout.rail{grid-template-columns:62px 1fr}
 .layout.rail .newp,.layout.rail .side-title,.layout.rail .ptxt,.layout.rail .side-collapse span{display:none}
 .layout.rail .plist{padding:6px 8px}
-.layout.rail .pav{display:grid;position:relative;font-size:12px}
+/* Thu gọn: bỏ hẳn hình tròn bên trong, chỉ giữ KHUNG NGOÀI bo góc chứa đúng tên dự án. */
+.layout.rail .pav{display:block;width:100%;height:32px;line-height:32px;border:0;border-radius:0;background:transparent;color:var(--text);font-size:12px;font-weight:700;text-align:center}
 .layout.rail .pav-letter{display:none}
-.layout.rail .pav-no{display:inline}
-.layout.rail .pitem{justify-content:center;padding:6px 0;margin-bottom:4px;border-radius:12px}
-/* Dự án đang mở: vòng tròn xanh + chấm xanh góc phải → biết ngay đang làm DA2. */
-.layout.rail .pitem.active{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 32%,transparent)}
-.layout.rail .pitem.active .pav{background:var(--grad);border-color:transparent;color:#fff}
-.layout.rail .pitem.active .pav::after{content:"";position:absolute;right:-1px;top:-1px;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--surface)}
+.layout.rail .pav-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
+.layout.rail .pitem{justify-content:center;padding:4px 0;margin-bottom:4px;border-radius:12px;border:1px solid var(--line)}
+/* Dự án đang mở: chỉ nhấn mạnh KHUNG NGOÀI, không vẽ vòng tròn bên trong. */
+.layout.rail .pitem.active{background:var(--accent-soft);border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+.layout.rail .pitem.active .pav{color:var(--accent)}
 .layout.rail .rail-add{display:grid;place-items:center;width:32px;height:32px;margin:0 auto 6px;border:1px dashed var(--line2);border-radius:50%;background:var(--surface2);color:var(--muted);font-size:18px;line-height:1;cursor:pointer;transition:.12s}
 .layout.rail .rail-add:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .layout.rail .side-collapse{margin:6px 10px 10px;padding:8px 0}
@@ -596,6 +598,7 @@ b,strong{
   .step{flex:1 1 0;min-width:0;justify-content:center;gap:5px;padding:4px 6px}
   .step .n{width:18px;height:18px}
   .step .t{font-size:11px}
+  .step.nonum{padding-left:29px}
 }
 @media(prefers-reduced-motion:reduce){
   .btn,.ib,.tb{transition:none}

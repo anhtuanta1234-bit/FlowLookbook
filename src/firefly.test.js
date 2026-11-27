@@ -135,17 +135,19 @@ test('chấm cọ thử lại khi Firefly chưa nhận nét, mỗi lần lấy b
   assert.match(src, /if \(!ready\) throw new Error\('Firefly không nhận nét chấm/);
 });
 
-test('ô chiếu trực tiếp chụp đúng canvas 9:16, nét, mượt và không hiện giao diện đầu', () => {
-  assert.match(src, /findCanvas\(page, \{ prefer9x16: true \}\)\)\.box/, 'chụp đúng vùng ảnh, không chụp cả trang Firefly');
-  assert.match(src, /if \(!box\) return \{ ok: false \}/, 'chưa có canvas thì không chiếu trang chủ Firefly');
-  assert.ok(!/x: 0, y: 0,\s*width: Math\.max\(320/.test(src), 'không còn dự phòng chụp cả viewport');
-  assert.match(src, /scale: 2, \/\/ 2x device pixel/);
-  assert.match(src, /format: 'jpeg', quality: 90/);
-  assert.match(src, /optimizeForSpeed: true/, 'chụp nhanh để ô chiếu không delay');
-  assert.match(src, /now - previewCache\.at < 250/, 'cache ngắn để poll nhanh nhưng vẫn cập nhật');
-  assert.match(src, /if \(!tab\.cdp\) tab\.cdp = await withTimeout\(page\.context\(\)\.newCDPSession\(page\), 1500\)/, 'dùng lại session CDP, không tạo lại mỗi lần chụp');
+test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, mượt và không nổi cửa sổ', () => {
+  const previewFn = src.slice(src.indexOf('async function preview('), src.indexOf('module.exports ='));
+  assert.match(src, /Chiếu TRỰC TIẾP nguyên tab Chrome/);
+  assert.ok(!/findCanvas\(page, \{ prefer9x16: true \}\)\)\.box/.test(previewFn), 'không còn chụp riêng vùng canvas để rồi phóng to');
+  assert.ok(!/scale: 2|clip:/.test(previewFn), 'không scale, không truyền clip: giữ đúng viewport tab');
+  assert.match(previewFn, /Page\.captureScreenshot', \{\s*format: 'jpeg', quality: 88, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,\s*\}/, 'chụp nguyên tab ở nền, nhanh');
+  assert.match(previewFn, /now - previewCache\.at < 250/, 'cache ngắn để poll nhanh nhưng vẫn cập nhật');
+  assert.match(previewFn, /const pr = tabs\.get\(key\);/, 'chiếu đúng tab của cảnh đó, không lấy nhầm tab cảnh khác');
+  assert.ok(!/\.\.\.tabs\.entries\(\)/.test(previewFn), 'bỏ dự phòng vớt tab cùng dự án');
+  assert.match(previewFn, /if \(!tab\.cdp\) tab\.cdp = await withTimeout\(page\.context\(\)\.newCDPSession\(page\), 1500\)/, 'dùng lại session CDP, không tạo lại mỗi lần chụp');
   assert.match(src, /await detachPreview\(t\); await t\.page\.close\(\)/, 'đóng tab thì huỷ session chụp');
-  assert.ok(!src.includes("quality: 45"), 'không chụp ảnh mờ quality 45');
+  const prepare = src.slice(src.indexOf('async function prepareScene('), src.indexOf('async function downloadPrepared('));
+  assert.ok(!/showWindow\(|bringToFront\(/.test(prepare), 'chạy Firefly không làm Chrome nổi lên');
 });
 
 test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {

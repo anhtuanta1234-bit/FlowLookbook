@@ -293,16 +293,33 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
 });
 
-test('Bước 4: khung chiếu rộng 100% ô Firefly, cao bằng ảnh gốc chưa xóa logo', () => {
+test('Bước 4: chiếu NGUYÊN tab Chrome, rộng 100% ô, cao bằng ảnh gốc, không phóng to/cắt', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, 'chiều cao khung chiếu được tính từ chiều rộng ảnh gốc 9:16');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
-  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:var\(--shot-h\);aspect-ratio:auto;object-fit:fill/, 'ảnh chiếu rộng đúng 100% khung, cao đúng bằng ảnh gốc');
-  assert.ok(!/\.logocell\.firefly img\{[^}]*width:var\(--shot-w\)/.test(css), 'không được ép ảnh chiếu chỉ rộng bằng ảnh gốc');
+  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:var\(--shot-h\);aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng 100% khung, cao bằng ảnh gốc, không phóng to/cắt');
+  assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:fill/.test(css), 'không kéo giãn ảnh đang xóa logo');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
   assert.ok(!/\.livedot\b/.test(css), 'không còn chấm/nút riêng ở góc ô Firefly');
+});
+
+test('dòng xóa logo làm sau ghép ảnh thật: chỉ ghi “Xóa logo”, không có số 4', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert.match(src, /\{ n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật/);
+  assert.match(src, /s\.n === 4 \? 'nonum' : ''/);
+  assert.match(src, /const num = s\.n === 4 \? '' :/);
+  assert.match(css, /\.step\.nonum\{padding-left:40px\}/);
+});
+
+test('chiếu từ lúc tạo tab tới lúc Firefly báo xong, ảnh mới giải mã xong mới thay để không giật', () => {
+  assert.match(src, /\['queued', 'preparing', 'downloading', 'waiting_ok', 'quota_blocked'\]/, 'ảnh đang chờ/tạo tab cũng nằm trong vòng chiếu');
+  assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)/, 'đóng băng khung đúng lúc Firefly đã hoàn tất');
+  assert.match(src, /async function paintPreview\(sid, el, data\)/);
+  assert.match(src, /const im = new Image\(\);\s*im\.src = data;\s*try \{ await im\.decode\(\); \}/, 'giải mã khung mới trước khi gán vào ô chiếu');
+  assert.match(src, /await paintPreview\(s\.id, el, out\.data\)/);
+  assert.match(src, /fireflyPreviewTimer = setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 650\)/);
 });
 
 test('dọn xong Bước 3 thì chuyển hẳn sang Bước 4, không cần bấm tab', () => {
@@ -372,20 +389,29 @@ test('nút thư mục ảnh đã xóa logo dùng chung kiểu với Mở thư m�
   assert.match(src, /class="btn sm" data-act="openout"[^>]*>\$\{I\.folder\} Mở thư mục kết quả<\/button>/);
 });
 
-test('sidebar về kiểu bản cũ: vòng tròn chữ cái + tên + trạng thái + xóa; thu gọn hiện DA2', () => {
+test('sidebar thu gọn: ĐÚNG tên dự án (DA2 chứ không phải DA1), chỉ khung ngoài, không vòng tròn', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(src, /const no = i \+ 1;/);
-  assert.match(src, /aria-label="Mở dự án \$\{no\}/);
-  assert.match(src, /<span class="pav-letter">\$\{esc\(\(p\.name\.trim\(\)\[0\] \|\| '\?'\)\.toUpperCase\(\)\)\}<\/span><span class="pav-no">DA\$\{no\}<\/span>/, 'mở rộng hiện chữ cái đầu, thu gọn hiện DA1/DA2');
-  assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'số dự án theo thứ tự tạo, không đổi khi sửa tên');
-  assert.match(css, /\.layout\.rail\{grid-template-columns:62px 1fr\}/, 'thu gọn về thanh 62px như bản đầu');
-  assert.match(css, /\.layout\.rail \.pav\{display:grid;position:relative;font-size:12px\}/, 'vòng tròn hiện lại khi thu gọn');
-  assert.match(css, /\.layout\.rail \.pav-letter\{display:none\}/);
-  assert.match(css, /\.layout\.rail \.pav-no\{display:inline\}/);
-  assert.match(css, /\.pitem \.nm\{font-weight:600/, 'mở rộng có tên dự án như bản đầu');
-  assert.match(css, /\.pitem \.sub\{font-size:11\.5px/, 'mở rộng có dòng trạng thái như bản đầu');
-  assert.match(css, /\.layout\.rail \.pitem\.active \.pav\{background:var\(--grad\)/, 'DA đang mở nổi bật bằng vòng tròn xanh');
+  assert.match(src, /<span class="pav-letter">\$\{esc\(\(p\.name\.trim\(\)\[0\] \|\| '\?'\)\.toUpperCase\(\)\)\}<\/span><span class="pav-name">\$\{esc\(p\.name \|\| '\?'\)\}<\/span>/, 'thu gọn lấy chính tên dự án, không tự sinh số');
+  assert.ok(!/DA\$\{no\}/.test(src), 'không còn nhãn tự sinh DA1/DA2');
+  assert.match(src, /aria-label="Mở dự án: \$\{esc\(p\.name\)\}"/);
+  assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'thứ tự dự án ổn định theo ngày tạo');
+  assert.match(css, /\.layout\.rail \.pav\{display:block;width:100%;height:32px;line-height:32px;border:0;border-radius:0;background:transparent/, 'bỏ hẳn hình tròn bên trong');
+  assert.match(css, /\.layout\.rail \.pav-name\{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap/, 'tên dự án hiện đúng trong khung');
+  assert.match(css, /\.layout\.rail \.pitem\{justify-content:center;padding:4px 0;margin-bottom:4px;border-radius:12px;border:1px solid var\(--line\)\}/, 'chỉ giữ khung ngoài');
+  assert.match(css, /\.layout\.rail \.pitem\.active\{background:var\(--accent-soft\);border-color:var\(--accent\)/, 'dự án đang mở nhấn mạnh khung ngoài');
+  assert.match(css, /\.pitem \.nm\{font-weight:600/, 'mở rộng vẫn có tên dự án');
+  assert.match(css, /\.pitem \.sub\{font-size:11\.5px/, 'mở rộng vẫn có dòng trạng thái');
   assert.match(html, /id="railAdd"/);
   assert.match(src, /\$\('#railAdd'\)\.onclick/);
+});
+
+test('chạy xóa logo giữ Chrome ở nền; chỉ nút Kết nối/Đổi Gmail mới mở cửa sổ', () => {
+  const ff = fs.readFileSync(path.join(__dirname, '..', 'src', 'firefly.js'), 'utf8');
+  const prepare = ff.slice(ff.indexOf('async function prepareScene('), ff.indexOf('async function downloadPrepared('));
+  const download = ff.slice(ff.indexOf('async function downloadPrepared('), ff.indexOf('function hasSceneTab('));
+  assert.ok(!/showWindow\(|bringToFront\(/.test(prepare), 'prepareScene không đẩy cửa sổ Firefly lên');
+  assert.ok(!/showWindow\(|bringToFront\(/.test(download), 'tải ảnh sạch cũng không đẩy cửa sổ lên');
+  assert.match(ff, /async function open\(\)/);
+  assert.match(ff, /await chrome\.showWindow\(\)/, 'đăng nhập/đổi Gmail vẫn mở cửa sổ khi người dùng chủ động bấm');
 });

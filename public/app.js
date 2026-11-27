@@ -407,13 +407,12 @@ function renderProjectActions() {
 function renderSidebar() {
   const projectIds = new Set(S.projects.map((p) => p.id));
   for (const id of S.selectedProjectIds) if (!projectIds.has(id)) S.selectedProjectIds.delete(id);
-  morph($('#projectList'), sortedProjects().map((p, i) => {
+  morph($('#projectList'), sortedProjects().map((p) => {
     const busy = projectHasActiveWork(p);
     const checked = S.selectedProjectIds.has(p.id);
-    const no = i + 1; // thu gọn hiện THEO SỐ (dự án 1, 2, 3…), không phải chữ cái đầu tên
-    return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án ${no}: ${esc(p.name)}" data-tip="Dự án ${no}: ${esc(p.name)}">
+    return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án: ${esc(p.name)}" data-tip="${esc(p.name)}">
       <input class="project-select" type="checkbox" data-pid="${p.id}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Chọn dự án ${esc(p.name)} để xóa" title="${busy ? 'Đang xử lý; chưa thể xóa' : 'Chọn để xóa nhiều dự án cùng lúc'}">
-      <div class="pav" aria-hidden="true"><span class="pav-letter">${esc((p.name.trim()[0] || '?').toUpperCase())}</span><span class="pav-no">DA${no}</span></div>
+      <div class="pav" aria-hidden="true"><span class="pav-letter">${esc((p.name.trim()[0] || '?').toUpperCase())}</span><span class="pav-name">${esc(p.name || '?')}</span></div>
       <div class="ptxt"><div class="nm">${esc(p.name)}</div><div class="sub">${projectSummary(p)}</div></div>
       <button class="project-delete" type="button" data-pid="${p.id}" aria-label="Xóa dự án ${esc(p.name)}" title="${busy ? 'Đang xử lý; chưa thể xóa' : `Xóa dự án ${esc(p.name)}`}" ${busy ? 'disabled' : ''}>${I.trash}</button>
     </div>`;
@@ -465,7 +464,7 @@ async function deleteProjects(ids, all = false) {
     else showWelcome();
   } else renderSidebar();
 }
-// Thu gọn / mở rộng thanh bên trái (nút ở dưới cùng). Thu gọn: lưới 2 ô, mỗi ô là số thứ tự dự án.
+// Thu gọn / mở rộng thanh bên trái (nút ở dưới cùng). Thu gọn: mỗi ô là khung chứa đúng tên dự án.
 function applyRail(on) {
   $('#layout').classList.toggle('rail', on);
   const b = $('#btnCollapse'); if (!b) return;
@@ -516,7 +515,7 @@ const STEPS = [
   { n: 1, t: 'Tách trang phục', tip: 'Bước 1: tách trang phục khỏi người, đặt trên nền trắng' },
   { n: 2, t: 'Ghép KOC', tip: 'Bước 2: cho KOC mặc trang phục đã tách' },
   { n: 3, t: 'Ghép cảnh thật', tip: 'Bước 3: ghép KOC vào nhiều cảnh người thật cùng lúc' },
-  { n: 4, t: 'Xóa logo', tip: 'Bước 4: cắt khung 9:16, dùng Firefly Chấm sửa và xóa, bạn bấm Ổn rồi tool tải ảnh sạch' },
+  { n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật: Firefly Chấm sửa và xóa, bạn bấm Ổn rồi tool tải ảnh sạch' },
 ];
 // Tắt “Xóa logo” thì Bước 4 biến mất hoàn toàn khỏi thanh các bước, chỉ còn 1-2-3.
 const visibleSteps = () => (S.cfg?.removeLogoEnabled ? STEPS : STEPS.filter((s) => s.n !== 4));
@@ -566,9 +565,11 @@ function refresh() {
   morph($('#steps'), visibleSteps().map((s) => {
     const locked = s.n > maxStage, done = stageDone(s.n);
     const tip = locked ? `Chưa mở: hoàn tất bước ${s.n - 1} rồi bấm “Sang bước ${s.n}” để mở bước này` : s.tip;
-    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : ''].join(' ');
+    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : '', s.n === 4 ? 'nonum' : ''].join(' ');
     const go = locked ? 'aria-disabled="true"' : `data-act="goto" data-stage="${s.n}"`;
-    return `<div class="${cls}" ${go} data-tip="${esc(tip)}" role="tab" tabindex="${locked ? -1 : 0}" aria-selected="${S.stage === s.n}"><span class="n">${locked ? I.lock : done ? '✓' : s.n}</span><span class="t">${s.t}</span></div>`;
+    // Dòng xóa logo làm sau ghép ảnh thật: chỉ ghi chữ “Xóa logo”, không hiện số 4 hay vòng tròn số.
+    const num = s.n === 4 ? '' : `<span class="n">${locked ? I.lock : done ? '✓' : s.n}</span>`;
+    return `<div class="${cls}" ${go} data-tip="${esc(tip)}" role="tab" tabindex="${locked ? -1 : 0}" aria-selected="${S.stage === s.n}">${num}<span class="t">${s.t}</span></div>`;
   }).join(''));
   renderSlots(); renderResults(); patchLogoPhases();
 }
@@ -1011,9 +1012,22 @@ function setLiveDot(id, on) {
   const el = document.querySelector(`[data-live-chip="${id}"]`);
   if (el) el.classList.toggle('on', on);
 }
+// Giải mã khung mới TRƯỚC khi thay src: ảnh cũ đứng yên tới khi có ảnh mới sẵn sàng → không nháy đen, không giật.
+const previewPainting = new Set();
+async function paintPreview(sid, el, data) {
+  if (previewPainting.has(sid) || el.getAttribute('src') === data) return;
+  previewPainting.add(sid);
+  try {
+    const im = new Image();
+    im.src = data;
+    try { await im.decode(); } catch (_) {}
+    if (el.isConnected && el.getAttribute('src') !== data) el.setAttribute('src', data);
+  } finally { previewPainting.delete(sid); }
+}
 async function patchFireflyPreviews() {
   if (S.stage !== 4 || !S.p) return;
-  const scenes = (S.p.s3?.scenes || []).filter((s) => ['preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
+  // “queued” cũng nằm trong vòng chiếu: tab Firefly vừa tạo là đã có khung, không đợi đến lúc đang xử lý.
+  const scenes = (S.p.s3?.scenes || []).filter((s) => ['queued', 'preparing', 'downloading', 'waiting_ok', 'quota_blocked'].includes(s.logoRemoval?.status || ''));
   const active = new Set();
   for (const s of scenes) {
     // Firefly đã báo xong mà người dùng CHƯA bấm Ổn: đóng băng khung hình cuối,
@@ -1026,7 +1040,7 @@ async function patchFireflyPreviews() {
     if (!el) { setLiveDot(s.id, false); continue; }
     active.add(s.id);
     S.preview.set(s.id, out.data);
-    if (el.getAttribute('src') !== out.data) el.setAttribute('src', out.data);
+    await paintPreview(s.id, el, out.data);
     setLiveDot(s.id, true);
   }
   for (const id of [...S.liveDot]) if (!active.has(id)) setLiveDot(id, false);

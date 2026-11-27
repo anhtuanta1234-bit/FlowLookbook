@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v1.2.4 - 2026-11-27
+- Sidebar thu gọn giờ hiện **đúng tên dự án** (dự án tên DA2 thì hiện DA2), bỏ hẳn vòng tròn bên trong, chỉ giữ khung ngoài; dự án đang mở có khung sáng.
+- Dòng xóa logo đứng sau ghép ảnh thật: chỉ ghi **Xóa logo**, bỏ số 4.
+- Khung chiếu trực tiếp chiếu nguyên tab Chrome đang xóa (không phóng to/cắt ảnh gốc), rộng 100% ô, cao bằng ảnh gốc; ảnh mới giải mã xong mới thay nên không bị giật.
+- Bắt đầu chiếu ngay từ lúc tạo tab/chờ xử lý và đóng băng đúng lúc Firefly báo đã hoàn tất thao tác tạo sinh.
+- Khi bấm chạy xóa logo, Chrome giữ ở nền, không nổi lên màn hình; chỉ nút Kết nối/Đổi Gmail mới mở cửa sổ để đăng nhập.
+
+
 ## v1.2.3 - 2026-11-27
 - Khung chiếu Firefly: ảnh từ Chrome rộng **100% ô chiếu**, cao bằng ảnh gốc chưa xóa logo (~373px), lấp đầy khung không còn khoảng trống hai bên.
 - Sidebar mở rộng trở lại kiểu bản đầu: vòng tròn chữ cái đầu + tên dự án + dòng trạng thái + nút xóa.
