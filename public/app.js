@@ -582,7 +582,8 @@ function refresh() {
   morph($('#steps'), visibleSteps().map((s) => {
     const locked = s.n > maxStage, done = stageDone(s.n);
     const tip = locked ? `Chưa mở: hoàn tất bước ${s.n - 1} rồi bấm “Sang bước ${s.n}” để mở bước này` : s.tip;
-    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : '', s.n === 4 ? 'logo-step' : ''].join(' ');
+    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : '',
+      s.n === 4 ? 'logo-step' : '', s.n === 4 && S.cfg?.removeLogoEnabled ? 'logo-on' : ''].join(' ');
     const go = locked ? 'aria-disabled="true"' : `data-act="goto" data-stage="${s.n}"`;
     // “Xóa logo” không hiện số 4: vòng tích, và sang bước này là tích + chữ đều xanh như bước đã xong.
     const num = s.n === 4

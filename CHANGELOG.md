@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.2.8 - 2026-11-27
+- Khi bật chế độ **Xóa logo**, tab “Xóa logo” (đứng ngay sau “Ghép cảnh thật”) luôn hiện vòng tích xanh + chữ xanh, dù bạn đang ở bước 3 hay bước 4.
+
+
 ## v1.2.7 - 2026-11-27
 - Danh sách dự án giờ xếp lần lượt theo số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…), không còn phụ thuộc ngày tạo.
 

@@ -1,5 +1,5 @@
 {
-  "version": "1.2.7",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.7/Flow.Lookbook.Setup.1.2.7.exe",
-  "notes": "- Danh sách dự án giờ xếp lần lượt theo số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…), không còn phụ thuộc ngày tạo."
+  "version": "1.2.8",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.8/Flow.Lookbook.Setup.1.2.8.exe",
+  "notes": "- Khi bật chế độ **Xóa logo**, tab “Xóa logo” (đứng ngay sau “Ghép cảnh thật”) luôn hiện vòng tích xanh + chữ xanh, dù bạn đang ở bước 3 hay bước 4."
 }

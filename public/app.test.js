@@ -305,13 +305,14 @@ test('Bước 4: chiếu NGUYÊN tab Chrome, rộng 100% ô, cao bằng ảnh g�
   assert.ok(!/\.livedot\b/.test(css), 'không còn chấm/nút riêng ở góc ô Firefly');
 });
 
-test('thanh “Xóa logo”: không có số 4, sang bước này là vòng tích + chữ đều xanh', () => {
+test('thanh “Xóa logo”: không số 4, bật tính năng là vòng tích + chữ LUÔN xanh như Ghép cảnh thật', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(src, /\{ n: 4, t: 'Xóa logo', tip: 'Làm sau khi ghép ảnh thật/);
   assert.match(src, /s\.n === 4 \? 'logo-step' : ''/);
+  assert.match(src, /s\.n === 4 && S\.cfg\?\.removeLogoEnabled \? 'logo-on' : ''/, 'bật xóa logo thì gắn cờ luôn xanh');
   assert.match(src, /const num = s\.n === 4\s*\? `<span class="n">\$\{locked \? I\.lock : '✓'\}<\/span>`/, 'bước 4 chỉ có tích/khóa, không có số 4');
-  assert.match(css, /\.step\.logo-step\.active,\.step\.logo-step\.done\{color:var\(--ok\)\}/, 'chữ chuyển xanh');
-  assert.match(css, /\.step\.logo-step\.active \.n,\.step\.logo-step\.done \.n\{background:var\(--ok\);color:#fff\}/, 'vòng tích xanh');
+  assert.match(css, /\.step\.logo-step\.logo-on:not\(\.locked\),\.step\.logo-step\.active,\.step\.logo-step\.done\{color:var\(--ok\)\}/, 'chữ xanh ngay cả khi đang đứng ở bước 3');
+  assert.match(css, /\.step\.logo-step\.logo-on:not\(\.locked\) \.n,\.step\.logo-step\.active \.n,\.step\.logo-step\.done \.n\{background:var\(--ok\);color:#fff\}/, 'vòng tích xanh');
 });
 
 test('chiếu từ lúc tạo tab tới lúc Firefly báo xong, ảnh mới giải mã xong mới thay để không giật', () => {
