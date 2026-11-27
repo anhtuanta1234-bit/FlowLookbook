@@ -97,7 +97,9 @@ test('nút Chạy tất cả: xếp mọi ảnh chưa xong theo thứ tự, khô
   assert.match(all, /\['approved', 'skipped', 'waiting_ok', 'preparing', 'downloading', 'quota_blocked'\]/, 'không đưa lại ảnh đã xong / đang chạy / đang bị chặn');
   assert.match(all, /st === 'error' \|\| !st/, 'chỉ làm lại đúng ảnh lỗi');
   assert.ok(!/resetFireflyDailyFree/.test(all), 'Chạy tất cả KHÔNG tự mở thêm lượt free');
+  assert.match(all, /await firefly\.background\(\)\.catch\(\(\) => \{\}\)/, 'bấm Chạy tất cả thì gập Chrome về nền ngay, không nổi lên màn hình');
   assert.match(all, /await queueLogoRemoval\(req\.params\.id\)/, 'dùng lại hàng đợi một ảnh một lần');
+  assert.match(src, /app\.post\('\/api\/firefly\/background'/, 'có endpoint gập Firefly về nền');
   const status = slice("app.get('/api/flow/status'", "app.post('/api/auto'");
   assert.match(status, /fireflyStatus: await firefly\.status\(\)/, 'status phải trả trạng thái kết nối Firefly cho khung trái');
 });

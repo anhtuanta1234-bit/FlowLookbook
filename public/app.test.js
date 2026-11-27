@@ -293,12 +293,12 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
 });
 
-test('Bước 4: chiếu NGUYÊN tab Chrome, rộng 100% ô, cao bằng ảnh gốc, không phóng to/cắt', () => {
+test('Bước 4: ảnh chiếu chạm mép khung, rộng 100% ô, tự co theo tab Chrome, không cắt/kéo giãn', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, 'chiều cao khung chiếu được tính từ chiều rộng ảnh gốc 9:16');
+  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, 'ô ảnh gốc giữ khung 9:16');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
-  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:var\(--shot-h\);aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng 100% khung, cao bằng ảnh gốc, không phóng to/cắt');
-  assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:fill/.test(css), 'không kéo giãn ảnh đang xóa logo');
+  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:auto;aspect-ratio:auto;object-fit:contain/, 'chiếu nguyên tab: rộng chạm mép khung, cao tự theo tỷ lệ tab, không thanh đen');
+  assert.ok(!/\.logocell\.firefly img\{[^}]*object-fit:(fill|cover)/.test(css), 'không kéo giãn/cắt canvas Firefly');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');

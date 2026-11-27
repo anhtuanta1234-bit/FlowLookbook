@@ -279,6 +279,14 @@ async function reveal() {
   else await open();
 }
 
+// Bấm “Chạy tất cả” / bắt đầu xóa logo: đưa cửa sổ đăng nhập về nền NGAY,
+// không để Chrome nổi lên che app. Việc chiếu vẫn chạy trong tab nền.
+async function background() {
+  loginKeepAlive = false;
+  await chrome.hideWindow().catch(() => {});
+  return { ok: true };
+}
+
 async function getTab(key) {
   const existing = tabs.get(key);
   if (existing) return existing;
@@ -645,6 +653,7 @@ async function prepareScene({ projectId, sceneId, imagePath, onPhase, isCanceled
     const key = `${projectId}:${sceneId}`;
     assertNotCanceled(isCanceled);
     loginKeepAlive = false; // đã bắt đầu xóa logo: không giữ cửa sổ đăng nhập cũ
+    await chrome.hideWindow().catch(() => {}); // gập cửa sổ Firefly đã mở lúc đăng nhập, không nổi lên lúc chạy
     await releaseTab(key); // clean old session
     const t = await getTab(key);
     const p = t.page;
@@ -803,7 +812,12 @@ async function preview({ projectId, sceneId } = {}) {
     Promise.resolve(promise).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
   });
   try {
-    if (!tab.cdp) tab.cdp = await withTimeout(page.context().newCDPSession(page), 1500);
+    if (!tab.cdp) {
+      tab.cdp = await withTimeout(page.context().newCDPSession(page), 1500);
+      // Giữ trang ở trạng thái focus dù cửa sổ đang thu nhỏ: Chrome không ngừng vẽ,
+      // nên khung chiếu không bị đen/đứng khi bạn minimize hoặc khi tool ẩn cửa sổ.
+      await tab.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
+    }
     // Không truyền vùng cắt — CDP chụp đúng viewport tab (ổn định, không nhảy theo box canvas).
     const shot = await withTimeout(tab.cdp.send('Page.captureScreenshot', {
       format: 'jpeg', quality: 88, optimizeForSpeed: true, fromSurface: false, captureBeyondViewport: false,
@@ -816,7 +830,7 @@ async function preview({ projectId, sceneId } = {}) {
 }
 
 module.exports = {
-  status, open, reveal, preview,
+  status, open, reveal, background, preview,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs, closeAll,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },

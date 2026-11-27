@@ -144,10 +144,14 @@ test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, 
   assert.match(previewFn, /now - previewCache\.at < 250/, 'cache ngắn để poll nhanh nhưng vẫn cập nhật');
   assert.match(previewFn, /const pr = tabs\.get\(key\);/, 'chiếu đúng tab của cảnh đó, không lấy nhầm tab cảnh khác');
   assert.ok(!/\.\.\.tabs\.entries\(\)/.test(previewFn), 'bỏ dự phòng vớt tab cùng dự án');
-  assert.match(previewFn, /if \(!tab\.cdp\) tab\.cdp = await withTimeout\(page\.context\(\)\.newCDPSession\(page\), 1500\)/, 'dùng lại session CDP, không tạo lại mỗi lần chụp');
+  assert.match(previewFn, /if \(!tab\.cdp\) \{[\s\S]*?Emulation\.setFocusEmulationEnabled', \{ enabled: true \}/, 'giữ focus trang để minimize không làm đứng/đen khung chiếu');
+  assert.match(previewFn, /tab\.cdp = await withTimeout\(page\.context\(\)\.newCDPSession\(page\), 1500\)/, 'dùng lại session CDP, không tạo lại mỗi lần chụp');
   assert.match(src, /await detachPreview\(t\); await t\.page\.close\(\)/, 'đóng tab thì huỷ session chụp');
   const prepare = src.slice(src.indexOf('async function prepareScene('), src.indexOf('async function downloadPrepared('));
   assert.ok(!/showWindow\(|bringToFront\(/.test(prepare), 'chạy Firefly không làm Chrome nổi lên');
+  assert.match(prepare, /await chrome\.hideWindow\(\)\.catch\(\(\) => \{\}\)/, 'bắt đầu xóa logo thì gập cửa sổ đăng nhập cũ về nền');
+  assert.match(src, /async function background\(\) \{[\s\S]*?loginKeepAlive = false;[\s\S]*?chrome\.hideWindow\(\)/, 'có hàm đưa Firefly về nền ngay khi bấm Chạy tất cả');
+  assert.match(src, /status, open, reveal, background, preview,/, 'endpoint gọi được hàm đưa về nền');
 });
 
 test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {

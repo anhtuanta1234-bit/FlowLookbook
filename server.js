@@ -242,6 +242,10 @@ app.post('/api/firefly/open', async (req, res) => {
 app.post('/api/firefly/reveal', async (req, res) => {
   try { await firefly.reveal(); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Gập cửa sổ Firefly về nền ngay khi bắt đầu chạy: không để Chrome nổi lên che app.
+app.post('/api/firefly/background', async (req, res) => {
+  try { res.json(await firefly.background()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // Xem trước Firefly trên app: ảnh lỗi thì trả {ok:false} chứ không báo lỗi lên giao diện.
 app.get('/api/firefly/preview', async (req, res) => {
   try {
@@ -1948,6 +1952,8 @@ app.post('/api/projects/:id/logo-remove/run-all', async (req, res) => {
       return { queued };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
+    // Bấm Chạy tất cả là Chrome phải gập về nền ngay, kể cả lúc đang mở để đổi Gmail.
+    await firefly.background().catch(() => {});
     await queueLogoRemoval(req.params.id);
     res.json({ ok: true, queued: out.queued });
   } catch (e) { res.status(400).json({ error: e.message }); }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.2.9 - 2026-11-27
+- Khung “chiếu trực tiếp” giờ rộng chạm đẹt mép khung, hết thanh đen hai bên; ảnh tự co theo đúng tỷ lệ tab Chrome nên không cắt canvas, không kéo giãn.
+- Bấm “Chạy tất cả” hoặc bắt đầu xóa logo là Chrome tự gập về nền ngay, không nổi lên che app (kể cả lúc đang mở để đổi Gmail).
+- Giữ trang Firefly ở trạng thái focus khi chạy nền nên thu nhỏ cửa sổ cũng không làm khung chiếu bị đen/đứng; ảnh vẫn mượt.
+
+
 ## v1.2.8 - 2026-11-27
 - Khi bật chế độ **Xóa logo**, tab “Xóa logo” (đứng ngay sau “Ghép cảnh thật”) luôn hiện vòng tích xanh + chữ xanh, dù bạn đang ở bước 3 hay bước 4.
 
