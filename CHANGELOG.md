@@ -2,10 +2,12 @@
 
 ## Unreleased
 
+## v1.4.2 - 2026-11-27
 ## v1.4.1 - 2026-11-27
 - Khung Firefly bên trái giờ cập nhật ngay theo tiến độ từng cảnh qua SSE; ảnh 07, 08 không còn bị kẹt ở nhãn cũ “chờ / làm lại” dù đã chạy xong.
 - Trạng thái từng cảnh dùng chung một bảng nhãn: đang chạy / lỗi / chờ hàng đợi / đang làm lại / hết lượt — không còn gộp nhầm các trạng thái với nhau.
 - Ảnh xem trước sau khi Firefly báo xong giờ có thêm bản lưu riêng và tự thử lại nếu chưa tải được; mất RAM hoặc reload app vẫn hiện trong khung “Ảnh đã xóa logo”, không cần bấm Chọn lại hay làm lại Firefly.
+- Nút “Xóa” cảnh giờ xóa được cả khi đang chờ hoặc đang chạy Firefly: tool hỏi xác nhận, hủy riêng lượt của cảnh đó, đóng tab và nhả khóa để ảnh kế tiếp chạy tiếp (không ảnh hưởng các cảnh khác).
 
 
 ## v1.3.10 - 2026-11-27

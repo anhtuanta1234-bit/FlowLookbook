@@ -699,16 +699,15 @@ app.delete('/api/projects/:id/scenes/:sid', async (req, res) => {
       if ((scene.runs || []).some((r) => r.status === 'queued' || r.status === 'running' || r.upgrading || (r.preview2kPending || []).length)) {
         return { code: 409, error: 'Cảnh này đang chạy hoặc đang lấy ảnh 2K. Hãy đợi xong rồi xóa.' };
       }
-      const ls = scene.logoRemoval?.status;
-      if (ls && ['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'].includes(ls)) {
-        return { code: 409, error: 'Cảnh này đang xóa logo trên Firefly. Hãy đợi xong rồi xóa.' };
-      }
+      // Đang chờ / đang chạy Firefly vẫn xóa được: hủy riêng cảnh này rồi nhả khóa cho ảnh kế.
+      cancelLogoScene(req.params.id, req.params.sid);
       p.s3.scenes = p.s3.scenes.filter((s) => s.id !== req.params.sid);
       pushProject(p);
       return { ok: true };
     });
     if (out.code) return res.status(out.code).json({ error: out.error });
     firefly.discardScene({ projectId: req.params.id, sceneId: req.params.sid }).catch(() => {});
+    releaseLogoJob(req.params.id, req.params.sid); // đang chạy thì nhả khóa, ảnh kế tiếp được vào Firefly
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -926,6 +925,23 @@ function cancelProjectWork(projectId) {
   flow.closeProjectTabs(projectId).catch(() => {});
   firefly.closeProjectTabs(projectId).catch(() => {});
   releaseLogoJobForProject(projectId); // dự án bị xóa: nhả khóa hàng đợi để ảnh khác vẫn chạy tiếp
+}
+// Xóa 1 cảnh thì chỉ hủy riêng lượt Firefly của cảnh đó — các cảnh khác vẫn chạy bình thường.
+const canceledLogoScenes = new Set(); // "projectId:sceneId"
+const logoSceneCancelKey = (projectId, sceneId) => `${projectId}:${sceneId}`;
+function cancelLogoScene(projectId, sceneId) {
+  const key = logoSceneCancelKey(projectId, sceneId);
+  canceledLogoScenes.add(key);
+  const timer = setTimeout(() => canceledLogoScenes.delete(key), 60 * 60 * 1000);
+  timer.unref?.();
+  for (let i = logoRemoveQueue.length - 1; i >= 0; i--) {
+    const j = logoRemoveQueue[i];
+    if (j.projectId === projectId && j.sceneId === sceneId) logoRemoveQueue.splice(i, 1);
+  }
+}
+function logoIsCanceled(projectId, sceneId) {
+  return canceledProjects.has(projectId) || canceledLogoScenes.has(logoSceneCancelKey(projectId, sceneId))
+    || !logoRemovalEnabled() || !!paused;
 }
 // { at, message } khi Flow cảnh báo hoạt động bất thường. Lưu ra file để khởi động lại tool KHÔNG làm mất lệnh dừng an toàn này.
 const pausedFile = path.join(cfg.dataDir, 'paused.json');
@@ -1706,7 +1722,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
   try {
     await firefly.prepareScene({
       projectId, sceneId, imagePath: prep.imagePath,
-      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
+      isCanceled: () => logoIsCanceled(projectId, sceneId),
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
@@ -1718,7 +1734,7 @@ async function prepareLogoRemoval(projectId, sceneId) {
     // CHƯA ghi ra anhdaxoalogo — chỉ bấm “Chọn” mới lưu (không còn lỗi saveAs file tạm).
     await firefly.holdPrepared({
       projectId, sceneId,
-      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
+      isCanceled: () => logoIsCanceled(projectId, sceneId),
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
@@ -1816,7 +1832,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
       projectId, sceneId, targetPath: prep.target,
       matchSize: srcSizeForMatch,
       // Lỗi/hết lượt/tạm dừng: Firefly đóng tab ngay, không giữ Chrome ăn RAM.
-      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
+      isCanceled: () => logoIsCanceled(projectId, sceneId),
       onPhase: (note) => writeLock.run(() => {
         const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
         if (!sc?.logoRemoval || sc.logoRemoval.status !== 'downloading') return;

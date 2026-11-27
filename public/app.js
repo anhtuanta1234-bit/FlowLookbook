@@ -1348,7 +1348,13 @@ async function act(b) {
     if (g === 's3ex') await api('PATCH', `/api/projects/${p.id}`, { s3: { extras: (p.s3.extras || []).filter((x) => x !== f) } });
     return;
   }
-  if (a === 'rmscene') return api('DELETE', `/api/projects/${p.id}/scenes/${b.dataset.sid}`);
+  if (a === 'rmscene') {
+    const sid = b.dataset.sid;
+    const st = (p.s3?.scenes || []).find((x) => x.id === sid)?.logoRemoval?.status || '';
+    if (['queued', 'retrying', 'preparing', 'downloading', 'waiting_ok'].includes(st)
+      && !confirm('Cảnh này đang xóa logo trên Firefly. Xóa sẽ hủy lượt đó, đóng tab Firefly và chuyển sang ảnh kế tiếp. Tiếp tục?')) return;
+    return api('DELETE', `/api/projects/${p.id}/scenes/${sid}`);
+  }
   if (a === 'retrysave') return api('POST', `/api/projects/${p.id}/retry-save`, { sceneId: b.dataset.sid });
   if (a === 'opensaved') { const sid = b.dataset.sid; return openLightboxList([`/files/saved/${p.id}/${sid}?t=${Date.now()}`], 0); }
   if (a === 'openclean') { const sid = b.dataset.sid; return openLightboxList([`/files/saved/${p.id}/${sid}?clean=1&t=${Date.now()}`], 0); }

@@ -15,10 +15,20 @@ test('xóa dự án cũng xóa luôn thư mục ảnh trong output (bulk và đ�
   assert.match(src, /logoRemoveQueue\[i\]\.projectId === projectId/, 'xóa dự án phải dọn cả hàng đợi xóa logo');
 });
 
-test('xóa cảnh Bước 4: chặn khi đang xóa logo và dọn tab Firefly của cảnh đó', () => {
+test('xóa cảnh Bước 4: đang chờ/chạy Firefly vẫn xóa được, hủy riêng cảnh đó và dọn tab', () => {
   const del = slice("app.delete('/api/projects/:id/scenes/:sid'", '// ---------- chạy Flow ----------');
-  assert.match(del, /\['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'\]\.includes\(ls\)/, 'đang làm lại / chạy Firefly thì không được xóa cảnh');
+  assert.ok(!/\['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'\]\.includes\(ls\)/.test(del), 'không chặn cảnh đang chờ/chạy Firefly');
+  assert.match(del, /cancelLogoScene\(req\.params\.id, req\.params\.sid\)/, 'hủy riêng lượt Firefly của cảnh này');
+  assert.match(del, /releaseLogoJob\(req\.params\.id, req\.params\.sid\)/, 'nhả khóa để ảnh kế tiếp được vào Firefly');
   assert.match(del, /firefly\.discardScene\(\{ projectId: req\.params\.id, sceneId: req\.params\.sid \}\)/, 'xóa cảnh thì đóng luôn tab Firefly của cảnh đó');
+});
+
+test('xóa 1 cảnh chỉ hủy lượt Firefly của cảnh đó, không hủy cả dự án', () => {
+  assert.match(src, /const canceledLogoScenes = new Set\(\)/, 'có danh sách hủy riêng theo cảnh');
+  assert.match(src, /function cancelLogoScene\(projectId, sceneId\)[\s\S]*?logoRemoveQueue\.splice\(i, 1\)/, 'bỏ job đang chờ của đúng cảnh đó khỏi hàng đợi');
+  assert.match(src, /function logoIsCanceled\(projectId, sceneId\)[\s\S]*?canceledLogoScenes\.has\(logoSceneCancelKey\(projectId, sceneId\)\)/, 'lệnh hủy chỉ đúng projectId:sceneId');
+  const checks = src.match(/isCanceled: \(\) => logoIsCanceled\(projectId, sceneId\),/g) || [];
+  assert.equal(checks.length, 3, 'prepare / hold / save Firefly đều nhận lệnh hủy theo từng cảnh');
 });
 
 test('chọn từng ảnh 2K không tự động sang Bước 4', () => {

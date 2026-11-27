@@ -131,6 +131,7 @@ test('tải/cài installer KHÔNG hiện thông báo timeout — chỉ báo lỗ
   assert.ok(cssVersion && jsVersion, 'CSS và JS đều phải có cache-buster');
   assert.equal(jsVersion, cssVersion, 'JS phải cùng bản cache-buster với CSS');
   assert.notEqual(cssVersion, '20261127-firefly-ui-20', 'mỗi lần đổi giao diện phải bump cache-buster');
+  assert.notEqual(cssVersion, '20261128-logo-status-1', 'bản sửa nút Xóa phải bump tiếp cache-buster');
 });
 
 test('xác nhận helper bằng file ready, không tin câu log ghi trước khi kiểm tra lock', () => {

@@ -336,6 +336,13 @@ test('ảnh xem trước tự thử lại khi chưa tải được, không bắt
   assert.match(src, /`\/api\/firefly\/prepared\?projectId=\$\{encodeURIComponent\(S\.p\.id\)\}&sceneId=\$\{encodeURIComponent\(s\.id\)\}&t=\$\{Date\.now\(\)\}`/, 'thử lại với cache-buster mới');
 });
 
+test('nút Xóa cảnh đang chờ/chạy Firefly hỏi xác nhận rồi mới hủy lượt đó', () => {
+  const rmscene = src.slice(src.indexOf("if (a === 'rmscene') {"), src.indexOf("if (a === 'retrysave')"));
+  assert.match(rmscene, /\['queued', 'retrying', 'preparing', 'downloading', 'waiting_ok'\]\.includes\(st\)/, 'cảnh đang chờ/chạy/chờ Chọn thì hỏi trước');
+  assert.match(rmscene, /confirm\('Cảnh này đang xóa logo trên Firefly/, 'báo rõ sẽ hủy lượt Firefly');
+  assert.match(rmscene, /return api\('DELETE', `\/api\/projects\/\$\{p\.id\}\/scenes\/\$\{sid\}`\)/, 'đồng ý thì gửi DELETE như thường');
+});
+
 test('chip Free tăng ngay 0/3 → 1/3 → 2/3 sau mỗi ảnh Firefly xong', () => {
   const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
   assert.match(ctl, /id="fireflyDailyChip"[^>]*>Free \$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}\/\$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\}/, 'chip Free có id để tự cập nhật, vẫn hiện số từ /api/flow/status');
