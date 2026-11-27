@@ -413,7 +413,7 @@ function renderSidebar() {
     const no = i + 1; // thu gọn hiện THEO SỐ (dự án 1, 2, 3…), không phải chữ cái đầu tên
     return `<div class="pitem ${p.id === S.id ? 'active' : ''}" data-pid="${p.id}" role="button" tabindex="0" aria-label="Mở dự án ${no}: ${esc(p.name)}" data-tip="Dự án ${no}: ${esc(p.name)}">
       <input class="project-select" type="checkbox" data-pid="${p.id}" ${checked ? 'checked' : ''} ${busy ? 'disabled' : ''} aria-label="Chọn dự án ${esc(p.name)} để xóa" title="${busy ? 'Đang xử lý; chưa thể xóa' : 'Chọn để xóa nhiều dự án cùng lúc'}">
-      <div class="pav" aria-hidden="true">${no}${p.id === S.id ? '<span class="pav-cur">đang mở</span>' : ''}</div>
+      <div class="pav" aria-hidden="true"><span class="pav-letter">${esc((p.name.trim()[0] || '?').toUpperCase())}</span><span class="pav-no">DA${no}</span></div>
       <div class="ptxt"><div class="nm">${esc(p.name)}</div><div class="sub">${projectSummary(p)}</div></div>
       <button class="project-delete" type="button" data-pid="${p.id}" aria-label="Xóa dự án ${esc(p.name)}" title="${busy ? 'Đang xử lý; chưa thể xóa' : `Xóa dự án ${esc(p.name)}`}" ${busy ? 'disabled' : ''}>${I.trash}</button>
     </div>`;

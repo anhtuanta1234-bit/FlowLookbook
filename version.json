@@ -1,5 +1,5 @@
 {
-  "version": "1.2.2",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.2/Flow.Lookbook.Setup.1.2.2.exe",
-  "notes": "- Sửa chip Firefly không lên “đã kết nối”: trạng thái đang đọc nhầm cổng của Flow (9333) thay vì cổng riêng Firefly (9334).\n- Bấm **Kết nối Firefly** thì cập nhật chip ngay (có chờ vài giây), không phải đợi vòng quét 6 giây; chấm xanh nhấp nháy ngay khi có kết nối.\n- Sidebar thu gọn: số dự án trước đây bị ẩn hẳn do CSS, giờ hiện lại rõ; dự án đang mở có viền sáng + nhãn “đang mở” (ví dụ đang làm dự án 2 thì biết ngay).\n- Số dự án giờ ổn định theo thứ tự tạo (dự án đầu tiên là 1), không đổi khi sửa tên hay chạy dự án.\n- Khung chiếu Firefly cao bằng ảnh gốc chưa xóa logo; ảnh chiếu từ Chrome căn giữa, vừa khung, không phóng to/cắt; chấm “chiếu trực tiếp” nhấp nháy xanh lúc đang chiếu."
+  "version": "1.2.3",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.3/Flow.Lookbook.Setup.1.2.3.exe",
+  "notes": "- Khung chiếu Firefly: ảnh từ Chrome rộng **100% ô chiếu**, cao bằng ảnh gốc chưa xóa logo (~373px), lấp đầy khung không còn khoảng trống hai bên.\n- Sidebar mở rộng trở lại kiểu bản đầu: vòng tròn chữ cái đầu + tên dự án + dòng trạng thái + nút xóa.\n- Sidebar thu gọn về thanh 62px, vòng tròn hiện **DA1, DA2, DA3…**; dự án đang mở có vòng tròn xanh + chấm xanh góc phải."
 }

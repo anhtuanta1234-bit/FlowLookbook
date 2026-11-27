@@ -293,12 +293,12 @@ test('Bước 4: nút Chạy tất cả xếp từng ảnh một và hiện tr�
   assert.match(src, /'Firefly: đã kết nối'/, 'Hiện trạng thái đã kết nối');
 });
 
-test('Bước 4: khung chiếu CAO BẰNG ảnh gốc chưa xóa logo, Chrome chiếu vừa khung', () => {
+test('Bước 4: khung chiếu rộng 100% ô Firefly, cao bằng ảnh gốc chưa xóa logo', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
-  assert.match(css, /\.logosplit\{--shot-w:210px;display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, '2 ô dùng chung chiều rộng ảnh --shot-w');
+  assert.match(css, /\.logosplit\{--shot-w:210px;--shot-h:calc\(var\(--shot-w\) \* 16 \/ 9\);display:grid;grid-template-columns:minmax\(0,210px\) minmax\(0,1fr\)/, 'chiều cao khung chiếu được tính từ chiều rộng ảnh gốc 9:16');
   assert.match(css, /\.logocell img\{display:block;width:100%;aspect-ratio:9\/16;object-fit:cover;background:var\(--bg2\);max-width:var\(--shot-w\);margin-inline:auto\}/, 'ảnh gốc khung 9:16 giới hạn bởi --shot-w');
-  assert.match(css, /\.logocell\.firefly img\{display:block;width:var\(--shot-w\);max-width:100%;height:auto;aspect-ratio:9\/16;object-fit:contain/, 'ảnh chiếu dùng chung --shot-w → cao bằng ảnh gốc, căn giữa, không phóng to/cắt');
-  assert.ok(!/\.logocell\.firefly img\{[^}]*max-width:none/.test(css), 'không cho ảnh chiếu tràn rộng hơn ảnh gốc');
+  assert.match(css, /\.logocell\.firefly img\{display:block;width:100%;max-width:none;height:var\(--shot-h\);aspect-ratio:auto;object-fit:fill/, 'ảnh chiếu rộng đúng 100% khung, cao đúng bằng ảnh gốc');
+  assert.ok(!/\.logocell\.firefly img\{[^}]*width:var\(--shot-w\)/.test(css), 'không được ép ảnh chiếu chỉ rộng bằng ảnh gốc');
   assert.ok(!/\.logocell img\{[^}]*max-height/.test(css), 'không được cắt ảnh gốc bằng max-height');
   assert.match(css, /\.logocell-lab \.livechip\.on::before\{[^}]*background:var\(--ok\)[^}]*animation:livedot-blink/, 'chấm TRONG chữ “chiếu trực tiếp” nhấp nháy xanh');
   assert.match(css, /\.logocell-lab \.livechip\.on\{[^}]*color:var\(--ok\)/, 'chữ “chiếu trực tiếp” cũng chuyển xanh');
@@ -372,18 +372,20 @@ test('nút thư mục ảnh đã xóa logo dùng chung kiểu với Mở thư m�
   assert.match(src, /class="btn sm" data-act="openout"[^>]*>\$\{I\.folder\} Mở thư mục kết quả<\/button>/);
 });
 
-test('sidebar thu gọn: hiện số + nhãn “đang mở”, lưới 2 cột, ô + để tạo dự án', () => {
+test('sidebar về kiểu bản cũ: vòng tròn chữ cái + tên + trạng thái + xóa; thu gọn hiện DA2', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert.match(src, /const no = i \+ 1;/);
   assert.match(src, /aria-label="Mở dự án \$\{no\}/);
-  assert.match(src, /<div class="pav" aria-hidden="true">\$\{no\}\$\{p\.id === S\.id \? '<span class="pav-cur">đang mở<\/span>' : ''\}<\/div>/, 'ô đang mở có nhãn riêng');
+  assert.match(src, /<span class="pav-letter">\$\{esc\(\(p\.name\.trim\(\)\[0\] \|\| '\?'\)\.toUpperCase\(\)\)\}<\/span><span class="pav-no">DA\$\{no\}<\/span>/, 'mở rộng hiện chữ cái đầu, thu gọn hiện DA1/DA2');
   assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'số dự án theo thứ tự tạo, không đổi khi sửa tên');
-  assert.match(css, /\.layout\.rail\{grid-template-columns:104px 1fr\}/);
-  assert.match(css, /\.layout\.rail \.plist\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(css, /\.layout\.rail \.pav\{display:flex;flex-direction:column;align-items:center;justify-content:center/, 'phải BẬT lại .pav vốn display:none, nếu không thu gọn bị trống ô');
-  assert.match(css, /\.layout\.rail \.pitem\.active \.pav-cur\{display:block/, 'chỉ dự án đang làm mới hiện nhãn “đang mở”');
-  assert.match(css, /\.layout\.rail \.pitem\.active\{outline:2px solid/, 'ô đang mở có viền sáng, nhìn là biết dự án 2');
+  assert.match(css, /\.layout\.rail\{grid-template-columns:62px 1fr\}/, 'thu gọn về thanh 62px như bản đầu');
+  assert.match(css, /\.layout\.rail \.pav\{display:grid;position:relative;font-size:12px\}/, 'vòng tròn hiện lại khi thu gọn');
+  assert.match(css, /\.layout\.rail \.pav-letter\{display:none\}/);
+  assert.match(css, /\.layout\.rail \.pav-no\{display:inline\}/);
+  assert.match(css, /\.pitem \.nm\{font-weight:600/, 'mở rộng có tên dự án như bản đầu');
+  assert.match(css, /\.pitem \.sub\{font-size:11\.5px/, 'mở rộng có dòng trạng thái như bản đầu');
+  assert.match(css, /\.layout\.rail \.pitem\.active \.pav\{background:var\(--grad\)/, 'DA đang mở nổi bật bằng vòng tròn xanh');
   assert.match(html, /id="railAdd"/);
   assert.match(src, /\$\('#railAdd'\)\.onclick/);
 });

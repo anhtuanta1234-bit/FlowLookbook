@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.2.3 - 2026-11-27
+- Khung chiếu Firefly: ảnh từ Chrome rộng **100% ô chiếu**, cao bằng ảnh gốc chưa xóa logo (~373px), lấp đầy khung không còn khoảng trống hai bên.
+- Sidebar mở rộng trở lại kiểu bản đầu: vòng tròn chữ cái đầu + tên dự án + dòng trạng thái + nút xóa.
+- Sidebar thu gọn về thanh 62px, vòng tròn hiện **DA1, DA2, DA3…**; dự án đang mở có vòng tròn xanh + chấm xanh góc phải.
+
+
 ## v1.2.2 - 2026-11-27
 - Sửa chip Firefly không lên “đã kết nối”: trạng thái đang đọc nhầm cổng của Flow (9333) thay vì cổng riêng Firefly (9334).
 - Bấm **Kết nối Firefly** thì cập nhật chip ngay (có chờ vài giây), không phải đợi vòng quét 6 giây; chấm xanh nhấp nháy ngay khi có kết nối.
