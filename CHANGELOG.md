@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.2.6 - 2026-11-27
+- Thanh **Xóa logo** bỏ hẳn số 4: dùng vòng tích; sang bước này hoặc làm xong thì vòng tích và chữ đều xanh như bước đã xong.
+
+
 ## v1.2.5 - 2026-11-27
 - Sidebar thu gọn: tên “dự án 2” giờ rút gọn thành **DA2** nằm trọn trong khung; chữ dài không còn tràn ra ngoài.
 - Thanh bước **Xóa logo** dùng chung kiểu với **Ghép cảnh thật** (cùng vòng số, cùng màu), chỉ khác chữ.

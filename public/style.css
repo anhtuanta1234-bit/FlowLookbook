@@ -141,6 +141,10 @@ textarea{width:100%;resize:vertical;line-height:1.55}
 .step.active,.step.active:hover{background:var(--step-on);color:var(--step-on-fg);box-shadow:0 2px 10px rgba(40,90,200,.22),0 0 0 1.5px color-mix(in srgb,var(--accent) 35%,transparent)}
 .step.active .n{background:var(--grad);color:#fff}
 .step.active.done .n{background:var(--ok);color:#fff}
+/* “Xóa logo”: bỏ số 4; sang bước này (hoặc làm xong) thì vòng tích + chữ đều xanh như bước đã xong. */
+.step.logo-step.active,.step.logo-step.done{color:var(--ok)}
+.step.logo-step.active{background:var(--step-on);box-shadow:0 2px 10px rgba(40,90,200,.22),0 0 0 1.5px color-mix(in srgb,var(--accent) 35%,transparent)}
+.step.logo-step.active .n,.step.logo-step.done .n{background:var(--ok);color:#fff}
 .step.locked,.step.locked:hover{opacity:.62;cursor:not-allowed;background:var(--step-lock);color:var(--step-idle-fg);filter:none}
 .step.locked .n svg{width:11px;height:11px}
 

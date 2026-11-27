@@ -575,10 +575,12 @@ function refresh() {
   morph($('#steps'), visibleSteps().map((s) => {
     const locked = s.n > maxStage, done = stageDone(s.n);
     const tip = locked ? `Chưa mở: hoàn tất bước ${s.n - 1} rồi bấm “Sang bước ${s.n}” để mở bước này` : s.tip;
-    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : ''].join(' ');
+    const cls = ['step', S.stage === s.n ? 'active' : '', done ? 'done' : '', locked ? 'locked' : '', s.n === 4 ? 'logo-step' : ''].join(' ');
     const go = locked ? 'aria-disabled="true"' : `data-act="goto" data-stage="${s.n}"`;
-    // Mọi bước, kể cả “Xóa logo”, dùng chung một kiểu thanh: vòng số + chữ.
-    const num = `<span class="n">${locked ? I.lock : done ? '✓' : s.n}</span>`;
+    // “Xóa logo” không hiện số 4: vòng tích, và sang bước này là tích + chữ đều xanh như bước đã xong.
+    const num = s.n === 4
+      ? `<span class="n">${locked ? I.lock : '✓'}</span>`
+      : `<span class="n">${locked ? I.lock : done ? '✓' : s.n}</span>`;
     return `<div class="${cls}" ${go} data-tip="${esc(tip)}" role="tab" tabindex="${locked ? -1 : 0}" aria-selected="${S.stage === s.n}">${num}<span class="t">${s.t}</span></div>`;
   }).join(''));
   renderSlots(); renderResults(); patchLogoPhases();
