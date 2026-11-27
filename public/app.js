@@ -246,6 +246,8 @@ async function init() {
     } else S.projects.unshift(data);
     if (data.id === S.id) {
       S.p = data; refresh();
+      // Ảnh Firefly vừa xong: hỏi lại /api/flow/status ngay để chip Free nhảy 0/3 → 1/3 → 2/3.
+      if (S.stage === 4) refreshFlow();
       const g = data.autoGo;
       if (g && g.at !== S.lastGo && Date.now() - g.at < 30000) {
         S.lastGo = g.at;
@@ -320,7 +322,18 @@ function announceProjectCompletions(previous, current) {
 // Chip Firefly được tạo lại mỗi lần vẽ Bước 4, nên phải tự cập nhật ngay sau khi vẽ
 // và ngay sau khi bấm “Kết nối Firefly” (không đợi vòng poll 6 giây).
 // Trạng thái lấy từ /api/flow/status → firefly.status() đọc Chrome riêng cổng 9334.
+// Chip “Free n/3” phải nhảy ngay sau mỗi ảnh Firefly tạo xong, không đợi đổi bước
+// hay vòng poll 6 giây: sự kiện project chỉ gọi refresh(), không gọi renderMain().
+function syncFireflyDaily() {
+  const el = $('#fireflyDailyChip'); if (!el) return;
+  const d = S.flow.fireflyDaily || {};
+  const limit = Math.max(1, Number(d.limit) || 3);
+  const used = Math.max(0, Number(d.count) || 0);
+  const text = `Free ${used}/${limit}`;
+  if (el.textContent !== text) el.textContent = text;
+}
 function syncFireflyChip() {
+  syncFireflyDaily();
   const ff = $('#fireflyStatus');
   if (!ff) return;
   const fs = S.flow.fireflyStatus || {};
@@ -589,7 +602,7 @@ function stageDone(n) {
   if (!S.cfg?.removeLogoEnabled) return true; // không bật tính năng thì không có việc phải làm
   return scenes.every((s) => ['approved', 'skipped'].includes(s.logoRemoval?.status));
 }
-// Chưa dọn xong Bước 3 thì nút “Xóa logo” không được bật — tránh hiện Bước 4 khi chưa có ảnh để xóa.
+// Bước 3 thật sự xong (đã tải hết ảnh về & dọn dẹp) thì “Xóa logo” mới mở khóa và tự chuyển sang Bước 4.
 function step3ReadyForLogo() {
   const scenes = S.p?.s3?.scenes || [];
   return !!S.p?.cleaned && scenes.length > 0 && scenes.every((s) => s.chosen);
@@ -773,15 +786,12 @@ function syncLogoToggle() {
   b.setAttribute('aria-pressed', String(on));
   b.dataset.tip = on
     ? 'Bước 4 đang BẬT: tool xóa logo sau khi Bước 3 dọn xong. Bấm để tắt.'
-    : 'Bước 4 đang TẮT (mặc định). Xong Bước 3 mới bật được xóa logo bằng Firefly.';
+    : 'Bước 4 đang TẮT (mặc định). Bật được ngay: nút hiện khóa cho tới khi dọn xong Bước 3.';
 }
 async function toggleLogo() {
   const on = !S.cfg?.removeLogoEnabled;
-  if (on && !step3ReadyForLogo()) {
-    toast('Hoàn tất Bước 3 (chọn ảnh rồi bấm “Tải hết ảnh về & Dọn dẹp”) xong mới được bật Bước 4.', 'warn');
-    return;
-  }
-  if (on && !confirm('Bật Bước 4 — xóa logo bằng Firefly?\n\nTool chỉ chạy sau khi bạn bấm “Tải hết ảnh về & Dọn dẹp” ở Bước 3. Firefly free 3 ảnh/ngày; hết lượt tool nhắc đổi Gmail. Bạn tự đăng nhập, app không lưu mật khẩu.')) return;
+  // Bật được mọi lúc: nút “Xóa logo” hiện ngay cạnh “Ghép cảnh thật”, còn khóa cho tới khi dọn xong Bước 3.
+  if (on && !confirm('Bật Bước 4 — xóa logo bằng Firefly?\n\nCó thể bật ngay: nút “Xóa logo” đứng ngay sau “Ghép cảnh thật” và hiện hình khóa. Xong Bước 3, bấm “Tải hết ảnh về & Dọn dẹp” là tự mở khóa, tự sang Bước 4. Firefly free 3 ảnh/ngày; hết lượt tool nhắc đổi Gmail.')) return;
   if (!on && (S.p?.s3?.scenes || []).some((s) => ['preparing', 'downloading', 'waiting_ok', 'queued', 'quota_blocked'].includes(s.logoRemoval?.status))) {
     toast('Đang có ảnh Bước 4 chưa xong. Hãy xử lý xong ảnh đó rồi mới tắt.', 'warn');
     return;
@@ -790,11 +800,16 @@ async function toggleLogo() {
     await api('POST', '/api/config', { removeLogoEnabled: on });
     S.cfg = { ...(S.cfg || {}), removeLogoEnabled: on };
     syncLogoToggle();
-    toast(on ? 'Đã bật Bước 4. Bước “Xóa logo” hiện ngay sau Bước 3.' : 'Đã tắt Bước 4. Bước “Xóa logo” đã ẩn, các bước 1–3 không đổi.', 'ok');
+    const ready = on && step3ReadyForLogo();
+    toast(on
+      ? (ready ? 'Đã bật Bước 4. Bước “Xóa logo” hiện ngay sau Bước 3.'
+        : 'Đã bật Bước 4. “Xóa logo” đứng ngay sau “Ghép cảnh thật” và đang khóa; dọn xong Bước 3 sẽ tự mở.')
+      : 'Đã tắt Bước 4. Bước “Xóa logo” đã ẩn, các bước 1–3 không đổi.', 'ok');
     if (S.p) {
-      // Tắt thì lui về Bước 3; bật (sau khi xong Bước 3) thì chuyển thẳng sang Bước 4.
+      // Tắt thì lui về Bước 3; bật khi Bước 3 đã dọn xong thì chuyển thẳng sang Bước 4.
+      // Bật sớm thì vẫn đứng ở bước hiện tại: thanh bước hiện khóa như các bước chưa mở.
       if (!on && S.stage === 4) S.stage = 3;
-      if (on) {
+      if (ready) {
         S.stage = 4;
         if ((S.p.stage || 1) < 4) await api('PATCH', `/api/projects/${S.p.id}`, { stage: 4 });
         S.p.stage = Math.max(S.p.stage || 1, 4);
@@ -814,7 +829,7 @@ function buildLogoCtl(p) {
       ${logoFlowHtml(lr)}
       ${logoQueueHtml(p)}
       <div class="logo-toolbar">
-        <span class="chip">Free ${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</span><span class="grow"></span>
+        <span class="chip" id="fireflyDailyChip" data-tip="Số lượt xóa logo Firefly đã dùng hôm nay: tự cộng 1 sau mỗi ảnh tạo xong. Đổi Gmail rồi bấm “Tiếp tục” để reset về 0.">Free ${+(S.flow?.fireflyDaily?.count || 0)}/${+(S.flow?.fireflyDaily?.limit || 3)}</span><span class="grow"></span>
         <span id="fireflyStatus" class="chip" role="status" aria-live="polite" data-tip="Trạng thái kết nối Adobe Firefly — dùng để xóa logo">Firefly: đang kiểm tra…</span>
         <button class="btn sm" data-act="fireflyreveal" data-tip="Hiện Firefly để đăng nhập / đổi Gmail hoặc kiểm tra ảnh">Kết nối Firefly</button>
       </div>
@@ -832,7 +847,7 @@ function buildLogoCtl(p) {
         <div class="mini-actions"><button class="btn sm primary" data-act="savefireflycfg" data-tip="Lưu cỡ cọ và vùng logo, áp dụng cho ảnh chưa xóa">Lưu</button></div>
       </details>
       <details class="lite-details"><summary>Hướng dẫn</summary>
-        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 16)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo xong, tool tải ảnh vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>, bạn bấm <b>Chọn</b> để lưu.</div>
+        <div class="hint">Cắt <b>9:16</b> → <b>Chấm sửa và xóa</b> → cọ <b>${+(S.cfg?.logoBrushSize || 16)}</b> → chấm 1 lần → <b>Xóa</b>. Firefly báo <b>Đã hoàn tất thao tác tạo sinh</b>, ảnh hiện ngay trong khung <b>Ảnh đã xóa logo</b> để bạn xem; bấm <b>Chọn</b> thì tool mới tải vào <code>output/&lt;project&gt;/anhdaxoalogo/</code>.</div>
       </details>
     </div>`;
   syncFireflyChip(); // vẽ lại chip đúng trạng thái hiện tại, không để chữ “đang kiểm tra…” kẹt lại
@@ -1007,9 +1022,13 @@ function logoSceneHtml(s, i) {
   const st = lr.status || '';
   const clean = st === 'approved' && lr.cleanFile;
   const src = s.chosen?.status === 'saved' ? `/files/saved/${S.p.id}/${s.id}${clean ? '?clean=1' : ''}` : imgUrl(s.file);
-  // Ô thứ 3: ảnh sạch đã được tự tải xong → hiện ngay bên cạnh ảnh gốc để bạn tự so sánh rồi bấm Chọn.
-  const cleanReady = (st === 'waiting_ok' || st === 'approved') && !!lr.cleanFile;
-  const cleanSrc = cleanReady ? `/files/saved/${S.p.id}/${s.id}?clean=1&t=${lr.updatedAt || Date.now()}` : '';
+  // Ô thứ 3: Firefly vừa báo xong là ảnh đã nằm trong khung này để xem (bytes giữ trong RAM ở server).
+  // Chưa ghi ra anhdaxoalogo: chỉ bấm “Chọn” mới tải về thư mục đích.
+  const waiting = st === 'waiting_ok';
+  const cleanReady = (waiting || st === 'approved') && (!!lr.cleanFile || (waiting && !!lr.prepared));
+  const cleanSrc = lr.cleanFile
+    ? `/files/saved/${S.p.id}/${s.id}?clean=1&t=${lr.updatedAt || Date.now()}`
+    : (waiting && lr.prepared ? `/api/firefly/prepared?projectId=${encodeURIComponent(S.p.id)}&sceneId=${encodeURIComponent(s.id)}&t=${lr.updatedAt || Date.now()}` : '');
   const badge = st === 'approved' ? '<span class="badge ok">đã lưu ảnh sạch</span>'
     : st === 'waiting_ok' ? '<span class="badge warn">chờ bạn bấm Chọn</span>'
     : (st === 'preparing' || st === 'downloading') ? '<span class="badge warn">đang chạy</span>'
@@ -1019,7 +1038,7 @@ function logoSceneHtml(s, i) {
   const live = LOGO_LIVE_STATUS[st] || 'chờ đến lượt xóa logo';
   const previewSrc = S.preview.get(s.id) || '';
   const approved = st === 'approved';
-  const canChoose = cleanReady && st === 'waiting_ok';
+  const canChoose = waiting && cleanReady;
   const busy = st === 'preparing' || st === 'downloading' || st === 'queued';
   const quota = st === 'quota_blocked';
   // Dùng CHUNG .rc-act/.tb với ô kết quả Bước 1-3: đúng 2 nút “Làm lại” + “Chọn” trên cùng một hàng.
@@ -1064,7 +1083,7 @@ function logoSceneHtml(s, i) {
         <div class="logocell-lab">Ảnh đã xóa logo</div>
         <div class="clean-wrap">
           <img data-clean-sid="${s.id}"${cleanSrc ? ` src="${cleanSrc}" data-zoom="${cleanSrc}"` : ''} alt="Ảnh đã xóa logo của ảnh ${esc(s.label || i + 1)}">
-          ${approved ? `<span class="tag">${I.check}Đã chọn</span>` : ''}
+          ${approved ? `<span class="tag">${I.check}Đã chọn</span>` : waiting && cleanSrc ? '<span class="tag">xem trước · bấm Chọn để tải về</span>' : ''}
         </div>
         ${actions}
       </div>

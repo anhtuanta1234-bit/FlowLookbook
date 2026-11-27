@@ -67,8 +67,9 @@ test('Bước 4 có nút bật/tắt ngoài Cài đặt, mặc định TẮT, ch
   assert.match(html, /data-tip="Bật\/tắt Bước 4 xóa logo bằng Firefly\. Mặc định TẮT/, 'Nút phải nói rõ mặc định TẮT');
   assert.match(src, /async function toggleLogo\(\)/, 'Phải có hàm bật/tắt');
   assert.match(src, /await api\('POST', '\/api\/config', \{ removeLogoEnabled: on \}\)/, 'Chỉ lưu khi người dùng bấm nút');
-  assert.match(src, /function step3ReadyForLogo\(\)/, 'Phải kiểm tra Bước 3 xong trước khi bật');
-  assert.match(src, /if \(on && !step3ReadyForLogo\(\)\) \{[\s\S]*?return;\s*\}/, 'Chưa xong Bước 3 thì nút không chuyển sang BẬT');
+  assert.match(src, /function step3ReadyForLogo\(\)/, 'Vẫn nhận diện Bước 3 đã dọn xong để tự mở khóa');
+  assert.ok(!/if \(on && !step3ReadyForLogo\(\)\)/.test(src), 'Bật sớm được: không chặn nút khi chưa xong Bước 3');
+  assert.match(src, /const ready = on && step3ReadyForLogo\(\)/, 'Chỉ tự sang Bước 4 khi đã dọn xong Bước 3');
   assert.ok(!/id="cRemoveLogo"/.test(src), 'Cài đặt không còn toggle Bước 4');
   for (const id of ['fBrush', 'fMaskX', 'fMaskY', 'fMaskW', 'fMaskH']) assert.match(src, new RegExp(`id="${id}"`), `Phải có ô chỉnh ${id}`);
   assert.match(src, /data-act="savefireflycfg"/, 'Cỡ cọ/mask có nút Lưu riêng');
@@ -84,12 +85,31 @@ test('tắt Xóa logo thì Bước 4 ẩn hẳn, bật lại mới hiện sau B�
   assert.match(src, /const visibleSteps = \(\) => \(S\.cfg\?\.removeLogoEnabled \? STEPS : STEPS\.filter\(\(s\) => s\.n !== 4\)\)/, 'thanh bước chỉ lấy 1-2-3 khi đang tắt');
   assert.match(src, /morph\(\$\('#steps'\), visibleSteps\(\)\.map/, 'render thanh bước dùng danh sách đã lọc');
   assert.match(src, /if \(!on && S\.stage === 4\) S\.stage = 3;/, 'tắt thì lui về Bước 3');
-  assert.match(src, /if \(on\) \{\s*S\.stage = 4;[\s\S]{0,200}api\('PATCH', `\/api\/projects\/\$\{S\.p\.id\}`/, 'xong Bước 3 rồi bật là chuyển thẳng sang Bước 4');
+  assert.match(src, /if \(ready\) \{\s*S\.stage = 4;[\s\S]{0,200}api\('PATCH', `\/api\/projects\/\$\{S\.p\.id\}`/, 'xong Bước 3 rồi bật là chuyển thẳng sang Bước 4');
   assert.match(src, /if \(to === 4 && !S\.cfg\?\.removeLogoEnabled\) return;/, 'không cho tự nhảy vào Bước 4 khi đang ẩn');
   assert.match(src, /if \(!S\.cfg\?\.removeLogoEnabled\) return false; \/\/ đang TẮT thì không hiện Bước 4/, 'dọn xong Bước 3 cũng không tự mở Bước 4');
   assert.match(src, /const nextStage = !S\.cfg\?\.removeLogoEnabled && data\.stage >= 4 \? 3 : data\.stage/, 'poll không đẩy lên Bước 4');
   assert.match(src, /const to = !S\.cfg\?\.removeLogoEnabled && g\.to >= 4 \? 3 : g\.to/, 'SSE không đẩy lên Bước 4');
   assert.match(src, /S\.stage = \(!S\.cfg\?\.removeLogoEnabled && st >= 4\) \? 3 : st/, 'mở lại dự án đang ở Bước 4 vẫn dừng ở Bước 3');
+});
+
+test('thanh bước “Xóa logo”: bật sớm vẫn khóa, dọn xong Bước 3 mới tích xanh và tự sang Bước 4', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert.match(src, /\{ n: 4, t: 'Xóa logo'/, 'có bước Xóa logo nối ngay sau Ghép cảnh thật');
+  assert.match(src, /const locked = s\.n > maxStage, done = stageDone\(s\.n\)/, 'khóa theo maxStage y hệt các bước khác');
+  assert.match(src, /s\.n === 4[\s\S]{0,30}\? `<span class="n">\$\{locked \? I\.lock : '✓'\}<\/span>`/, 'chưa mở là hình khóa, mở rồi là vòng tích');
+  assert.match(src, /s\.n === 4 \? 'logo-step' : ''/, 'cùng lớp .step với các bước trước');
+  assert.match(css, /\.step\.logo-step\.logo-on:not\(\.locked\),\.step\.logo-step\.active,\.step\.logo-step\.done\{color:var\(--ok\)\}/, 'chữ xanh như bước trước');
+  assert.match(css, /\.step\.logo-step\.logo-on:not\(\.locked\) \.n,\.step\.logo-step\.active \.n,\.step\.logo-step\.done \.n\{background:var\(--ok\);color:#fff\}/, 'vòng tích xanh');
+  assert.match(src, /async function showStep4IfReady\(\)/, 'dọn xong Bước 3 thì tự sang Bước 4, giữ thông báo hiện tại');
+});
+
+test('Firefly báo xong thì ảnh vào khung xem trước, bấm Chọn mới tải vào anhdaxoalogo', () => {
+  assert.ok(src.includes('/api/firefly/prepared?projectId='), 'khung “Ảnh đã xóa logo” đọc ảnh đang giữ trong RAM');
+  assert.ok(src.includes('xem trước · bấm Chọn để tải về'), 'có nhãn báo ảnh chưa ghi đĩa');
+  assert.match(src, /const canChoose = waiting && cleanReady/, 'nút Chọn chỉ sáng khi Firefly đã xong và có ảnh xem trước');
+  assert.ok(src.includes('Firefly báo <b>Đã hoàn tất thao tác tạo sinh</b>'), 'hướng dẫn đúng mốc Firefly báo xong');
+  assert.ok(src.includes('bấm <b>Chọn</b> thì tool mới tải vào'), 'chỉ bấm Chọn mới lưu vào thư mục đích');
 });
 
 test('xóa dự án báo rõ thư mục output bị xóa, không còn nói giữ ảnh', () => {
@@ -293,6 +313,14 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /logoBrushSize: val\('fBrush', 16\)/, 'Cỡ cọ phải được lưu qua /api/config');
 });
 
+test('chip Free tăng ngay 0/3 → 1/3 → 2/3 sau mỗi ảnh Firefly xong', () => {
+  const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
+  assert.match(ctl, /id="fireflyDailyChip"[^>]*>Free \$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}\/\$\{\+\(S\.flow\?\.fireflyDaily\?\.limit \|\| 3\)\}/, 'chip Free có id để tự cập nhật, vẫn hiện số từ /api/flow/status');
+  assert.match(src, /function syncFireflyDaily\(\)[\s\S]*?\$\('#fireflyDailyChip'\)[\s\S]*?const text = `Free \$\{used\}\/\$\{limit\}`[\s\S]*?el\.textContent = text/, 'đọc count/limit rồi đổi ngay chữ trên chip');
+  assert.match(src, /function syncFireflyChip\(\) \{\s*syncFireflyDaily\(\);/, 'mỗi lần vẽ chip Firefly cũng cập nhật chip Free');
+  assert.match(src, /if \(S\.stage === 4\) refreshFlow\(\)/, 'sự kiện project ở Bước 4 hỏi lại status ngay, không đợi poll 6s');
+});
+
 test('hàng chờ Bước 4 hiện đúng số ảnh 01, 02, 03 đã đặt từ Bước 3', () => {
   assert.match(src, /no: \+\(s\.order \|\| i \+ 1\)/, 'dùng số thứ tự thật của ảnh, không đánh số lại từ 1');
   assert.match(src, /sort\(\(a, b\) => a\.no - b\.no\)/, 'hàng chờ đi theo thứ tự ảnh');
@@ -455,10 +483,10 @@ test('hết lượt Firefly: 2 bước Đổi Gmail → Tiếp tục', () => {
   assert.ok(!/data-live-dot/.test(src), 'không còn chấm riêng ở góc ô chiếu');
 });
 
-test('nút Xóa logo bật/tắt cùng kiểu nút Tự động và bật xong là sang Bước 4', () => {
+test('nút Xóa logo bật/tắt cùng kiểu nút Tự động, xong Bước 3 mới tự sang Bước 4', () => {
   assert.match(src, /b\.classList\.toggle\('primary', on\); \/\/ giống hệt nút “Tự động: Bật”/);
   assert.match(src, /ba\.classList\.toggle\('primary', on\)/, 'nút Tự động cũng dùng class primary');
-  assert.match(src, /if \(on\) \{\s*S\.stage = 4;/);
+  assert.match(src, /if \(ready\) \{\s*S\.stage = 4;/, 'bật sớm thì vẫn khóa, chỉ xong Bước 3 mới tự sang');
   assert.match(src, /await api\('PATCH', `\/api\/projects\/\$\{S\.p\.id\}`/, 'cập nhật stage đúng dự án đang mở');
 });
 

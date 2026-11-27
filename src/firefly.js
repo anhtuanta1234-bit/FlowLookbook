@@ -2,12 +2,18 @@
 // Đổi Gmail Firefly liên tục vì thế không đụng session Google của Flow.
 // UI selectors are centralized here because Firefly changes frequently.
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const cfg = require('./config');
 const chrome = require('./chrome-firefly');
 const { imageDimensions } = require('./image');
 
 const DEFAULT_HOME = 'https://firefly.adobe.com/';
+// Ảnh Firefly vừa tạo được giữ TRONG BỘ NHỚ để hiện vào khung “Ảnh đã xóa logo”.
+// Chỉ khi người dùng bấm “Chọn” thì mới ghi ra output/<dự án>/anhdaxoalogo.
+// Nhờ vậy không còn copyfile từ file tạm playwright-artifacts (lỗi ENOENT hôm trước).
+const preparedImages = new Map();
+const preparedKey = (projectId, sceneId) => `${projectId}:${sceneId}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const UI_TICK_MS = 150;
 // Chờ theo điều kiện thật thay vì ngủ cố định: nhanh hơn nhưng vẫn bấm đúng lúc nút đã active.
@@ -801,6 +807,100 @@ async function fitImageToSize(page, file, size) {
   }
 }
 
+function preparedImage(projectId, sceneId) {
+  return preparedImages.get(preparedKey(projectId, sceneId)) || null;
+}
+async function readDownloadBuffer(download) {
+  const chunks = [];
+  for await (const chunk of download.createReadStream()) chunks.push(Buffer.from(chunk));
+  const buf = Buffer.concat(chunks);
+  if (!buf.length) throw new Error('Firefly trả file ảnh rỗng.');
+  return buf;
+}
+function downloadGoneError(e) {
+  return Object.assign(new Error('Chrome đã dọn mất file ảnh tạm của Firefly. Bấm “Làm lại” để tạo lại ảnh này.'), { code: 'FIREFLY_DOWNLOAD_GONE', cause: e });
+}
+
+// Firefly vừa báo “Đã hoàn tất thao tác tạo sinh”: bấm Tải xuống, giữ bytes trong RAM để
+// app hiện vào khung xem trước. CHƯA ghi ra đĩa — chỉ bấm “Chọn” mới lưu vào anhdaxoalogo.
+async function holdPrepared({ projectId, sceneId, onPhase, isCanceled }) {
+  return lock.run(async () => {
+    const key = preparedKey(projectId, sceneId);
+    const pr = tabs.get(key);
+    if (!pr) throw new Error('Không còn phiên Firefly của cảnh này. Hãy bấm “Làm lại xóa logo”.');
+    const t = await pr;
+    const p = t.page;
+    try {
+      assertNotCanceled(isCanceled);
+      if (!(await downloadReady(p)) && await detectQuotaBlock(p)) throw quotaError();
+      onPhase?.('Đang bấm nút Tải xuống trên Firefly để đưa ảnh vào khung xem trước…');
+      const download = await waitForDownloadClick(p);
+      assertNotCanceled(isCanceled);
+      let buffer;
+      try { buffer = await readDownloadBuffer(download); } catch (e) { throw downloadGoneError(e); }
+      const ext = path.extname(download.suggestedFilename() || '') || '.png';
+      const probe = path.join(os.tmpdir(), `flb-prepared-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+      try {
+        fs.writeFileSync(probe, buffer);
+        const size = imageDimensions(probe);
+        if (!size?.width || !size?.height) throw new Error('File tải về từ Firefly không đọc được.');
+        preparedImages.set(key, { buffer, ext, width: size.width, height: size.height, at: Date.now() });
+      } finally { fs.rmSync(probe, { force: true }); }
+      onPhase?.('Ảnh sạch đã hiện trong khung xem trước. Bấm “Chọn” để lưu vào anhdaxoalogo.');
+      return { ok: true, width: preparedImages.get(key).width, height: preparedImages.get(key).height, ext };
+    } catch (e) {
+      preparedImages.delete(key);
+      await releaseTab(key);
+      throw e;
+    }
+  });
+}
+
+// Bấm “Chọn”: ghi bytes đã giữ vào thư mục anhdaxoalogo, ép đúng kích thước ảnh gốc
+// (dùng canvas trên chính tab Firefly còn mở), rồi đóng tab. Không click tải lần 2.
+async function savePrepared({ projectId, sceneId, targetPath, matchSize, onPhase, isCanceled }) {
+  return lock.run(async () => {
+    const key = preparedKey(projectId, sceneId);
+    const data = preparedImages.get(key);
+    if (!data) throw new Error('Ảnh xem trước đã hết. Bấm “Làm lại” để tạo lại ảnh này.');
+    const tmp = targetPath + '.part';
+    try {
+      assertNotCanceled(isCanceled);
+      onPhase?.('Đang lưu ảnh sạch vào anhdaxoalogo…');
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(tmp, data.buffer);
+      let file = tmp, width = data.width, height = data.height;
+      if (matchSize?.width && matchSize?.height && (width !== matchSize.width || height !== matchSize.height)) {
+        const pr = tabs.get(key);
+        const t = pr ? await pr.catch(() => null) : null;
+        if (t?.page && !t.page.isClosed()) {
+          onPhase?.('Đang chỉnh ảnh sạch đúng kích thước ảnh gốc…');
+          const png = await fitImageToSize(t.page, tmp, matchSize);
+          if (png) {
+            const targetPng = /\.png$/i.test(targetPath) ? targetPath : targetPath.replace(/\.[^.\\/]+$/, '') + '.png';
+            fs.writeFileSync(targetPng, png);
+            fs.rmSync(tmp, { force: true });
+            file = targetPng; width = matchSize.width; height = matchSize.height;
+          }
+        }
+      }
+      if (file === tmp) {
+        const final = /^\.[a-z0-9]+$/i.test(data.ext) ? targetPath.replace(/\.[^.\\/]+$/, '') + data.ext : targetPath;
+        fs.rmSync(final, { force: true });
+        fs.renameSync(tmp, final);
+        file = final;
+      }
+      onPhase?.('Đã lưu ảnh sạch về máy.');
+      preparedImages.delete(key);
+      await releaseTab(key);
+      return { ok: true, file, width, height };
+    } catch (e) {
+      fs.rmSync(tmp, { force: true });
+      throw e;
+    }
+  });
+}
+
 async function downloadPrepared({ projectId, sceneId, targetPath, matchSize, onPhase, isCanceled }) {
   return lock.run(async () => {
     const key = `${projectId}:${sceneId}`;
@@ -860,7 +960,10 @@ function hasSceneTab(projectId, sceneId) {
 }
 
 async function discardScene({ projectId, sceneId }) {
-  return lock.run(async () => { await releaseTab(`${projectId}:${sceneId}`); });
+  return lock.run(async () => {
+    preparedImages.delete(preparedKey(projectId, sceneId));
+    await releaseTab(`${projectId}:${sceneId}`);
+  });
 }
 
 // Đóng toàn bộ Chrome Firefly khi tắt tool (không đụng Chrome đang chạy Flow).
@@ -868,6 +971,7 @@ async function closeAll() {
   return lock.run(async () => {
     cancelIdleClose();
     loginKeepAlive = false;
+    preparedImages.clear();
     for (const [key, pr] of [...tabs]) {
       tabs.delete(key);
       try { const t = await pr; await detachPreview(t); await t.page.close().catch(() => {}); } catch (_) {}
@@ -927,7 +1031,7 @@ async function preview({ projectId, sceneId } = {}) {
 
 module.exports = {
   status, checkQuota, open, reveal, background, preview,
-  prepareScene, downloadPrepared, discardScene, hasSceneTab,
+  prepareScene, holdPrepared, savePrepared, preparedImage, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs, closeAll, closeIdleNow,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },
 };

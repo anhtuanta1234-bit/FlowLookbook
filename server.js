@@ -241,6 +241,13 @@ app.get('/api/firefly/status', async (req, res) => {
 app.post('/api/firefly/check-quota', async (req, res) => {
   try { res.json(await firefly.checkQuota()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Ảnh vừa tạo (giữ trong RAM) để hiện vào khung “Ảnh đã xóa logo” TRƯỚC khi người dùng bấm Chọn.
+app.get('/api/firefly/prepared', (req, res) => {
+  const img = firefly.preparedImage(String(req.query.projectId || ''), String(req.query.sceneId || ''));
+  if (!img) return res.status(404).json({ error: 'Ảnh xem trước đã hết. Bấm “Làm lại” để tạo lại ảnh này.' });
+  res.set('Cache-Control', 'no-store');
+  res.type((img.ext || '.png').replace('.', '').replace(/^jpg$/, 'jpeg')).send(img.buffer);
+});
 app.post('/api/firefly/open', async (req, res) => {
   try { res.json(await firefly.open()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1695,8 +1702,6 @@ async function prepareLogoRemoval(projectId, sceneId) {
     return { imagePath: sc.chosen.target };
   });
   if (!prep) { releaseLogoJob(projectId, sceneId); return; }
-  const cur = store.load(projectId);
-  const cleanTarget = cur ? logoCleanTargetPath(cur, sceneId) : '';
   try {
     await firefly.prepareScene({
       projectId, sceneId, imagePath: prep.imagePath,
@@ -1708,33 +1713,27 @@ async function prepareLogoRemoval(projectId, sceneId) {
         sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
     });
-    // Tự tải ảnh sạch NGAY để có ô thứ 3 để bạn so sánh với ảnh gốc TRƯỚC khi bấm “Chọn”.
-    // Không tiêu thêm lượt free: chỉ bấm nút Tải xuống trên chính tab Firefly vừa tạo.
-    let autoClean = null;
-    if (cleanTarget) {
-      autoClean = await firefly.downloadPrepared({
-        projectId, sceneId, targetPath: cleanTarget,
-        // Ép file sạch đúng chiều rộng/cao của ảnh gốc → 2 ô so sánh cùng kích thước thật.
-        matchSize: prep.imagePath && fs.existsSync(prep.imagePath) ? imageDimensions(prep.imagePath) : null,
-        isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
-        onPhase: (note) => writeLock.run(() => {
-          const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
-          if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
-          sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
-          sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
-        }).catch(() => {}),
-      });
-    }
+    // Firefly vừa báo hoàn tất: chỉ GIỮ bytes trong RAM để app hiện vào khung xem trước.
+    // CHƯA ghi ra anhdaxoalogo — chỉ bấm “Chọn” mới lưu (không còn lỗi saveAs file tạm).
+    await firefly.holdPrepared({
+      projectId, sceneId,
+      isCanceled: () => canceledProjects.has(projectId) || !logoRemovalEnabled() || !!paused,
+      onPhase: (note) => writeLock.run(() => {
+        const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
+        if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
+        sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
+        sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
+      }).catch(() => {}),
+    });
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval || sc.logoRemoval.status !== 'preparing') return;
       sc.logoRemoval.status = 'waiting_ok';
-      // Mốc ảnh ĐÃ tạo xong: nếu tải bị hết lượt thì đổi Gmail chỉ tải lại, không tạo lại.
+      // Mốc ảnh ĐÃ tạo xong: ảnh đang nằm trong khung xem trước, đợi người dùng bấm Chọn mới ghi đĩa.
       sc.logoRemoval.generated = true;
-      sc.logoRemoval.cleanFile = autoClean?.file || '';
-      sc.logoRemoval.note = autoClean?.file
-        ? 'Ảnh sạch đã sẵn sàng ở ô bên cạnh. Bấm “Chọn” để lưu.'
-        : 'Đã xóa logo trên Firefly. Bấm “Chọn” để lưu ảnh sạch.';
+      sc.logoRemoval.cleanFile = '';
+      sc.logoRemoval.prepared = true;
+      sc.logoRemoval.note = 'Firefly đã hoàn tất. Ảnh đang hiện trong khung “Ảnh đã xóa logo” để bạn xem; bấm “Chọn” để tải về anhdaxoalogo.';
       appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
@@ -1802,7 +1801,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
     appendLogoPhase(sc.logoRemoval, sc.logoRemoval.note);
     sc.logoRemoval.updatedAt = Date.now();
     pushProject(p);
-    return { target, source: sc.chosen?.target, oldClean };
+    return { target, source: sc.chosen?.target, oldClean, prepared: !!sc.logoRemoval.prepared };
   });
   if (prep.code) return prep;
   if (prep.ready) {
@@ -1812,7 +1811,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
   }
   try {
     const srcSizeForMatch = prep.source && fs.existsSync(prep.source) ? imageDimensions(prep.source) : null;
-    const result = await firefly.downloadPrepared({
+    const opts = {
       projectId, sceneId, targetPath: prep.target,
       matchSize: srcSizeForMatch,
       // Lỗi/hết lượt/tạm dừng: Firefly đóng tab ngay, không giữ Chrome ăn RAM.
@@ -1823,7 +1822,10 @@ async function downloadLogoRemoval(projectId, sceneId) {
         sc.logoRemoval.note = note; appendLogoPhase(sc.logoRemoval, note);
         sc.logoRemoval.updatedAt = Date.now(); pushProject(p);
       }).catch(() => {}),
-    });
+    };
+    // Ảnh mới: bytes đã giữ lúc Firefly báo xong → chỉ ghi đĩa, không bấm tải lần 2.
+    // Dự án cũ chưa có ảnh giữ sẵn vẫn đi đường downloadPrepared như trước.
+    const result = prep.prepared ? await firefly.savePrepared(opts) : await firefly.downloadPrepared(opts);
     await writeLock.run(() => {
       const p = store.load(projectId); const sc = p?.s3.scenes.find((s) => s.id === sceneId);
       if (!sc?.logoRemoval) return;
@@ -1846,6 +1848,7 @@ async function downloadLogoRemoval(projectId, sceneId) {
       discardOldCleanFile(p, prep.oldClean, result.file);
       sc.logoRemoval.status = 'approved';
       sc.logoRemoval.cleanFile = result.file;
+      sc.logoRemoval.prepared = false;
       sc.logoRemoval.code = '';
       sc.logoRemoval.error = '';
       sc.logoRemoval.note = 'Đã lưu ảnh sạch vào thư mục anhdaxoalogo.';

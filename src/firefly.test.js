@@ -221,6 +221,18 @@ test('báo rõ từng thao tác Firefly trên Bước 4, có xác nhận cắt v
   assert.ok(src.includes('Đang bấm nút Tải xuống trên Firefly…'), 'Tool tự bấm Tải xuống trước khi bạn bấm Chọn');
 });
 
+test('giữ ảnh Firefly trong RAM để xem trước, bấm Chọn mới ghi vào anhdaxoalogo', () => {
+  assert.ok(src.includes('const preparedImages = new Map()'), 'có bộ đệm ảnh xem trước');
+  assert.match(src, /async function holdPrepared\(/, 'xong thì giữ bytes trước, chưa ghi đĩa');
+  assert.match(src, /for await \(const chunk of download\.createReadStream\(\)\)/, 'đọc thẳng stream, không copyfile từ playwright-artifacts');
+  assert.match(src, /preparedImages\.set\(key, \{ buffer/, 'lưu bytes theo projectId:sceneId');
+  assert.match(src, /downloadGoneError\(e\)/, 'file tạm mất thì báo lỗi dễ hiểu');
+  assert.ok(src.includes('FIREFLY_DOWNLOAD_GONE'));
+  assert.match(src, /async function savePrepared\(/, 'bấm Chọn mới có hàm ghi đĩa');
+  assert.match(src, /fs\.writeFileSync\(tmp, data\.buffer\)/, 'ghi từ bytes đã giữ, không bấm tải lần 2');
+  assert.match(src, /fitImageToSize\(t\.page, tmp, matchSize\)/, 'vẫn ép đúng kích thước ảnh gốc');
+});
+
 test('chọn cỡ cọ thật trong hộp Cài đặt cọ vẽ, rồi chấm đúng 1 lần vào canvas mask', () => {
   assert.ok(src.includes("#gen-remove-brush-settings-trigger"), 'Phải mở nút Cài đặt cọ vẽ thật của Firefly');
   assert.ok(src.includes('sp-slider[label="Kích thước cọ"]'), 'Slider thật nằm trong web component sp-slider');

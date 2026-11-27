@@ -87,7 +87,7 @@ function normalizeLogoRemoval(lr) {
   const known = LOGO_STATUSES.includes(lr.status);
   const status = known ? lr.status : 'queued';
   const str = (v) => (typeof v === 'string' ? v : '');
-  const out = { ...lr, status, code: str(lr.code), error: str(lr.error), note: str(lr.note), cleanFile: str(lr.cleanFile), sourceTarget: str(lr.sourceTarget) };
+  const out = { ...lr, status, code: str(lr.code), error: str(lr.error), note: str(lr.note), cleanFile: str(lr.cleanFile), sourceTarget: str(lr.sourceTarget), prepared: !!lr.prepared };
   out.phases = Array.isArray(lr.phases) ? lr.phases.slice(-LOGO_PHASE_LIMIT) : [];
   // Trạng thái lạ (dữ liệu cũ/sửa tay) không được giữ cleanFile của ảnh khác.
   if (!known) out.cleanFile = '';

@@ -1,5 +1,5 @@
 {
-  "version": "1.3.9",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.9/Flow.Lookbook.Setup.1.3.9.exe",
-  "notes": "- Ô chiếu Firefly giờ chụp từ surface của tab: khi tool dời cửa sổ ra ngoài màn hình, khung vẫn lên đều (~0,5s thay vì ~4s), không còn mất hình hay giật/delay.\n- Chốt cứng tọa độ xóa logo sau khi test thật trên Chrome: tâm (93%, 96,02%), sát mép phải dưới của ảnh 2K.\n- Cỡ cọ xóa logo tăng từ 14 lên 16 để phủ kín vùng logo.\n- Đồng bộ tọa độ/cỡ cọ đã chốt vào mọi giá trị dự phòng (server, giao diện cài đặt và Firefly) để không bao giờ tụt lại bản cũ."
+  "version": "1.3.10",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.10/Flow.Lookbook.Setup.1.3.10.exe",
+  "notes": "- Nút “Xóa logo” bật được ngay cả khi chưa xong Bước 3: hiện ngay cạnh “Ghép cảnh thật” dưới dạng khóa như các bước chưa mở; dọn xong Bước 3 thì mở khóa, tích xanh, chữ xanh và tự sang Bước 4.\n- Firefly báo “Đã hoàn tất thao tác tạo sinh” thì ảnh hiện ngay trong khung “Ảnh đã xóa logo” để xem trước; chỉ khi bấm “Chọn” ảnh mới được tải vào `anhdaxoalogo`.\n- Sửa lỗi `download.saveAs ... ENOENT ... playwright-artifacts ... .part`: ảnh được giữ trong bộ nhớ thay vì copy từ file tạm của Chrome.\n- Chip “Free n/3” trên Bước 4 giờ tự nhảy 0/3 → 1/3 → 2/3 ngay sau mỗi ảnh Firefly xong, không còn bị kẹt ở 0/3 cho tới khi đổi bước."
 }
