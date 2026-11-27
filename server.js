@@ -244,9 +244,10 @@ app.post('/api/firefly/check-quota', async (req, res) => {
 // Ảnh vừa tạo (giữ trong RAM) để hiện vào khung “Ảnh đã xóa logo” TRƯỚC khi người dùng bấm Chọn.
 app.get('/api/firefly/prepared', (req, res) => {
   const img = firefly.preparedImage(String(req.query.projectId || ''), String(req.query.sceneId || ''));
-  if (!img) return res.status(404).json({ error: 'Ảnh xem trước đã hết. Bấm “Làm lại” để tạo lại ảnh này.' });
+  const buf = img?.buffer?.length ? img.buffer : (img?.file && fs.existsSync(img.file) ? fs.readFileSync(img.file) : null);
+  if (!buf?.length) return res.status(404).json({ error: 'Ảnh xem trước đã hết. Bấm “Làm lại” để tạo lại ảnh này.' });
   res.set('Cache-Control', 'no-store');
-  res.type((img.ext || '.png').replace('.', '').replace(/^jpg$/, 'jpeg')).send(img.buffer);
+  res.type((img.ext || '.png').replace('.', '').replace(/^jpg$/, 'jpeg')).send(buf);
 });
 app.post('/api/firefly/open', async (req, res) => {
   try { res.json(await firefly.open()); } catch (e) { res.status(500).json({ error: e.message }); }
@@ -699,7 +700,7 @@ app.delete('/api/projects/:id/scenes/:sid', async (req, res) => {
         return { code: 409, error: 'Cảnh này đang chạy hoặc đang lấy ảnh 2K. Hãy đợi xong rồi xóa.' };
       }
       const ls = scene.logoRemoval?.status;
-      if (ls && ['queued', 'preparing', 'waiting_ok', 'downloading'].includes(ls)) {
+      if (ls && ['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'].includes(ls)) {
         return { code: 409, error: 'Cảnh này đang xóa logo trên Firefly. Hãy đợi xong rồi xóa.' };
       }
       p.s3.scenes = p.s3.scenes.filter((s) => s.id !== req.params.sid);
@@ -1607,7 +1608,7 @@ function markSceneDailyQuota(projectId, sceneId) {
 // Đạt 3 ảnh thì đánh dấu ảnh kế tiếp (nếu có) để banner đổi mail hiện ngay trên giao diện.
 function blockNextQueuedForDaily(p, doneSceneId) {
   const next = (p?.s3?.scenes || [])
-    .filter((s) => s.id !== doneSceneId && s.logoRemoval?.status === 'queued')
+    .filter((s) => s.id !== doneSceneId && ['queued', 'retrying'].includes(s.logoRemoval?.status))
     .sort((a, b) => sceneNo(p, a.id) - sceneNo(p, b.id))[0];
   return setDailyQuotaOn(next?.logoRemoval);
 }
@@ -1617,7 +1618,7 @@ function blockNextQueuedForDaily(p, doneSceneId) {
 function anyLogoJobWaiting() {
   for (const meta of store.list()) {
     const p = store.load(meta.id);
-    if (p?.s3?.scenes?.some((s) => ['preparing', 'downloading', 'waiting_ok'].includes(s.logoRemoval?.status))) return true;
+    if (p?.s3?.scenes?.some((s) => ['retrying', 'preparing', 'downloading', 'waiting_ok'].includes(s.logoRemoval?.status))) return true;
   }
   return false;
 }
@@ -1640,7 +1641,7 @@ function logoQueuePump() {
     const p = store.load(next.projectId);
     const sc = p?.s3?.scenes?.find((s) => s.id === next.sceneId);
     // Bỏ job cũ nếu người dùng đã duyệt/bỏ qua/lỗi cảnh này từ trước.
-    if (!p || sc?.logoRemoval?.status !== 'queued') continue;
+    if (!p || !['queued', 'retrying'].includes(sc?.logoRemoval?.status)) continue;
     logoRemoveActive = true;
     logoRemoveActiveKey = logoJobKey(next.projectId, next.sceneId);
     // prepareLogoRemoval() chỉ nhả khóa khi lỗi / hết lượt. Khi ảnh đã tạo xong nó đứng ở
@@ -1662,7 +1663,7 @@ async function queueLogoRemoval(projectId) {
     ensureLogoRemovalState(p);
     // Xếp hàng theo đúng thứ tự ảnh 1, 2, 3, … chứ không theo thứ tự mảng (có thể bị xóa/chèn).
     for (const sc of p.s3.scenes.slice().sort((a, b) => sceneNo(p, a.id) - sceneNo(p, b.id))) {
-      if (sc.logoRemoval?.status === 'queued') enqueueLogoRemoval(projectId, sc.id);
+      if (['queued', 'retrying'].includes(sc.logoRemoval?.status)) enqueueLogoRemoval(projectId, sc.id);
     }
     pushProject(p);
   });
@@ -2020,7 +2021,8 @@ app.post('/api/projects/:id/logo-remove/retry', async (req, res) => {
       const sc = findLogoRemovalScene(p, sceneId); if (!sc) return { code: 404, error: 'Không tìm thấy cảnh.' };
       if (!sc.chosen?.target || !fs.existsSync(sc.chosen.target)) return { code: 400, error: 'Không tìm thấy ảnh 2K Bước 3 để xóa logo.' };
       if (sc.logoRemoval?.status === 'approved') return { code: 400, error: 'Cảnh này đã có ảnh sạch được xác nhận.' };
-      sc.logoRemoval = { status: 'queued', code: '', error: '', note: 'Chờ xóa logo sau Bước 3', sourceTarget: sc.chosen.target, cleanFile: '', createdAt: Date.now(), updatedAt: Date.now() };
+      // Trạng thái RIÊNG để giao diện báo “đang làm lại” thay vì “chờ hàng đợi” như lần đầu.
+      sc.logoRemoval = { status: 'retrying', code: '', error: '', note: 'Đang làm lại: chờ đến lượt xóa logo', sourceTarget: sc.chosen.target, cleanFile: '', prepared: false, createdAt: Date.now(), updatedAt: Date.now() };
       logoRemovePausedQuota = null;
       pushProject(p);
       return { ok: true };
@@ -2199,7 +2201,7 @@ function recoverInterruptedRuns() {
     for (const sc of p.s3.scenes) if (sc.chosen?.status === 'saving') { sc.chosen.status = 'error'; sc.chosen.error = 'Bị gián đoạn khi lưu 2K. Bấm “Lưu lại”.'; n++; }
     // waiting_ok cũng phải đưa về error: tool mất bộ nhớ tab Firefly sau khi khởi động lại,
     // nếu cứ giữ trạng thái chờ Chọn thì hàng đợi Bước 4 bị kẹt vĩnh viễn (kể cả dự án khác).
-    for (const sc of p.s3.scenes) if (['queued', 'preparing', 'waiting_ok', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
+    for (const sc of p.s3.scenes) if (['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'].includes(sc.logoRemoval?.status)) { sc.logoRemoval.status = 'error'; sc.logoRemoval.error = 'Bị gián đoạn vì tool khởi động lại. Bấm “Làm lại xóa logo”.'; sc.logoRemoval.updatedAt = Date.now(); n++; }
     if (n) { store.save(p); removeStaleTemp(store.outputDirFor(p)); interruptedCount += n; }
   }
 }

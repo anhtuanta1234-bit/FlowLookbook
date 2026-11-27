@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, normalizeLogoRemoval, appendLogoPhase, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
+const { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, normalizeLogoRemoval, appendLogoPhase, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets } = require('./workflow');
 
 test('nhật ký Bước 4 ghi từng thao tác Firefly và bỏ trùng liên tiếp', () => {
   const lr = { status: 'preparing' };
@@ -94,8 +94,14 @@ test('đổi Gmail xong làm lại đúng ảnh chưa Chọn, ảnh đã Chọn 
   assert.equal(logoResumeStatus({ status: 'skipped' }), null, 'ảnh đã bỏ qua cũng giữ nguyên');
   assert.equal(logoResumeStatus({ status: 'queued' }), null, 'ảnh đang chờ/chạy không bị đẩy lại');
   assert.equal(logoResumeStatus({ status: 'preparing' }), null, 'ảnh đang chạy thật không bị làm lại');
-  assert.equal(logoResumeStatus({ status: 'quota_blocked' }), 'queued', 'hết lượt thì tạo tiếp bằng Gmail mới');
-  assert.equal(logoResumeStatus({ status: 'waiting_ok', generated: true }), 'queued', 'đã tạo nhưng chưa bấm Chọn thì làm lại chính ảnh đó');
+  assert.equal(logoResumeStatus({ status: 'quota_blocked' }), 'retrying', 'hết lượt thì tạo tiếp bằng Gmail mới');
+  assert.equal(logoResumeStatus({ status: 'waiting_ok', generated: true }), 'retrying', 'đã tạo nhưng chưa bấm Chọn thì làm lại chính ảnh đó');
+});
+
+test('trạng thái đang làm lại là trạng thái riêng của từng cảnh, không trộn với chờ hàng đợi', () => {
+  assert.ok(LOGO_PENDING_STATUSES.includes('retrying'), 'đang làm lại vẫn là ảnh chưa xong');
+  assert.equal(normalizeLogoRemoval({ status: 'retrying' }).status, 'retrying', 'đọc lại dự án không được đổi thành queued');
+  assert.equal(logoRemovalPending({ logoRemoval: { status: 'retrying' } }), true);
 });
 
 test('disconnect drops empty queued runs and keeps finished, failed, and in-flight runs', () => {

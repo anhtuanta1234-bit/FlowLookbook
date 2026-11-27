@@ -65,7 +65,9 @@ function flowBlockedMessage(sceneOrder) {
   return `Cảnh ${sceneOrder} hiện không thực hiện được do lỗi Flow, hãy kiểm tra lại`;
 }
 
-const LOGO_PENDING_STATUSES = ['queued', 'preparing', 'waiting_ok', 'downloading'];
+// "retrying" = người dùng vừa bấm Làm lại / Tiếp tục, ảnh đang xếp lại hàng chờ.
+// Phân biệt với "queued" (lần đầu) để giao diện hiện đúng chữ “đang làm lại”.
+const LOGO_PENDING_STATUSES = ['queued', 'retrying', 'preparing', 'waiting_ok', 'downloading'];
 const LOGO_DONE_STATUSES = ['approved', 'skipped'];
 const LOGO_STATUSES = [...LOGO_PENDING_STATUSES, ...LOGO_DONE_STATUSES, 'error', 'quota_blocked'];
 
@@ -121,7 +123,7 @@ function step3ReadyForLogo(project) {
 // Ảnh đã Chọn/bỏ qua hoặc đang chạy thật thì trả null, không đẩy lại vào hàng đợi.
 function logoResumeStatus(lr) {
   if (!['quota_blocked', 'waiting_ok'].includes(lr?.status)) return null;
-  return 'queued';
+  return 'retrying';
 }
 
 module.exports = { completeHqStage, finishHqBatch, dropQueuedRuns, MAX_FLOW_REOPEN, shouldReopenFlow, flowReopenDelayMs, flowBlockedMessage, LOGO_PENDING_STATUSES, LOGO_DONE_STATUSES, LOGO_STATUSES, LOGO_PHASE_LIMIT, normalizeLogoRemoval, appendLogoPhase, logoRemovalPending, step3ReadyForLogo, logoResumeStatus, allLogoRemovalDone, logoCleanupTargets };

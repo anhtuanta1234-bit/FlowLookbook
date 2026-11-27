@@ -270,7 +270,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   const results = src.slice(src.indexOf('function logoResultsHtml('), src.indexOf('const runSig'));
   assert.match(src, /function logoQueueRows\(p\)/, 'Phải tính thứ tự ảnh chưa xong');
   assert.match(src, /<span class="qno">\$\{x\.no\}<\/span>/, 'Mỗi cảnh phải hiện số thứ tự trong hàng chời');
-  assert.match(src, /trong hàng chờ/, 'Ảnh chưa tới lượt phải hiện rõ là đang chờ');
+  assert.match(src, /chờ hàng đợi/, 'Ảnh chưa tới lượt phải hiện rõ là chờ hàng đợi');
   assert.match(ctl, /\$\{logoQueueHtml\(p\)\}/, 'Hàng chờ nằm trong khung trái');
   assert.match(ctl, /<summary>Hướng dẫn<\/summary>/, 'Giữ mục Hướng dẫn trong khung trái');
   assert.ok(!/Ảnh Bước 4/.test(ctl), 'Bỏ ô ảnh thừa bên dưới Hướng dẫn trong khung trái');
@@ -296,8 +296,8 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.ok(!/live-note/.test(scene), 'Bỏ dòng note/error dài (kiểu hết lượt free) bên dưới 2 khung');
   assert.match(scene, /<div class="meta">[\s\S]*?<span class="grow"><\/span><button class="btn sm xs danger" data-act="rmscene" data-sid="\$\{s\.id\}"/, 'Nút Xóa nằm góc phải trên cùng của mỗi cảnh');
 
-  assert.match(scene, /preparing: 'đang xóa logo'/, 'Đang chạy thì báo đang xóa logo');
-  assert.match(scene, /waiting_ok: 'đã xóa xong logo'/, 'Xong thì báo đã xóa xong logo');
+  assert.match(src, /preparing: \{ text: 'đang chạy'/, 'Đang chạy thì báo đúng “đang chạy”');
+  assert.match(src, /waiting_ok: \{ text: 'đã xóa xong · chờ Chọn'/, 'Xong thì báo đã xóa xong, chờ Chọn');
   assert.match(src, /\/api\/firefly\/preview/, 'Có endpoint chụp Firefly lên app');
   assert.match(src, /function patchFireflyPreviews\(\)/, 'Ảnh Firefly được làm mới định kỳ');
   assert.match(src, /setInterval\(\(\) => \{ patchFireflyPreviews\(\)\.catch\(\(\) => \{\}\); \}, 500\)/, 'Poll 500ms để chiếu trực tiếp mượt, không delay');
@@ -311,6 +311,29 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.match(src, /Firefly: hết \$\{limit\} lượt free\/ngày — đổi mail/, 'Chip Firefly phải nhắc đổi mail khi hết lượt');
   assert.match(src, /id="fBrush"[^>]*min="5"[^>]*max="128"/, 'Bước 4 phải có ô cỡ cọ');
   assert.match(src, /logoBrushSize: val\('fBrush', 16\)/, 'Cỡ cọ phải được lưu qua /api/config');
+});
+
+test('khung Firefly bên trái cập nhật trạng thái từng cảnh theo SSE, không đóng băng ở chữ cũ', () => {
+  const ctl = src.slice(src.indexOf('function buildLogoCtl('), src.indexOf('function buildCtl()'));
+  const refreshFn = src.slice(src.indexOf('function refresh()'), src.indexOf('// ---------- khung ảnh tham chiếu'));
+  assert.match(ctl, /<div id="logoQueue">\$\{logoQueueHtml\(p\)\}<\/div>/, 'hàng chờ có id để tự patch');
+  assert.match(src, /function patchLogoQueue\(\)[\s\S]*?\$\('#logoQueue'\)[\s\S]*?logoQueueHtml\(S\.p\)/, 'patch nội dung hàng chờ từ dữ liệu mới');
+  assert.match(refreshFn, /if \(S\.stage === 4\) \{ patchLogoQueue\(\); syncFireflyDaily\(\); \}/, 'mỗi sự kiện SSE ở Bước 4 đều vẽ lại khung trái');
+  assert.match(src, /const LOGO_STATUS = \{/, 'một bảng trạng thái dùng chung cho khung trái và phải');
+  assert.match(src, /retrying: \{ text: 'đang làm lại'/, 'bấm Làm lại hiện đúng đang làm lại');
+  assert.match(src, /queued: \{ text: 'chờ hàng đợi'/, 'chưa tới lượt hiện chờ hàng đợi');
+  assert.match(src, /preparing: \{ text: 'đang chạy'/, 'đang chạy thì hiện đang chạy, không phải chờ/làm lại');
+  assert.match(src, /downloading: \{ text: 'đang chạy'/, 'đang tải ảnh sạch vẫn là đang chạy');
+  assert.match(src, /error: \{ text: 'lỗi'/, 'lỗi thì hiện lỗi');
+  assert.match(src, /quota_blocked: \{ text: 'hết lượt'/, 'hết free thì hiện hết lượt');
+  assert.match(refreshFn, /renderSlots\(\); renderResults\(\); patchLogoPhases\(\);/, 'khung phải vẫn cập nhật như cũ');
+});
+
+test('ảnh xem trước tự thử lại khi chưa tải được, không bắt bấm Chọn lại', () => {
+  assert.ok(src.includes('const preparedRetry = new Map()'), 'có bộ đếm thử lại theo cảnh');
+  assert.match(src, /el\.naturalWidth > 0\) \{ preparedRetry\.delete\(s\.id\); continue; \}/, 'ảnh lên rồi thì thôi không thử nữa');
+  assert.match(src, /if \(n >= 8\) continue/, 'giới hạn số lần thử, không gọi endpoint vô hạn');
+  assert.match(src, /`\/api\/firefly\/prepared\?projectId=\$\{encodeURIComponent\(S\.p\.id\)\}&sceneId=\$\{encodeURIComponent\(s\.id\)\}&t=\$\{Date\.now\(\)\}`/, 'thử lại với cache-buster mới');
 });
 
 test('chip Free tăng ngay 0/3 → 1/3 → 2/3 sau mỗi ảnh Firefly xong', () => {
@@ -393,7 +416,7 @@ test('thanh “Xóa logo”: không số 4, bật tính năng là vòng tích + 
 });
 
 test('chiếu từ lúc tạo tab tới lúc Firefly báo xong, ảnh mới giải mã xong mới thay để không giật', () => {
-  assert.match(src, /\['queued', 'preparing', 'downloading', 'waiting_ok', 'quota_blocked'\]/, 'ảnh đang chờ/tạo tab cũng nằm trong vòng chiếu');
+  assert.match(src, /\['queued', 'retrying', 'preparing', 'downloading', 'waiting_ok', 'quota_blocked'\]/, 'ảnh đang chờ/làm lại/tạo tab cũng nằm trong vòng chiếu');
   assert.match(src, /status === 'waiting_ok' && S\.preview\.has\(s\.id\)/, 'đóng băng khung đúng lúc Firefly đã hoàn tất');
   assert.match(src, /async function paintPreview\(sid, el, data\)/);
   assert.match(src, /const im = new Image\(\);\s*im\.src = data;\s*try \{ await im\.decode\(\); \}/, 'giải mã khung mới trước khi gán vào ô chiếu');

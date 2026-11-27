@@ -2,11 +2,10 @@
 // Đổi Gmail Firefly liên tục vì thế không đụng session Google của Flow.
 // UI selectors are centralized here because Firefly changes frequently.
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const cfg = require('./config');
 const chrome = require('./chrome-firefly');
-const { imageDimensions } = require('./image');
+const { imageDimensions, imageDimensionsFromBuffer, imageExtFromBuffer } = require('./image');
 
 const DEFAULT_HOME = 'https://firefly.adobe.com/';
 // Ảnh Firefly vừa tạo được giữ TRONG BỘ NHỚ để hiện vào khung “Ảnh đã xóa logo”.
@@ -14,6 +13,16 @@ const DEFAULT_HOME = 'https://firefly.adobe.com/';
 // Nhờ vậy không còn copyfile từ file tạm playwright-artifacts (lỗi ENOENT hôm trước).
 const preparedImages = new Map();
 const preparedKey = (projectId, sceneId) => `${projectId}:${sceneId}`;
+// Bản xem trước cũng được ghi ra file riêng (KHÔNG phải anhdaxoalogo) để ảnh vẫn hiện
+// nếu bộ nhớ bị dọn hoặc app khởi động lại trước khi người dùng bấm Chọn.
+const PREVIEW_EXTS = ['.png', '.jpg', '.jpeg', '.webp'];
+function preparedPreviewDir() { return path.join(cfg.dataDir, 'firefly-preview'); }
+function preparedPreviewPath(projectId, sceneId, ext) {
+  return path.join(preparedPreviewDir(), `${path.basename(String(projectId))}-${path.basename(String(sceneId))}${ext}`);
+}
+function removePreparedPreview(projectId, sceneId) {
+  for (const ext of PREVIEW_EXTS) fs.rmSync(preparedPreviewPath(projectId, sceneId, ext), { force: true });
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const UI_TICK_MS = 150;
 // Chờ theo điều kiện thật thay vì ngủ cố định: nhanh hơn nhưng vẫn bấm đúng lúc nút đã active.
@@ -808,7 +817,23 @@ async function fitImageToSize(page, file, size) {
 }
 
 function preparedImage(projectId, sceneId) {
-  return preparedImages.get(preparedKey(projectId, sceneId)) || null;
+  const key = preparedKey(projectId, sceneId);
+  const cached = preparedImages.get(key);
+  if (cached) return cached;
+  // RAM có thể bị dọn (đổi Gmail, khởi động lại) nhưng file xem trước vẫn còn → ảnh vẫn hiện.
+  for (const ext of PREVIEW_EXTS) {
+    const file = preparedPreviewPath(projectId, sceneId, ext);
+    try {
+      if (!fs.existsSync(file)) continue;
+      const buffer = fs.readFileSync(file);
+      if (!buffer.length) continue;
+      const size = imageDimensions(file);
+      const entry = { buffer, ext, file, width: size?.width || 0, height: size?.height || 0, at: Date.now() };
+      preparedImages.set(key, entry);
+      return entry;
+    } catch (_) {}
+  }
+  return null;
 }
 async function readDownloadBuffer(download) {
   const chunks = [];
@@ -838,18 +863,19 @@ async function holdPrepared({ projectId, sceneId, onPhase, isCanceled }) {
       assertNotCanceled(isCanceled);
       let buffer;
       try { buffer = await readDownloadBuffer(download); } catch (e) { throw downloadGoneError(e); }
-      const ext = path.extname(download.suggestedFilename() || '') || '.png';
-      const probe = path.join(os.tmpdir(), `flb-prepared-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-      try {
-        fs.writeFileSync(probe, buffer);
-        const size = imageDimensions(probe);
-        if (!size?.width || !size?.height) throw new Error('File tải về từ Firefly không đọc được.');
-        preparedImages.set(key, { buffer, ext, width: size.width, height: size.height, at: Date.now() });
-      } finally { fs.rmSync(probe, { force: true }); }
+      // Đuôi ảnh lấy theo NỘI DUNG, không tin suggestedFilename (Firefly có thể trả tên lạ).
+      const ext = '.' + (imageExtFromBuffer(buffer) || 'png');
+      const size = imageDimensionsFromBuffer(buffer);
+      if (!size?.width || !size?.height) throw new Error('File tải về từ Firefly không đọc được.');
+      fs.mkdirSync(preparedPreviewDir(), { recursive: true });
+      const file = preparedPreviewPath(projectId, sceneId, ext);
+      fs.writeFileSync(file, buffer);
+      preparedImages.set(key, { buffer, ext, file, width: size.width, height: size.height, at: Date.now() });
       onPhase?.('Ảnh sạch đã hiện trong khung xem trước. Bấm “Chọn” để lưu vào anhdaxoalogo.');
-      return { ok: true, width: preparedImages.get(key).width, height: preparedImages.get(key).height, ext };
+      return { ok: true, width: size.width, height: size.height, ext };
     } catch (e) {
       preparedImages.delete(key);
+      removePreparedPreview(projectId, sceneId);
       await releaseTab(key);
       throw e;
     }
@@ -861,14 +887,14 @@ async function holdPrepared({ projectId, sceneId, onPhase, isCanceled }) {
 async function savePrepared({ projectId, sceneId, targetPath, matchSize, onPhase, isCanceled }) {
   return lock.run(async () => {
     const key = preparedKey(projectId, sceneId);
-    const data = preparedImages.get(key);
+    const data = preparedImage(projectId, sceneId);
     if (!data) throw new Error('Ảnh xem trước đã hết. Bấm “Làm lại” để tạo lại ảnh này.');
     const tmp = targetPath + '.part';
     try {
       assertNotCanceled(isCanceled);
       onPhase?.('Đang lưu ảnh sạch vào anhdaxoalogo…');
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-      fs.writeFileSync(tmp, data.buffer);
+      fs.writeFileSync(tmp, data.buffer || fs.readFileSync(data.file));
       let file = tmp, width = data.width, height = data.height;
       if (matchSize?.width && matchSize?.height && (width !== matchSize.width || height !== matchSize.height)) {
         const pr = tabs.get(key);
@@ -892,6 +918,7 @@ async function savePrepared({ projectId, sceneId, targetPath, matchSize, onPhase
       }
       onPhase?.('Đã lưu ảnh sạch về máy.');
       preparedImages.delete(key);
+      removePreparedPreview(projectId, sceneId);
       await releaseTab(key);
       return { ok: true, file, width, height };
     } catch (e) {
@@ -962,6 +989,7 @@ function hasSceneTab(projectId, sceneId) {
 async function discardScene({ projectId, sceneId }) {
   return lock.run(async () => {
     preparedImages.delete(preparedKey(projectId, sceneId));
+    removePreparedPreview(projectId, sceneId);
     await releaseTab(`${projectId}:${sceneId}`);
   });
 }

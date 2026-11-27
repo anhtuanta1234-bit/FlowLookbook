@@ -221,15 +221,20 @@ test('báo rõ từng thao tác Firefly trên Bước 4, có xác nhận cắt v
   assert.ok(src.includes('Đang bấm nút Tải xuống trên Firefly…'), 'Tool tự bấm Tải xuống trước khi bạn bấm Chọn');
 });
 
-test('giữ ảnh Firefly trong RAM để xem trước, bấm Chọn mới ghi vào anhdaxoalogo', () => {
+test('giữ ảnh Firefly để xem trước (RAM + file riêng), bấm Chọn mới ghi vào anhdaxoalogo', () => {
   assert.ok(src.includes('const preparedImages = new Map()'), 'có bộ đệm ảnh xem trước');
-  assert.match(src, /async function holdPrepared\(/, 'xong thì giữ bytes trước, chưa ghi đĩa');
+  assert.match(src, /async function holdPrepared\(/, 'xong thì giữ bytes trước, chưa ghi ra anhdaxoalogo');
   assert.match(src, /for await \(const chunk of download\.createReadStream\(\)\)/, 'đọc thẳng stream, không copyfile từ playwright-artifacts');
   assert.match(src, /preparedImages\.set\(key, \{ buffer/, 'lưu bytes theo projectId:sceneId');
+  assert.match(src, /imageExtFromBuffer\(buffer\)/, 'đuôi ảnh lấy theo nội dung, không tin tên Firefly trả về');
+  assert.match(src, /preparedPreviewDir\(\)/, 'có thư mục riêng cho ảnh xem trước');
+  assert.match(src, /fs\.writeFileSync\(file, buffer\)/, 'ghi bản xem trước ra file riêng, không đụng anhdaxoalogo');
+  assert.match(src, /function preparedImage\(projectId, sceneId\)[\s\S]*?fs\.readFileSync\(file\)/, 'mất RAM thì vẫn đọc lại được từ file xem trước');
   assert.match(src, /downloadGoneError\(e\)/, 'file tạm mất thì báo lỗi dễ hiểu');
   assert.ok(src.includes('FIREFLY_DOWNLOAD_GONE'));
   assert.match(src, /async function savePrepared\(/, 'bấm Chọn mới có hàm ghi đĩa');
-  assert.match(src, /fs\.writeFileSync\(tmp, data\.buffer\)/, 'ghi từ bytes đã giữ, không bấm tải lần 2');
+  assert.match(src, /fs\.writeFileSync\(tmp, data\.buffer \|\| fs\.readFileSync\(data\.file\)\)/, 'ghi từ bytes/file đã giữ, không bấm tải lần 2');
+  assert.match(src, /removePreparedPreview\(projectId, sceneId\)/, 'xong thì dọn file xem trước');
   assert.match(src, /fitImageToSize\(t\.page, tmp, matchSize\)/, 'vẫn ép đúng kích thước ảnh gốc');
 });
 
