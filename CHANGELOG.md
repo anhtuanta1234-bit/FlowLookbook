@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.3.7 - 2026-11-27
+- Nhật ký Bước 4 lưu từ bản cũ tự đổi nhãn nút duyệt ảnh thành “Chọn” ngay khi mở dự án; câu “ảnh sạch được giữ trong anhdaxoalogo” giữ nguyên, không cần làm lại ảnh.
+- Dấu × của banner hết lượt và banner tạm dừng chuyển xuống ngay cuối dòng chữ, không còn nằm ở góc trên bên phải.
+- Bấm “Kết nối Firefly” giờ kiểm tra luôn Gmail hiện tại đã dùng lượt free hôm nay chưa; hết 3/3 thì báo ngay “Gmail này hôm nay đã hết lượt free”, còn dùng 1–2 lượt thì báo số lượt còn lại.
+
+
 ## v1.3.6 - 2026-11-27
 - Banner hết lượt Firefly có thêm dấu × để tắt; tắt xong không hiện lại khi app tự làm mới.
 - Đổi Gmail giờ làm lại đúng ảnh đầu tiên CHƯA bấm Chọn (kể cả ảnh vừa hết lượt giữa chừng); ảnh đã Chọn giữ nguyên, không nhảy sang ảnh kế.

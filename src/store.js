@@ -153,6 +153,19 @@ function createProject(name) {
   return proj;
 }
 
+// Dự án cũ còn lưu chữ “bấm Ổn” trong nhật ký Bước 4: đổi sang “bấm Chọn” ngay khi đọc,
+// không cần người dùng làm lại ảnh. Ghi đè project.json lúc migrate để không hiện lại ở lần mở sau.
+function cleanOldLogoWordingIn(p) {
+  const fix = (s) => (typeof s === 'string' && s.includes('Ổn') ? s.replace(/Ổn/g, 'Chọn') : s);
+  for (const sc of p?.s3?.scenes || []) {
+    const lr = sc?.logoRemoval;
+    if (!lr) continue;
+    lr.note = fix(lr.note);
+    lr.error = fix(lr.error);
+    if (Array.isArray(lr.phases)) for (const ph of lr.phases) if (ph) ph.note = fix(ph.note);
+  }
+}
+
 // Dữ liệu cũ có thể thiếu trường (hoặc bị sửa tay). Chuẩn hóa để server không crash và giao diện luôn có mảng/object.
 function normalizeProject(p) {
   if (!p || typeof p !== 'object') return null;
@@ -169,6 +182,7 @@ function normalizeProject(p) {
     if (!Array.isArray(sc.extras)) sc.extras = [];
     sc.logoRemoval = normalizeLogoRemoval(sc.logoRemoval);
   }
+  cleanOldLogoWordingIn(p);
   const allRuns = [p.s1, p.s2, ...p.s3.scenes].flatMap((st) => st.runs);
   for (const r of allRuns) {
     if (!r || typeof r !== 'object') continue;
@@ -217,6 +231,7 @@ function migrateProjects(log = () => {}) {
     } catch (_) { continue; }
     const before = JSON.stringify(raw);
     cleanPromptsIn(raw);
+    cleanOldLogoWordingIn(raw);
     if (JSON.stringify(raw) !== before) {
       try { save(raw); changed++; }
       catch (er) { log('prompt migrate failed ' + id + ': ' + er.message); }
@@ -308,6 +323,6 @@ module.exports = {
   uid, safeName, templates, saveTemplates,
   createProject, nameExists, save, load, list, remove, assetPath, saveAsset, migrateProjects,
   listKoc, saveKoc, kocPath, removeKoc, outputDirFor, pdir,
-  outputFolderFor, hasActiveWork, sceneOrder, normalizeProject, isValidProjectId,
+  outputFolderFor, hasActiveWork, sceneOrder, normalizeProject, isValidProjectId, cleanOldLogoWordingIn,
   _test: { legacyOutputFolder, suffixedFolder },
 };

@@ -1,6 +1,8 @@
 /* Flow Lookbook — giao diện. JS thuần, không cần build. */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Dự án cũ có thể còn lưu nhật ký “bấm Ổn”: đổi ngay khi hiển thị, không đợi migrate ở server.
+const logoText = (s) => String(s ?? '').replace(/Ổn/g, 'Chọn');
 // Link manifest cập nhật do server cung cấp (đặt trong server.js, không cần người dùng điền).
 let UPDATE_MANIFEST_URL = '';
 let CURRENT_VERSION = '';
@@ -324,10 +326,15 @@ function syncFireflyChip() {
   const fs = S.flow.fireflyStatus || {};
   const connected = !!(fs.browser && fs.loggedIn);
   // Hết lượt free là chuyện của FIREFLY: báo ngay tại chip Firefly, không dán vào chip Flow ở header.
-  const quota = !!S.flow.fireflyQuotaPaused;
+  // Bộ đếm fireflyDaily theo ngày được reset khi bấm “Tiếp tục” sau đổi Gmail, nên dùng được cả
+  // khi tool chưa từng chạy ảnh mà Gmail hiện tại đã dùng hết 3 lượt trong ngày.
+  const d = S.flow.fireflyDaily || {};
+  const limit = Math.max(1, Number(d.limit) || 3);
+  const used = Math.max(0, Number(d.count) || 0);
+  const quota = !!S.flow.fireflyQuotaPaused || used >= limit;
   ff.className = connected && !quota ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
   ff.textContent = quota
-    ? `Firefly: hết ${+(S.flow.fireflyDaily?.limit || 3)} lượt free/ngày — đổi mail`
+    ? `Firefly: hết ${limit} lượt free/ngày — đổi mail`
     : connected ? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối';
   ff.dataset.tip = quota
     ? 'Firefly đang dùng lượt free hàng ngày và đã hết. Vui lòng đổi mail khác rồi tiếp tục. Bấm “Kết nối Firefly” ngay cạnh đây để đăng nhập Gmail mới.'
@@ -335,13 +342,29 @@ function syncFireflyChip() {
       ? 'Đã đăng nhập Adobe Firefly — có thể xóa logo. Chấm xanh nhấp nháy là đang kết nối.'
       : 'Chưa đăng nhập Adobe Firefly. Bấm nút “Kết nối Firefly” ngay cạnh đây.';
 }
+// Bấm “Kết nối Firefly” là kiểm tra LUÔN Gmail hiện tại đã dùng lượt free hôm nay chưa,
+// không cần đợi tool chạy ảnh mới phát hiện hết lượt.
+function fireflyDailyNotice() {
+  if (!S.flow?.fireflyStatus?.loggedIn) return false; // chưa đăng nhập thì chưa nói về Gmail
+  const d = S.flow.fireflyDaily || {};
+  const limit = Math.max(1, Number(d.limit) || 3);
+  const used = Math.max(0, Number(d.count) || 0);
+  if (used >= limit) {
+    toast(`Gmail này hôm nay đã hết ${limit} lượt free. Đổi Gmail khác rồi bấm “Tiếp tục”.`, 'warn', { duration: 12000 });
+    return true;
+  }
+  if (used > 0) toast(`Gmail này hôm nay đã làm ${used}/${limit} lượt free, còn ${limit - used} lượt.`, '', { duration: 8000 });
+  return false;
+}
 // Bấm “Kết nối Firefly”: mở cửa sổ Firefly rồi hỏi lại trạng thái vài giây để chip
 // chuyển xanh + chấm nhấp nháy NGAY, không phải đợi vòng poll 6 giây.
-async function connectFirefly(kind = 'reveal') {
+async function connectFirefly(kind = 'reveal', checkDaily = true) {
   if (kind === 'open') await api('POST', '/api/firefly/open');
   else await api('POST', '/api/firefly/reveal');
+  let notified = false;
   for (let i = 0; i < 12; i++) {
     await refreshFlow();
+    if (checkDaily && !notified) notified = fireflyDailyNotice();
     if (S.flow?.fireflyStatus?.browser && S.flow.fireflyStatus.loggedIn) break;
     await new Promise((r) => setTimeout(r, 1000));
   }
@@ -354,7 +377,7 @@ async function refreshFlow() {
   { const ba = $('#btnAuto'); if (ba) { const on = S.flow.auto !== false; ba.textContent = on ? 'Tự động: Bật' : 'Tự động: Tắt (làm tay)'; ba.setAttribute('aria-pressed', String(on)); ba.classList.toggle('primary', on); } }
   if (wasAuto !== undefined && wasAuto !== S.flow.auto && S.p) refresh();
   const bn = $('#pauseBanner');
-  if (S.flow.paused && S.hidePause !== S.flow.paused.at) { bn.classList.remove('hidden'); bn.innerHTML = `<button class="tclose" data-act="dismisspause" aria-label="Tắt thông báo" title="Tắt">×</button><b>Đã tạm dừng.</b><span>${esc(S.flow.paused.message)} Hãy mở Flow bằng tay xem tài khoản có ổn không, nghỉ một lúc (vài giờ nếu có thể), rồi mới tiếp tục. “Tiếp tục chạy” chỉ gỡ tạm dừng; với lượt đã lỗi, bấm “Thử lại lượt” ngay trong thông báo lỗi.</span><span class="grow"></span><button class="btn sm" data-act="revealflow" data-tip="Mở Flow để xem tài khoản trực tiếp">Mở Flow</button><button class="btn sm" data-act="clearqueue">Hủy các lượt đang chờ</button><button class="btn sm primary" data-act="resume">Tiếp tục chạy</button>`; } else bn.classList.add('hidden');
+  if (S.flow.paused && S.hidePause !== S.flow.paused.at) { bn.classList.remove('hidden'); bn.innerHTML = `<b>Đã tạm dừng.</b><span>${esc(S.flow.paused.message)} Hãy mở Flow bằng tay xem tài khoản có ổn không, nghỉ một lúc (vài giờ nếu có thể), rồi mới tiếp tục. “Tiếp tục chạy” chỉ gỡ tạm dừng; với lượt đã lỗi, bấm “Thử lại lượt” ngay trong thông báo lỗi.</span><span class="grow"></span><button class="btn sm" data-act="revealflow" data-tip="Mở Flow để xem tài khoản trực tiếp">Mở Flow</button><button class="btn sm" data-act="clearqueue">Hủy các lượt đang chờ</button><button class="btn sm primary" data-act="resume">Tiếp tục chạy</button><button class="tclose" data-act="dismisspause" aria-label="Tắt thông báo" data-tip="Tắt">×</button>`; } else bn.classList.add('hidden');
   const el = $('#flowStatus');
   if (!S.flow.browser) { el.className = 'chip warn'; el.textContent = 'Flow: hãy kết nối với Flow'; }
   else if (S.flow.loggedIn) { el.className = 'chip ok'; el.textContent = 'Flow: đã kết nối · chạy nền'; }
@@ -666,7 +689,7 @@ const LOGO_FLOW_STEPS = [
   'Tool bấm “Tải xuống”, bạn bấm “Chọn”',
 ];
 function logoFlowIndex(lr) {
-  const text = (lr?.phases || []).map((x) => x.note || '').join(' | ') + ' ' + (lr?.note || '');
+  const text = (lr?.phases || []).map((x) => logoText(x?.note)).join(' | ') + ' ' + logoText(lr?.note);
   if (/Bạn đã bấm “Chọn”|đã lưu ảnh sạch/i.test(text)) return LOGO_FLOW_STEPS.length;
   if (/bấm “Chọn”|Tải xuống/i.test(text)) return 6;
   if (/bấm Xóa|Xóa để Firefly/i.test(text)) return 5;
@@ -726,7 +749,7 @@ function patchLogoPhases() {
   const html = tmp.firstElementChild?.innerHTML || '';
   if (box.innerHTML !== html) box.innerHTML = html;
   const now = $('#logoNow'); if (now) {
-    const text = (S.cfg?.removeLogoEnabled ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.');
+    const text = (S.cfg?.removeLogoEnabled ? (logoText(lr?.note) || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.');
     if (now.textContent !== text) now.textContent = text;
   }
 }
@@ -776,7 +799,7 @@ function buildLogoCtl(p) {
   $('#ctl').innerHTML = `
     <div class="sec">
       <h3>Bước 4 — Xóa logo</h3>
-      <div class="hint" id="logoNow">${esc(on ? (lr?.note || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.')}</div>
+      <div class="hint" id="logoNow">${esc(on ? (logoText(lr?.note) || 'Chưa bắt đầu xóa logo.') : 'Bước 4 đang TẮT. Bấm “Xóa logo: Tắt” trên thanh công cụ để bật.')}</div>
       ${logoFlowHtml(lr)}
       ${logoQueueHtml(p)}
       <div class="logo-toolbar">
@@ -980,7 +1003,7 @@ function logoSceneHtml(s, i) {
     : st === 'waiting_ok' ? '<span class="badge warn">chờ bạn bấm Chọn</span>'
     : (st === 'preparing' || st === 'downloading') ? '<span class="badge warn">đang chạy</span>'
     : st === 'quota_blocked' ? '<span class="badge err">hết lượt free</span>'
-    : st === 'error' ? `<span class="badge err" data-tip="${esc(lr.error || '')}">lỗi</span>`
+    : st === 'error' ? `<span class="badge err" data-tip="${esc(logoText(lr.error))}">lỗi</span>`
     : st === 'skipped' ? '<span class="badge">đã bỏ qua</span>' : '';
   const live = LOGO_LIVE_STATUS[st] || 'chờ đến lượt xóa logo';
   const previewSrc = S.preview.get(s.id) || '';
@@ -1011,7 +1034,7 @@ function logoSceneHtml(s, i) {
   // Tiến trình nằm trong ô Firefly: chỉ hiện 1 bước mới nhất, đổi theo thời gian thực.
   const lastPhase = (lr.phases || []).slice(-1)[0];
   const phase = lastPhase
-    ? `<div class="phase"><span>${esc(lastPhase.note)}</span><time>${esc(new Date(lastPhase.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`
+    ? `<div class="phase"><span>${esc(logoText(lastPhase.note))}</span><time>${esc(new Date(lastPhase.at || 0).toLocaleTimeString('vi-VN', { hour12: false }))}</time></div>`
     : '<div class="hint">Chưa có thao tác nào được ghi lại.</div>';
   return `<div class="scene logoscene" data-sid="${s.id}">
     <div class="meta"><b>Ảnh ${String(+(s.order || i + 1)).padStart(2, '0')}${s.label ? ' · ' + esc(s.label) : ''}</b>${badge}<span class="grow"></span><button class="btn sm xs danger" data-act="rmscene" data-sid="${s.id}" data-tip="Bỏ cảnh này" aria-label="Bỏ cảnh này">${I.trash}<span>Xóa</span></button></div>
@@ -1100,8 +1123,8 @@ function logoResultsHtml(p) {
     ? `${quotaScene.id}:${quotaScene.logoRemoval.updatedAt || ''}`
     : (S.flow?.fireflyQuotaPaused?.at ? `flow:${S.flow.fireflyQuotaPaused.at}` : '');
   const closeQuota = `<button class="tclose" data-act="dismissquota" data-key="${esc(quotaKey)}" aria-label="Tắt thông báo" data-tip="Tắt">×</button>`;
-  if (quotaScene && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên.${closeQuota}</div>`;
-  else if (!quotaScene && S.flow?.fireflyQuotaPaused && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px">Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm lại ảnh chưa Chọn.${closeQuota}</div>`;
+  if (quotaScene && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên. ${closeQuota}</span></div>`;
+  else if (!quotaScene && S.flow?.fireflyQuotaPaused && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm lại ảnh chưa Chọn. ${closeQuota}</span></div>`;
   h += scenes.map(logoSceneHtml).join('') || `<div class="drop" data-act="goto" data-stage="3" role="button" tabindex="0">Chưa có cảnh nào. Về Bước 3 thêm ảnh cảnh người thật.</div>`;
   return h;
 }
@@ -1288,7 +1311,7 @@ async function act(b) {
   }
   if (a === 'gmailchange') {
     markGmailChanged(b.dataset.sid);
-    await connectFirefly('reveal'); // mở Firefly cho bạn đăng nhập Gmail khác, cập nhật chip luôn
+    await connectFirefly('reveal', false); // đang đổi Gmail: khỏi nhắc lại lượt free của mail cũ
     return refresh(); // nút đổi thành “Tiếp tục”
   }
   if (a === 'logoresume') {

@@ -299,7 +299,9 @@ details.old summary{cursor:pointer;color:var(--muted);font-size:12.5px;padding:4
 .mini-grid .lbl{margin:0;font-size:11px;color:var(--muted)}
 .mini-grid input{width:100%;margin-top:3px}
 .mini-actions{display:flex;gap:8px;margin-top:8px}
-.banner.quota{font-size:12px}
+/* Dấu × nằm ngay CUỐI dòng chữ, không bị đẩy lên góc như banner tạm dừng. */
+.banner.quota{font-size:12px;display:block;line-height:1.5}
+.banner.quota .tclose{vertical-align:middle;margin-left:4px}
 
 /* ===== hộp thoại / thông báo ===== */
 .modal{position:fixed;inset:0;background:rgba(8,13,24,.62);z-index:40;display:grid;place-items:center;padding:20px}
@@ -511,8 +513,8 @@ code{background:var(--surface3);padding:1px 6px;border-radius:6px;font-size:12px
 .err-text{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
 .err-text>span:first-child{flex:1;min-width:0}
 .errbtns{display:inline-flex;align-items:center;gap:6px;flex:none}
-#pauseBanner{position:relative;padding-right:40px}
-#pauseBanner .tclose{position:absolute;top:8px;right:8px}
+#pauseBanner{padding-right:18px}
+#pauseBanner .tclose{position:static;order:99;margin-left:4px}
 
 #pauseBanner{position:sticky;top:0;z-index:30}
 

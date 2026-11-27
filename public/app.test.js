@@ -77,7 +77,7 @@ test('Bước 4 có nút bật/tắt ngoài Cài đặt, mặc định TẮT, ch
   assert.match(src, /data-act="fireflyreveal"/, 'Phải có nút hiện Firefly để kiểm tra kết quả');
   assert.match(src, /fireflyQuotaPaused/, 'Phải hiện trạng thái Firefly hết lượt trên thanh trạng thái');
   assert.match(src, /data-act="logoresume"/, 'Phải có nút tiếp tục sau khi đổi Gmail');
-  assert.match(src, /esc\(lr\.error \|\| ''\)/, 'Thông báo lỗi/quota phải hiển thị từ máy chủ gửi sang');
+  assert.match(src, /esc\(logoText\(lr\.error\)\)/, 'Thông báo lỗi/quota phải hiển thị từ máy chủ gửi sang và sửa chữ Ổn cũ');
 });
 
 test('tắt Xóa logo thì Bước 4 ẩn hẳn, bật lại mới hiện sau Bước 3', () => {
@@ -128,6 +128,22 @@ test('hết lượt Firefly: banner gọn, có nút × tắt, đổi Gmail làm 
   assert.match(src, /if \(S\.stage === 4\) return JSON\.stringify\(\[[\s\S]{0,200}\[\.\.\.S\.quotaHidden\]\.join\(','\)/, 'signature Bước 4 đổi khi tắt banner');
   assert.match(src, /data-act="gmailchange" data-sid="\$\{s\.id\}"[\s\S]{0,180}>Đổi Gmail<\/span><\/button>/, 'nút đổi Gmail nằm trên thẻ ảnh Bước 4, cùng kiểu .tb');
   assert.ok(!src.includes('ảnh đã tạo, chờ tải lại'), 'không hứa tải lại ảnh cũ');
+});
+
+test('nhật ký cũ còn chữ Ổn thì đổi thành Chọn ngay trên giao diện Bước 4', () => {
+  assert.ok(src.includes("const logoText = (s) => String(s ?? '').replace(/Ổn/g, 'Chọn');"), 'có hàm sửa chữ cũ khi hiển thị');
+  assert.ok(src.includes('logoText(lr?.note)'), 'câu trạng thái đi qua logoText');
+  assert.ok(src.includes('logoText(lastPhase.note)'), 'tiến trình Firefly đi qua logoText');
+  assert.ok(src.includes('logoText(lr.error)'), 'tooltip lỗi đi qua logoText');
+});
+
+test('dấu × của thông báo nằm ngay cuối dòng chữ, không dính ở góc trên', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert.ok(src.includes('giữ nguyên. ${closeQuota}</span></div>'), '× nằm chung <span> với câu báo, ngay sau dấu chấm cuối dòng');
+  assert.match(css, /\.banner\.quota\{font-size:12px;display:block;line-height:1\.5\}/, 'banner dạng block để × đi theo chữ');
+  assert.match(css, /\.banner\.quota \.tclose\{vertical-align:middle;margin-left:4px\}/);
+  assert.ok(src.includes('Tiếp tục chạy</button><button class="tclose" data-act="dismisspause"'), '× của banner tạm dừng cũng chuyển xuống cuối dòng');
+  assert.match(css, /#pauseBanner \.tclose\{position:static;order:99;margin-left:4px\}/, 'không còn ép × lên góc phải');
 });
 
 test('manifest raw bị cache cũ vẫn lấy bản mới từ GitHub Releases API', async () => {
@@ -271,7 +287,7 @@ test('Bước 4: hàng chờ chỉ ở khung trái, khung phải 2 ô ảnh vớ
   assert.ok(!/tab đã đóng, chờ Gmail mới/.test(src), 'Bỏ đoạn dài về tab đã đóng');
   assert.ok(!/Đổi Gmail khác để tiếp tục/.test(src), 'Bỏ nhãn nút cũ trong banner');
   assert.match(src, /Free \$\{\+\(S\.flow\?\.fireflyDaily\?\.count \|\| 0\)\}/, 'Bước 4 phải hiện số lượt đã dùng');
-  assert.match(src, /Firefly: hết \$\{\+\(S\.flow\.fireflyDaily\?\.limit \|\| 3\)\} lượt free\/ngày — đổi mail/, 'Chip Firefly phải nhắc đổi mail khi hết lượt');
+  assert.match(src, /Firefly: hết \$\{limit\} lượt free\/ngày — đổi mail/, 'Chip Firefly phải nhắc đổi mail khi hết lượt');
   assert.match(src, /id="fBrush"[^>]*min="5"[^>]*max="128"/, 'Bước 4 phải có ô cỡ cọ');
   assert.match(src, /logoBrushSize: val\('fBrush', 14\)/, 'Cỡ cọ phải được lưu qua /api/config');
 });
@@ -377,12 +393,16 @@ test('chip Firefly: bấm Kết nối là cập nhật ngay, chưa kết nối �
   assert.match(src, /function syncFireflyChip\(\)/);
   assert.match(src, /ff\.className = connected && !quota \? 'chip ok' : 'chip warn'/);
   assert.match(src, /: connected \? 'Firefly: đã kết nối' : 'Firefly: chưa kết nối'/);
-  assert.match(src, /const quota = !!S\.flow\.fireflyQuotaPaused;/, 'Hết lượt free đọc từ trạng thái Firefly');
+  assert.match(src, /const quota = !!S\.flow\.fireflyQuotaPaused \|\| used >= limit;/, 'Hết lượt free đọc cả bộ đếm theo ngày, không chỉ lúc tool vừa báo lỗi');
+  assert.match(src, /const used = Math\.max\(0, Number\(d\.count\) \|\| 0\)/, 'Đọc số lượt free đã dùng hôm nay từ /api/flow/status');
   assert.match(src, /Firefly đang dùng lượt free hàng ngày và đã hết\. Vui lòng đổi mail khác rồi tiếp tục/, 'Tip chip Firefly dùng đúng chuỗi báo hết lượt');
   assert.match(src, /syncFireflyChip\(\); \/\/ vẽ lại chip đúng trạng thái/, 'vẽ lại Bước 4 phải cập nhật chip ngay');
   assert.match(src, /syncFireflyChip\(\);\s*const ob =/, 'refreshFlow cũng cập nhật chip');
-  assert.match(src, /async function connectFirefly\(kind = 'reveal'\)/);
+  assert.match(src, /async function connectFirefly\(kind = 'reveal', checkDaily = true\)/);
   assert.match(src, /a === 'fireflyreveal'\) return connectFirefly\('reveal'\)/, 'bấm Kết nối Firefly thì hỏi lại trạng thái ngay');
+  assert.match(src, /if \(checkDaily && !notified\) notified = fireflyDailyNotice\(\);/, 'bấm Kết nối thì kiểm tra lượt free của Gmail hiện tại');
+  assert.match(src, /Gmail này hôm nay đã hết \$\{limit\} lượt free\. Đổi Gmail khác rồi bấm “Tiếp tục”\./, 'Gmail hết lượt thì báo đúng thông báo');
+  assert.match(src, /await connectFirefly\('reveal', false\); \/\/ đang đổi Gmail/, 'lúc đang đổi Gmail thì không nhắc lại lượt của mail cũ');
   assert.match(src, /for \(let i = 0; i < 12; i\+\+\)[\s\S]{0,220}await refreshFlow\(\)/, 'chờ tối đa ~12s cho chip lên xanh');
   assert.match(ffSrc, /port: c\.fireflyCdpPort/, 'Firefly status phải đọc cổng 9334 riêng');
   assert.ok(!/port: c\.cdpPort/.test(ffSrc), 'không đọc nhầm cổng Flow 9333');
