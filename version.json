@@ -1,5 +1,5 @@
 {
-  "version": "1.3.7",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.7/Flow.Lookbook.Setup.1.3.7.exe",
-  "notes": "- Nhật ký Bước 4 lưu từ bản cũ tự đổi nhãn nút duyệt ảnh thành “Chọn” ngay khi mở dự án; câu “ảnh sạch được giữ trong anhdaxoalogo” giữ nguyên, không cần làm lại ảnh.\n- Dấu × của banner hết lượt và banner tạm dừng chuyển xuống ngay cuối dòng chữ, không còn nằm ở góc trên bên phải.\n- Bấm “Kết nối Firefly” giờ kiểm tra luôn Gmail hiện tại đã dùng lượt free hôm nay chưa; hết 3/3 thì báo ngay “Gmail này hôm nay đã hết lượt free”, còn dùng 1–2 lượt thì báo số lượt còn lại."
+  "version": "1.3.8",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.3.8/Flow.Lookbook.Setup.1.3.8.exe",
+  "notes": "- Dấu × của banner hết lượt và banner tạm dừng giờ nằm sát mép bên phải của dòng thông báo, không dính ngay sau chữ.\n- Bấm “Kết nối Firefly” giờ đọc trực tiếp trang Firefly để check lượt free của Gmail hiện tại — kể cả Gmail đã dùng hết 3 lượt ở nơi khác trong khi bộ đếm của tool vẫn hiện 0/3. Không tạo ảnh, không tốn lượt.\n- Phát hiện Gmail hết lượt ngay lúc bấm Kết nối thì hiện luôn banner hết lượt trên Bước 4 (với dấu × sát mép phải) và đổi chip Firefly, không cần đợi tool chạy ảnh."
 }

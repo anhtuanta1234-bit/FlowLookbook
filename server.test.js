@@ -118,6 +118,10 @@ test('nút Chạy tất cả: xếp mọi ảnh chưa xong theo thứ tự, khô
   assert.match(src, /app\.post\('\/api\/firefly\/background'/, 'có endpoint gập Firefly về nền');
   const status = slice("app.get('/api/flow/status'", "app.post('/api/auto'");
   assert.match(status, /fireflyStatus: await firefly\.status\(\)/, 'status phải trả trạng thái kết nối Firefly cho khung trái');
+  const check = slice("app.post('/api/firefly/check-quota'", "app.post('/api/firefly/open'");
+  assert.match(check, /firefly\.checkQuota\(\)/, 'nút Kết nối có endpoint đọc lượt free ngay trên trang Firefly');
+  assert.match(check, /res\.json\(await firefly\.checkQuota\(\)\)/, 'trả kết quả.checked / .quota cho giao diện');
+  assert.ok(!/fireflyDailyFree\(\)/.test(check), 'endpoint không dùng bộ đếm nội bộ làm nguồn duy nhất');
 });
 
 test('ảnh Firefly tải về lưu đúng vào output/<dự án>/anhdaxoalogo', () => {

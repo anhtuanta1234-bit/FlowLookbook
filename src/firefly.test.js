@@ -39,6 +39,20 @@ test('màn hình nâng cấp trả phí cũng là hết lượt free, báo đổ
   assert.match(src, /Firefly đang dùng lượt free hàng ngày và đã hết\. Vui lòng đổi mail khác/);
 });
 
+test('checkQuota đọc ngay trang Firefly khi bấm Kết nối, không tạo ảnh và không tự mở Chrome', () => {
+  assert.equal(typeof firefly.checkQuota, 'function', 'phải có hàm kiểm tra lượt theo yêu cầu nút Kết nối');
+  assert.match(src, /async function checkQuota\(\) \{[\s\S]{0,900}chromium\.connectOverCDP/, 'chỉ đính vào Chrome đang chạy');
+  assert.match(src, /cfg\.get\(\)\.fireflyCdpPort/, 'đúng cổng Firefly như hàm status(), không đọc nhầm cổng Flow');
+  assert.match(src, /if \(!st\.browser\) return out/, 'Chrome chưa mở thì không tự spawn');
+  assert.match(src, /browser\.close\(\)\.catch/, 'đọc xong chỉ ngắt CDP, không tắt Chrome');
+  assert.match(src, /isFireflyUrl\(p\.url\(\)\)/, 'chỉ đọc tab Firefly');
+  assert.match(src, /detectQuotaBlock\(p, state\)/, 'dùng lại bộ nhận diện banner hết lượt đã kiểm tra');
+  assert.match(src, /out\.quota = true/, 'trả về cờ hết lượt cho giao diện');
+  assert.match(src, /checkedAt: Date\.now\(\)/, 'có mốc thời gian để giao diện khóa banner đã tắt');
+  const check = src.slice(src.indexOf('async function checkQuota()'), src.indexOf('async function open()'));
+  assert.ok(!/ensureBrowser\(/.test(check), 'không tự mở Chrome chỉ để kiểm tra lượt');
+});
+
 test('chỉ coi banner hết lượt là có thật khi nó visible, không đếm tooltip ẩn trong shadow DOM', () => {
   assert.match(src, /function stateHasQuota\(state\) \{[\s\S]*?return isQuotaText\(state\?\.body\);/, 'chỉ tin body, không tin deepText/uiText');
   assert.ok(!/isQuotaText\(state\?\.deepText\)/.test(src), 'không đọc text ẩn');
@@ -167,7 +181,7 @@ test('chiếu NGUYÊN tab Chrome, không chụp riêng canvas/không phóng to, 
   assert.ok(!/showWindow\(|bringToFront\(/.test(prepare), 'chạy Firefly không làm Chrome nổi lên');
   assert.match(prepare, /await chrome\.hideWindow\(\)\.catch\(\(\) => \{\}\)/, 'bắt đầu xóa logo thì dời cửa sổ cũ ra ngoài màn hình (vẫn full size)');
   assert.match(src, /async function background\(\) \{[\s\S]*?loginKeepAlive = false;[\s\S]*?chrome\.hideWindow\(\)/, 'có hàm đưa Firefly về nền ngay khi bấm Chạy tất cả');
-  assert.match(src, /status, open, reveal, background, preview,/, 'endpoint gọi được hàm đưa về nền');
+  assert.match(src, /status, checkQuota, open, reveal, background, preview,/, 'endpoint gọi được hàm đưa về nền và hàm check lượt');
 });
 
 test('đọc trạng thái Firefly qua shadow DOM, không đếm sai nút bị ẩn', () => {

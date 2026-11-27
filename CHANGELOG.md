@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.3.8 - 2026-11-27
+- Dấu × của banner hết lượt và banner tạm dừng giờ nằm sát mép bên phải của dòng thông báo, không dính ngay sau chữ.
+- Bấm “Kết nối Firefly” giờ đọc trực tiếp trang Firefly để check lượt free của Gmail hiện tại — kể cả Gmail đã dùng hết 3 lượt ở nơi khác trong khi bộ đếm của tool vẫn hiện 0/3. Không tạo ảnh, không tốn lượt.
+- Phát hiện Gmail hết lượt ngay lúc bấm Kết nối thì hiện luôn banner hết lượt trên Bước 4 (với dấu × sát mép phải) và đổi chip Firefly, không cần đợi tool chạy ảnh.
+
+
 ## v1.3.7 - 2026-11-27
 - Nhật ký Bước 4 lưu từ bản cũ tự đổi nhãn nút duyệt ảnh thành “Chọn” ngay khi mở dự án; câu “ảnh sạch được giữ trong anhdaxoalogo” giữ nguyên, không cần làm lại ảnh.
 - Dấu × của banner hết lượt và banner tạm dừng chuyển xuống ngay cuối dòng chữ, không còn nằm ở góc trên bên phải.

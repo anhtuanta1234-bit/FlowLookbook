@@ -257,6 +257,41 @@ async function status() {
   return { browser: true, loggedIn, onFirefly, onLogin };
 }
 
+// Bấm “Kết nối Firefly” phải biết Gmail HIỆN TẠI còn lượt free không.
+// cfg.fireflyDailyFree() chỉ đếm lượt tool tự chạy — Gmail đã dùng hết 3 lượt ở chỗ khác
+// thì vẫn hiện 0/3. Vì vậy đọc luôn banner/nút nâng cấp ngay trên trang Firefly (không tạo ảnh).
+async function checkQuota() {
+  const st = await status();
+  const out = { ...st, checked: false, quota: false, pages: 0, checkedAt: Date.now() };
+  if (!st.browser) return out;
+  const { chromium } = require('playwright-core');
+  const port = Math.max(1, Number(cfg.get().fireflyCdpPort) || 9334);
+  let browser;
+  try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`); } catch (_) { return out; }
+  try {
+    const ctx = browser.contexts()[0];
+    if (!ctx) return out;
+    const pages = (ctx.pages() || []).filter((p) => isFireflyUrl(p.url())).slice(0, 4);
+    out.pages = pages.length;
+    const cap = (pr, ms, fallback) => new Promise((resolve) => {
+      const t = setTimeout(() => resolve(fallback), ms); t.unref?.();
+      Promise.resolve(pr).then((v) => { clearTimeout(t); resolve(v); }, () => { clearTimeout(t); resolve(fallback); });
+    });
+    for (const p of pages) {
+      try {
+        const state = await cap(readPageState(p), 4000, null);
+        // Trang vẫn đang tải thì state rỗng: chưa tính là đã check để UI thử lại.
+        if (!state || (!state.body && !state.hasApp && !state.hasEditorApp)) continue;
+        out.checked = true;
+        if (await cap(detectQuotaBlock(p, state), 4000, false)) { out.quota = true; return out; }
+      } catch (_) {}
+    }
+    return out;
+  } finally {
+    await browser.close().catch(() => {}); // chỉ ngắt kết nối CDP, KHÔNG tắt Chrome của người dùng
+  }
+}
+
 async function open() {
   loginKeepAlive = true; // người dùng đang đăng nhập/đổi Gmail: giữ cửa sổ này lại
   await chrome.ensureBrowser({ visible: true });
@@ -888,7 +923,7 @@ async function preview({ projectId, sceneId } = {}) {
 }
 
 module.exports = {
-  status, open, reveal, background, preview,
+  status, checkQuota, open, reveal, background, preview,
   prepareScene, downloadPrepared, discardScene, hasSceneTab,
   closeProjectTabs, closeAll, closeIdleNow,
   _test: { normalizeMask, fireflyHome, editorUrl, isQuotaText, isRemovalDone, waitForFireflyReady, clickEnabledAny, readPageState, selectAspect916, setBrushSize, findCanvas, applyBrush },

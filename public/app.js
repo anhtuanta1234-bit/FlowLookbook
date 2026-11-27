@@ -16,7 +16,7 @@ const compareVer = (a, b) => {
   }
   return 0;
 };
-const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), quotaHidden: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
+const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, fireflyQuota: null, stage: 1, open: new Set(), dismissed: new Set(), quotaHidden: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
 // Xếp dự án theo ĐÚNG số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…).
 // Dự án không có số thì xếp sau, giữ thứ tự tạo để không nhảy lung tung.
@@ -326,12 +326,12 @@ function syncFireflyChip() {
   const fs = S.flow.fireflyStatus || {};
   const connected = !!(fs.browser && fs.loggedIn);
   // Hết lượt free là chuyện của FIREFLY: báo ngay tại chip Firefly, không dán vào chip Flow ở header.
-  // Bộ đếm fireflyDaily theo ngày được reset khi bấm “Tiếp tục” sau đổi Gmail, nên dùng được cả
-  // khi tool chưa từng chạy ảnh mà Gmail hiện tại đã dùng hết 3 lượt trong ngày.
+  // Ba nguồn: bộ đếm tool, lượt tool vừa báo lỗi, VÀ kết quả đọc ngay trang Firefly khi bấm Kết nối
+  // (Gmail có thể đã dùng hết lượt ở chỗ khác nên bộ đếm tool vẫn hiện 0/3).
   const d = S.flow.fireflyDaily || {};
   const limit = Math.max(1, Number(d.limit) || 3);
   const used = Math.max(0, Number(d.count) || 0);
-  const quota = !!S.flow.fireflyQuotaPaused || used >= limit;
+  const quota = !!S.flow.fireflyQuotaPaused || used >= limit || !!S.fireflyQuota?.quota;
   ff.className = connected && !quota ? 'chip ok' : 'chip warn'; // .chip.ok::before = chấm xanh nhấp nháy
   ff.textContent = quota
     ? `Firefly: hết ${limit} lượt free/ngày — đổi mail`
@@ -345,29 +345,40 @@ function syncFireflyChip() {
 // Bấm “Kết nối Firefly” là kiểm tra LUÔN Gmail hiện tại đã dùng lượt free hôm nay chưa,
 // không cần đợi tool chạy ảnh mới phát hiện hết lượt.
 function fireflyDailyNotice() {
-  if (!S.flow?.fireflyStatus?.loggedIn) return false; // chưa đăng nhập thì chưa nói về Gmail
   const d = S.flow.fireflyDaily || {};
   const limit = Math.max(1, Number(d.limit) || 3);
   const used = Math.max(0, Number(d.count) || 0);
-  if (used >= limit) {
-    toast(`Gmail này hôm nay đã hết ${limit} lượt free. Đổi Gmail khác rồi bấm “Tiếp tục”.`, 'warn', { duration: 12000 });
+  const live = S.fireflyQuota;
+  // Trang Firefly báo hết lượt là chuẩn nhất, kể cả bộ đếm của tool vẫn hiện 0/3.
+  if (!!live?.quota || !!S.flow.fireflyQuotaPaused || used >= limit) {
+    toast(`Gmail này hôm nay đã hết ${limit} lượt free. Đổi Gmail khác rồi bấm “Tiếp tục”.`, 'warn', { duration: 15000 });
     return true;
   }
+  if (!S.flow?.fireflyStatus?.loggedIn && !live?.checked) return false; // chưa đăng nhập thì chưa nói về Gmail
   if (used > 0) toast(`Gmail này hôm nay đã làm ${used}/${limit} lượt free, còn ${limit - used} lượt.`, '', { duration: 8000 });
   return false;
 }
-// Bấm “Kết nối Firefly”: mở cửa sổ Firefly rồi hỏi lại trạng thái vài giây để chip
-// chuyển xanh + chấm nhấp nháy NGAY, không phải đợi vòng poll 6 giây.
+// Bấm “Kết nối Firefly”: mở cửa sổ Firefly, hỏi lại trạng thái, rồi đọc LUÔN trang
+// để biết Gmail này còn lượt hay đã hết — không tốn lượt tạo ảnh, không đợi poll 6 giây.
 async function connectFirefly(kind = 'reveal', checkDaily = true) {
+  if (!checkDaily) S.fireflyQuota = null; // đang đổi Gmail: quên kết quả của mail cũ
   if (kind === 'open') await api('POST', '/api/firefly/open');
   else await api('POST', '/api/firefly/reveal');
-  let notified = false;
   for (let i = 0; i < 12; i++) {
     await refreshFlow();
-    if (checkDaily && !notified) notified = fireflyDailyNotice();
     if (S.flow?.fireflyStatus?.browser && S.flow.fireflyStatus.loggedIn) break;
     await new Promise((r) => setTimeout(r, 1000));
   }
+  if (checkDaily) {
+    for (let i = 0; i < 3; i++) {
+      try { S.fireflyQuota = await api('POST', '/api/firefly/check-quota'); } catch (_) { S.fireflyQuota = null; }
+      if (S.fireflyQuota?.checked || !S.flow?.fireflyStatus?.loggedIn) break;
+      await new Promise((r) => setTimeout(r, 1500)); // Firefly vẫn đang tải thì thử lại vài lần
+    }
+    fireflyDailyNotice();
+    if (S.p && S.stage === 4) refresh(); // có banner hết lượt ngay trên Bước 4, không đợi poll
+  }
+  syncFireflyChip();
 }
 async function refreshFlow() {
   const was = !!S.flow.paused;
@@ -1123,15 +1134,18 @@ function logoResultsHtml(p) {
     ? `${quotaScene.id}:${quotaScene.logoRemoval.updatedAt || ''}`
     : (S.flow?.fireflyQuotaPaused?.at ? `flow:${S.flow.fireflyQuotaPaused.at}` : '');
   const closeQuota = `<button class="tclose" data-act="dismissquota" data-key="${esc(quotaKey)}" aria-label="Tắt thông báo" data-tip="Tắt">×</button>`;
-  if (quotaScene && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên. ${closeQuota}</span></div>`;
-  else if (!quotaScene && S.flow?.fireflyQuotaPaused && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm lại ảnh chưa Chọn. ${closeQuota}</span></div>`;
+  if (quotaScene && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày tại <b>${esc(quotaScene.label || `Cảnh ${quotaIndex + 1}`)}</b> (ảnh ${String(quotaNo).padStart(2, '0')}). Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh này; ảnh đã bấm Chọn giữ nguyên.</span>${closeQuota}</div>`;
+  else if (!quotaScene && S.flow?.fireflyQuotaPaused && quotaKey && !S.quotaHidden.has(quotaKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Firefly hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt/ngày. Đổi Gmail rồi bấm “Tiếp tục” để làm lại ảnh chưa Chọn.</span>${closeQuota}</div>`;
+  // Bấm “Kết nối” mà phát hiện Gmail đã hết lượt (dù tool chưa chạy ảnh) thì hiện ngay banner.
+  const liveKey = S.fireflyQuota?.quota ? `live:${S.fireflyQuota.checkedAt || 0}` : '';
+  if (liveKey && !S.quotaHidden.has(liveKey)) h += `<div class="banner quota" style="margin:10px 0;border-radius:8px"><span>Gmail này hôm nay đã hết ${+(S.flow?.fireflyDaily?.limit || 3)} lượt free. Đổi Gmail rồi bấm “Tiếp tục” — làm lại đúng ảnh chưa bấm Chọn; ảnh đã Chọn giữ nguyên.</span><button class="tclose" data-act="dismissquota" data-key="${esc(liveKey)}" aria-label="Tắt thông báo" data-tip="Tắt">×</button></div>`;
   h += scenes.map(logoSceneHtml).join('') || `<div class="drop" data-act="goto" data-stage="3" role="button" tabindex="0">Chưa có cảnh nào. Về Bước 3 thêm ảnh cảnh người thật.</div>`;
   return h;
 }
 
 const runSig = (r) => [r.note, r.inputNote, r.id, r.status, r.images.map((i) => i.file).join(), r.chosen, r.error, r.errorCode, r.abuseReopens, !!S.flow.paused, S.dismissed.has(r.id), r.rerunOf, r.upgrading, JSON.stringify(r.upgradeProgress || null), r.upgradeError];
 function resultsSig(p) {
-  if (S.stage === 4) return JSON.stringify(['step4', !!S.cfg?.removeLogoEnabled, !!p.cleaned, [...S.quotaHidden].join(','), p.s3.scenes.map((s) => [s.id, s.label, s.chosen?.status, s.logoRemoval])]);
+  if (S.stage === 4) return JSON.stringify(['step4', !!S.cfg?.removeLogoEnabled, !!p.cleaned, [...S.quotaHidden].join(','), S.fireflyQuota?.quota ? (S.fireflyQuota.checkedAt || 0) : '', p.s3.scenes.map((s) => [s.id, s.label, s.chosen?.status, s.logoRemoval])]);
   if (S.stage === 3) return JSON.stringify([!!p.cleaned, p.s3.scenes.map((s) => [s.id, s.file, s.label, s.chosen, s.runs.slice(0, 6).map(runSig)])]);
   const st = p[PK[S.stage]];
   return JSON.stringify([st.approved, st.hq, p.s1.approved, st.runs.slice(0, 6).map(runSig)]);

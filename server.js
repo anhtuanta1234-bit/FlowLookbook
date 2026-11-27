@@ -236,6 +236,11 @@ app.post('/api/flow/open', async (req, res) => {
 app.get('/api/firefly/status', async (req, res) => {
   try { res.json(await firefly.status()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Bấm “Kết nối Firefly”: đọc trực tiếp trang Firefly để biết Gmail này hôm nay hết lượt free chưa.
+// Chỉ đọc DOM, không tạo ảnh / không tốn lượt.
+app.post('/api/firefly/check-quota', async (req, res) => {
+  try { res.json(await firefly.checkQuota()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.post('/api/firefly/open', async (req, res) => {
   try { res.json(await firefly.open()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
