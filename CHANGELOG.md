@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.2.7 - 2026-11-27
+- Danh sách dự án giờ xếp lần lượt theo số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…), không còn phụ thuộc ngày tạo.
+
+
 ## v1.2.6 - 2026-11-27
 - Thanh **Xóa logo** bỏ hẳn số 4: dùng vòng tích; sang bước này hoặc làm xong thì vòng tích và chữ đều xanh như bước đã xong.
 

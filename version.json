@@ -1,5 +1,5 @@
 {
-  "version": "1.2.6",
-  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.6/Flow.Lookbook.Setup.1.2.6.exe",
-  "notes": "- Thanh **Xóa logo** bỏ hẳn số 4: dùng vòng tích; sang bước này hoặc làm xong thì vòng tích và chữ đều xanh như bước đã xong."
+  "version": "1.2.7",
+  "url": "https://github.com/anhtuanta1234-bit/FlowLookbook/releases/download/v1.2.7/Flow.Lookbook.Setup.1.2.7.exe",
+  "notes": "- Danh sách dự án giờ xếp lần lượt theo số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…), không còn phụ thuộc ngày tạo."
 }

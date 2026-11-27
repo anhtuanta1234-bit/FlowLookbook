@@ -409,6 +409,14 @@ test('sidebar thu gọn: “dự án 2” rút thành DA2, nằm gọn trong khu
   assert.match(src, /\$\('#railAdd'\)\.onclick/);
 });
 
+test('dự án xếp lần lượt 1, 2, 3… theo số trong tên (DA1 trước DA2)', () => {
+  assert.match(src, /const projectNumber = \(p\) =>/);
+  assert.ok(src.includes("String(p?.name || '').match(/(\\d+)\\s*$/)"), 'lấy số ở cuối tên dự án');
+  assert.match(src, /if \(na !== nb\) return na - nb;/);
+  assert.match(src, /\(\(a\.createdAt \|\| 0\) - \(b\.createdAt \|\| 0\)\)/, 'không có số thì giữ thứ tự tạo');
+  assert.match(src, /sortedProjects\(\)\.map\(\(p\) =>/, 'sidebar dùng danh sách đã sắp xếp');
+});
+
 test('chạy xóa logo giữ Chrome ở nền; chỉ nút Kết nối/Đổi Gmail mới mở cửa sổ', () => {
   const ff = fs.readFileSync(path.join(__dirname, '..', 'src', 'firefly.js'), 'utf8');
   const prepare = ff.slice(ff.indexOf('async function prepareScene('), ff.indexOf('async function downloadPrepared('));

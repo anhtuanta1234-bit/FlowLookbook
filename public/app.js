@@ -16,10 +16,17 @@ const compareVer = (a, b) => {
 };
 const S = { projects: [], selectedProjectIds: new Set(), projectDeleteApi: false, id: null, p: null, cfg: {}, koc: [], flow: {}, stage: 1, open: new Set(), dismissed: new Set(), hidePause: null, updateDialogOpen: false, preview: new Map(), liveDot: new Set(), gmailOpened: new Set() };
 const projectNameOrder = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
-// Số dự án phải ổn định theo thứ tự TẠO (cũ nhất = 1), không đổi khi sửa tên hay chạy dự án.
-// Thu gọn thì số này là thứ duy nhất bạn thấy, nên không được nhảy lung tung.
-const sortedProjects = () => [...S.projects].sort((a, b) =>
-  ((a.createdAt || 0) - (b.createdAt || 0)) || projectNameOrder.compare(a.name || '', b.name || ''));
+// Xếp dự án theo ĐÚNG số trong tên: dự án 1, dự án 2, dự án 3… (DA1, DA2, DA3…).
+// Dự án không có số thì xếp sau, giữ thứ tự tạo để không nhảy lung tung.
+const projectNumber = (p) => {
+  const m = String(p?.name || '').match(/(\d+)\s*$/);
+  return m ? Number(m[1]) : Infinity;
+};
+const sortedProjects = () => [...S.projects].sort((a, b) => {
+  const na = projectNumber(a), nb = projectNumber(b);
+  if (na !== nb) return na - nb;
+  return ((a.createdAt || 0) - (b.createdAt || 0)) || projectNameOrder.compare(a.name || '', b.name || '');
+});
 const normName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 const duplicateName = (name, excludeId) => S.projects.some((p) => p.id !== excludeId && normName(p.name) === normName(name));
 // Hết lượt Firefly: bấm “Đổi Gmail…” thì nhớ lại để nút chuyển thành “Đã đổi Gmail, tiếp tục”.
